@@ -1,5 +1,5 @@
 import { gasRequest } from './api'
-import type { DashboardStats, ClassroomStats, AuditLog } from '@/types'
+import type { DashboardStats, ClassroomStats, AuditLog, DataCompleteness } from '@/types'
 import type { PaginatedResponse } from '@/types'
 
 export interface ReportFilters {
@@ -15,6 +15,11 @@ export const reportsService = {
   /** Statistik utama untuk dashboard */
   async getDashboardStats(schoolYearId?: string): Promise<DashboardStats> {
     return gasRequest<DashboardStats>('reports.dashboardStats', { schoolYearId }, { retry404: 2 })
+  },
+
+  /** Kualitas & kelengkapan data siswa aktif */
+  async getDataCompleteness(): Promise<DataCompleteness> {
+    return gasRequest<DataCompleteness>('reports.dataCompleteness', undefined, { retry404: 2 })
   },
 
   /** Statistik per kelas */
