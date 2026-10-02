@@ -283,7 +283,7 @@ async function processFile(file: File) {
     const buffer = await file.arrayBuffer()
     const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
     const ws = wb.Sheets[wb.SheetNames[0]]
-    const rawJson = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: false })
+    const rawJson = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: true })
     const json = rawJson.map(row =>
       Object.fromEntries(Object.entries(row).map(([key, value]) => [key, normalizeCell(value)]))
     ) as Record<string, string>[]
