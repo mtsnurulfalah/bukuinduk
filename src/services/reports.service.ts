@@ -14,48 +14,48 @@ export interface ReportFilters {
 export const reportsService = {
   /** Statistik utama untuk dashboard */
   async getDashboardStats(schoolYearId?: string): Promise<DashboardStats> {
-    return gasRequest<DashboardStats>('reports.dashboardStats', { schoolYearId })
+    return gasRequest<DashboardStats>('reports.dashboardStats', { schoolYearId }, { retry404: 2 })
   },
 
   /** Statistik per kelas */
   async getClassroomStats(schoolYearId?: string): Promise<ClassroomStats[]> {
-    return gasRequest<ClassroomStats[]>('reports.classroomStats', { schoolYearId })
+    return gasRequest<ClassroomStats[]>('reports.classroomStats', { schoolYearId }, { retry404: 2 })
   },
 
   /** Distribusi jenis kelamin per kelas */
   async getGenderDistribution(filters?: ReportFilters) {
     return gasRequest<{ label: string; male: number; female: number }[]>(
-      'reports.genderDistribution', filters
+      'reports.genderDistribution', filters, { retry404: 2 }
     )
   },
 
   /** Distribusi usia siswa */
   async getAgeDistribution(filters?: ReportFilters) {
     return gasRequest<{ ageGroup: string; count: number }[]>(
-      'reports.ageDistribution', filters
+      'reports.ageDistribution', filters, { retry404: 2 }
     )
   },
 
   /** Distribusi status siswa */
   async getStatusDistribution(filters?: ReportFilters) {
     return gasRequest<{ status: string; label: string; count: number }[]>(
-      'reports.statusDistribution', filters
+      'reports.statusDistribution', filters, { retry404: 2 }
     )
   },
 
   /** Tren penerimaan siswa per tahun pelajaran */
   async getEnrollmentTrend() {
-    return gasRequest<{ schoolYear: string; count: number }[]>('reports.enrollmentTrend')
+    return gasRequest<{ schoolYear: string; count: number }[]>('reports.enrollmentTrend', undefined, { retry404: 2 })
   },
 
   /** Data lengkap untuk export laporan siswa */
   async getStudentReport(filters: ReportFilters) {
-    return gasRequest<Record<string, unknown>[]>('reports.studentReport', filters, { timeout: 60_000 })
+    return gasRequest<Record<string, unknown>[]>('reports.studentReport', filters, { timeout: 60_000, retry404: 2 })
   },
 
   /** Laporan rekapitulasi per kelas */
   async getClassReport(filters: ReportFilters) {
-    return gasRequest<Record<string, unknown>[]>('reports.classReport', filters, { timeout: 60_000 })
+    return gasRequest<Record<string, unknown>[]>('reports.classReport', filters, { timeout: 60_000, retry404: 2 })
   },
 
   // ── Audit Log ─────────────────────────────────────────────────
@@ -69,6 +69,6 @@ export const reportsService = {
     page?: number
     limit?: number
   }): Promise<PaginatedResponse<AuditLog>> {
-    return gasRequest<PaginatedResponse<AuditLog>>('audit.list', params)
+    return gasRequest<PaginatedResponse<AuditLog>>('audit.list', params, { retry404: 2 })
   },
 }
