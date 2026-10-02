@@ -351,7 +351,7 @@ var StudentHandler = {
     if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
 
     var parents = sheetToObjects(getSheet(CONFIG.SHEETS.PARENTS))
-      .filter(function(p) { return String(p.studentId) === String(payload.studentId); });
+      .filter(function(p) { return String(p.studentId != null ? p.studentId : p.studentID) === String(payload.studentId); });
     if (user.role === 'teacher') {
       parents = parents.map(function(p) { var c = Object.assign({}, p); delete c.nik; return c; });
     }
@@ -386,7 +386,7 @@ var StudentHandler = {
     if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
 
     var h = sheetToObjects(getSheet(CONFIG.SHEETS.HEALTH))
-      .find(function(x) { return String(x.studentId) === String(payload.studentId); });
+      .find(function(x) { return String(x.studentId != null ? x.studentId : x.studentID) === String(payload.studentId); });
     return successResponse(h || null);
   },
 
@@ -414,7 +414,7 @@ var StudentHandler = {
     if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
 
     var data = sheetToObjects(getSheet(CONFIG.SHEETS.EDUCATION))
-      .filter(function(e) { return String(e.studentId) === String(payload.studentId); });
+      .filter(function(e) { return String(e.studentId != null ? e.studentId : e.studentID) === String(payload.studentId); });
     return successResponse(data);
   },
 
@@ -423,7 +423,7 @@ var StudentHandler = {
     if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
 
     var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS))
-      .filter(function(e) { return String(e.studentId) === String(payload.studentId); });
+      .filter(function(e) { return String(e.studentId != null ? e.studentId : e.studentID) === String(payload.studentId); });
     var classrooms  = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
     var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
 
