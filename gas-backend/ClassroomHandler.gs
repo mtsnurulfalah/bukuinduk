@@ -46,7 +46,7 @@ var ClassroomHandler = {
         homeroomTeacherName: teacher ? teacher.fullName : '',
         schoolYearName: sy ? sy.name : '',
         studentCount: count,
-        isActive: c.isActive === true || c.isActive === 'TRUE',
+        isActive: normalizeBoolean(c.isActive, false),
       });
     });
 
@@ -70,7 +70,7 @@ var ClassroomHandler = {
       gradeName: grade ? grade.name : '',
       homeroomTeacherName: teacher ? teacher.fullName : '',
       schoolYearName: sy ? sy.name : '',
-      isActive: c.isActive === true || c.isActive === 'TRUE',
+      isActive: normalizeBoolean(c.isActive, false),
     }));
   },
 
@@ -181,7 +181,7 @@ var ClassroomHandler = {
       return Object.assign({}, c, {
         studentCount: count,
         schoolYearName: sy ? sy.name : '',
-        isActive: c.isActive === true || c.isActive === 'TRUE',
+        isActive: normalizeBoolean(c.isActive, false),
       });
     });
 
@@ -250,7 +250,7 @@ var SchoolYearHandler = {
   list: function(payload, user) {
     var all = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
     all.sort(function(a,b){ return (b.name||'').localeCompare(a.name||''); });
-    return successResponse(all.map(function(s){ return Object.assign({}, s, { isActive: s.isActive === true || s.isActive === 'TRUE' }); }));
+    return successResponse(all.map(function(s){ return Object.assign({}, s, { isActive: normalizeBoolean(s.isActive, false) }); }));
   },
   create: function(payload, user) {
     checkPermission(user, 'school_year:manage');
@@ -314,7 +314,7 @@ var SchoolYearHandler = {
     var colIsActive = headers.indexOf('isActive') + 1;
     if (colIsActive <= 0) return;
     all.forEach(function(s) {
-      if (String(s.id) !== String(exceptId) && (s.isActive === true || s.isActive === 'TRUE')) {
+      if (String(s.id) !== String(exceptId) && normalizeBoolean(s.isActive, false)) {
         var rowIdx = findRowById(sheet, s.id);
         if (rowIdx > 0) sheet.getRange(rowIdx, colIsActive).setValue(false);
       }
