@@ -18,7 +18,7 @@
     </BaseCard>
 
     <BaseRetry
-      v-else-if="error"
+      v-if="error"
       title="Data guru gagal dimuat"
       :message="error"
       @retry="load"
