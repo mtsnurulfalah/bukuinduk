@@ -19,7 +19,7 @@ var AuthHandler = {
     });
 
     if (!user) return errorResponse(401, 'Username atau password salah.');
-    if (!user.isActive || user.isActive === 'FALSE' || user.isActive === false) {
+    if (!normalizeBoolean(user.isActive, false)) {
       return errorResponse(403, 'Akun Anda tidak aktif. Hubungi administrator.');
     }
     if (!verifyPassword(password, user.passwordHash)) {
