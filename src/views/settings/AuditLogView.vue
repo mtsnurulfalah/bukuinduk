@@ -30,27 +30,51 @@
       />
       <BaseEmpty v-else-if="!logs.length" title="Tidak ada log aktivitas" type="default" />
       <div v-else class="divide-y divide-slate-100">
-        <div v-for="log in logs" :key="log.id" class="flex gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
-          <!-- Icon action -->
-          <div :class="['p-2 rounded-lg shrink-0 mt-0.5', actionIconBg(log.action)]">
-            <component :is="actionIcon(log.action)" :class="['h-3.5 w-3.5', actionIconColor(log.action)]" />
-          </div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-start justify-between gap-2">
-              <p class="text-sm font-medium text-slate-800">{{ log.description }}</p>
-              <span class="text-xs text-slate-400 whitespace-nowrap shrink-0">{{ formatDateTime(log.createdAt) }}</span>
+        <div v-for="log in logs" :key="log.id" class="transition-colors">
+          <button
+            type="button"
+            class="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
+            :aria-expanded="expandedLogId === log.id"
+            @click="toggleDetails(log.id)"
+          >
+            <div :class="['p-2 rounded-lg shrink-0 mt-0.5', actionIconBg(log.action)]">
+              <component :is="actionIcon(log.action)" :class="['h-3.5 w-3.5', actionIconColor(log.action)]" />
             </div>
-            <div class="flex flex-wrap items-center gap-2 mt-1">
-              <span class="text-xs text-slate-500">{{ log.userName }}</span>
-              <BaseBadge :color="actionBadge(log.action)" size="sm">{{ log.action }}</BaseBadge>
-              <span v-if="log.resourceType" class="text-xs text-slate-400">{{ log.resourceType }}</span>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start justify-between gap-2">
+                <p class="text-sm font-medium text-slate-800">{{ log.description }}</p>
+                <ChevronDown
+                  :class="['h-4 w-4 text-slate-400 shrink-0 transition-transform', expandedLogId === log.id ? 'rotate-180' : '']"
+                />
+              </div>
+              <div class="flex flex-wrap items-center gap-2 mt-1">
+                <span class="text-xs text-slate-500">{{ log.userName || 'Sistem' }}</span>
+                <BaseBadge :color="actionBadge(log.action)" size="sm">{{ log.action }}</BaseBadge>
+                <span v-if="log.resourceType" class="text-xs text-slate-400">{{ log.resourceType }}</span>
+                <span class="text-xs text-slate-400">{{ formatDateTime(log.createdAt) }}</span>
+              </div>
+            </div>
+          </button>
+          <div v-if="expandedLogId === log.id" class="px-4 pb-4">
+            <div class="ml-10 rounded-lg bg-slate-50 border border-slate-100 p-3 space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div><p class="text-slate-400">ID Log</p><p class="font-mono text-slate-600 break-all">{{ log.id }}</p></div>
+                <div><p class="text-slate-400">Resource ID</p><p class="font-mono text-slate-600 break-all">{{ log.resourceId || '—' }}</p></div>
+                <div><p class="text-slate-400">Waktu</p><p class="text-slate-600">{{ formatDateTime(log.createdAt) }}</p></div>
+              </div>
+              <div v-if="log.oldValues || log.newValues" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div v-if="log.oldValues" class="rounded-lg bg-white border border-slate-200 p-3">
+                  <p class="text-xs font-semibold text-slate-500 mb-1">Sebelum</p>
+                  <pre class="text-[11px] text-slate-600 whitespace-pre-wrap break-words max-h-48 overflow-auto">{{ prettyJson(log.oldValues) }}</pre>
+                </div>
+                <div v-if="log.newValues" class="rounded-lg bg-white border border-slate-200 p-3">
+                  <p class="text-xs font-semibold text-slate-500 mb-1">Sesudah</p>
+                  <pre class="text-[11px] text-slate-600 whitespace-pre-wrap break-words max-h-48 overflow-auto">{{ prettyJson(log.newValues) }}</pre>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div class="px-4 border-t border-slate-100">
-        <BasePagination :current-page="page" :total-pages="totalPages" :total="total" :limit="limit"
-          @update:current-page="onPageChange" />
       </div>
     </BaseCard>
   </div>
@@ -118,7 +142,7 @@ function actionIconColor(action: string): string {
   return map[action] ?? 'text-slate-500'
 }
 function actionBadge(action: string): 'green' | 'amber' | 'red' | 'blue' | 'slate' | 'purple' | 'teal' {
-  const map: Record<string, 'green' | 'amber' | 'red' | 'blue' | 'slate' | 'purple'> = {
+  const map: Record<string, 'green' | 'amber' | 'red' | 'blue' | 'slate' | 'purple' | 'teal'> = {
     CREATE: 'green', UPDATE: 'amber', DELETE: 'red',
     LOGIN: 'blue', LOGOUT: 'slate', ARCHIVE: 'purple',
     VERIFY: 'green', EXPORT: 'teal', ERROR: 'red',
