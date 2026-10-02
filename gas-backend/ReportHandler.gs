@@ -7,6 +7,7 @@ var ReportHandler = {
     switch (method) {
       case 'dashboardStats':    return this.dashboardStats(payload, user);
       case 'dataCompleteness': return this.dataCompleteness(payload, user);
+      case 'intelligence':     return this.intelligence(payload, user);
       case 'classroomStats':    return ClassroomHandler.getStats(payload, user);
       case 'genderDistribution':return this.genderDistribution(payload, user);
       case 'statusDistribution':return this.statusDistribution(payload, user);
@@ -183,6 +184,300 @@ var ReportHandler = {
     };
 
     cacheSet('students_completeness', result, 60);
+    return successResponse(result);
+  },
+
+  /**
+   * Intelligence Center — analisis rule-based untuk menemukan anomali
+   * dan data yang perlu ditinjau. Tidak mengubah data dan tidak memakai
+   * layanan AI eksternal.
+   */
+  intelligence: function(payload, user) {
+    checkPermission(user, 'report:intelligence');
+
+    var cached = cacheGet('reports_intelligence');
+    if (cached) return successResponse(cached);
+
+    var allStudents = StudentHandler._getAll();
+    var activeStudents = allStudents.filter(function(s) { return s.status === 'active'; });
+    var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
+    var classrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
+
+    var activeEnrollmentByStudent = {};
+    var classroomNameById = {};
+    classrooms.forEach(function(c) {
+      classroomNameById[String(c.id)] = c.name || '';
+    });
+
+    enrollments.forEach(function(e) {
+      if (e.status !== 'active') return;
+      var sid = String(e.studentId != null ? e.studentId : e.studentID || '');
+      if (!sid) return;
+      activeEnrollmentByStudent[sid] = e;
+    });
+
+    // Deteksi duplikasi NIS/NISN di seluruh data siswa.
+    var nisGroups = {};
+    var nisnGroups = {};
+    allStudents.forEach(function(s) {
+      var nis = normalizeIdentifier(s.nis);
+      var nisn = normalizeIdentifier(s.nisn);
+      if (nis) {
+        if (!nisGroups[nis]) nisGroups[nis] = [];
+        nisGroups[nis].push(String(s.id));
+      }
+      if (nisn) {
+        if (!nisnGroups[nisn]) nisnGroups[nisn] = [];
+        nisnGroups[nisn].push(String(s.id));
+      }
+    });
+
+    var duplicateNisIds = {};
+    var duplicateNisGroups = 0;
+    Object.keys(nisGroups).forEach(function(key) {
+      if (nisGroups[key].length > 1) {
+        duplicateNisGroups++;
+        nisGroups[key].forEach(function(id) { duplicateNisIds[id] = true; });
+      }
+    });
+
+    var duplicateNisnIds = {};
+    var duplicateNisnGroups = 0;
+    Object.keys(nisnGroups).forEach(function(key) {
+      if (nisnGroups[key].length > 1) {
+        duplicateNisnGroups++;
+        nisnGroups[key].forEach(function(id) { duplicateNisnIds[id] = true; });
+      }
+    });
+
+    function hasValue(value) {
+      return value !== null && value !== undefined && String(value).trim() !== '';
+    }
+
+    function getAge(birthDate) {
+      if (!hasValue(birthDate)) return null;
+      var date = new Date(birthDate);
+      if (isNaN(date.getTime())) return null;
+      var today = new Date();
+      var age = today.getFullYear() - date.getFullYear();
+      var month = today.getMonth() - date.getMonth();
+      if (month < 0 || (month === 0 && today.getDate() < date.getDate())) age--;
+      return age;
+    }
+
+    var issueDefinitions = {
+      missing_identity: { label: 'Identitas belum lengkap', severity: 'medium' },
+      missing_address: { label: 'Alamat belum lengkap', severity: 'medium' },
+      missing_family: { label: 'Data orang tua/wali belum lengkap', severity: 'medium' },
+      missing_health: { label: 'Data kesehatan belum lengkap', severity: 'low' },
+      missing_education: { label: 'Riwayat pendidikan belum ada', severity: 'low' },
+      no_class: { label: 'Belum memiliki rombel aktif', severity: 'high' },
+      duplicate_nis: { label: 'NIS terduplikasi', severity: 'high' },
+      duplicate_nisn: { label: 'NISN terduplikasi', severity: 'high' },
+      age_review: { label: 'Usia/tanggal lahir perlu ditinjau', severity: 'low' },
+    };
+
+    // Data relasi cukup dibaca sekali.
+    var parents = sheetToObjects(getSheet(CONFIG.SHEETS.PARENTS));
+    var health = sheetToObjects(getSheet(CONFIG.SHEETS.HEALTH));
+    var education = sheetToObjects(getSheet(CONFIG.SHEETS.EDUCATION));
+
+    var parentByStudent = {};
+    parents.forEach(function(p) {
+      var sid = String(p.studentId != null ? p.studentId : p.studentID || '');
+      if (!sid) return;
+      if (!parentByStudent[sid]) parentByStudent[sid] = {};
+      parentByStudent[sid][String(p.relationship || '').toLowerCase()] = p;
+    });
+
+    var healthByStudent = {};
+    health.forEach(function(h) {
+      var sid = String(h.studentId != null ? h.studentId : h.studentID || '');
+      if (sid) healthByStudent[sid] = h;
+    });
+
+    var educationByStudent = {};
+    education.forEach(function(e) {
+      var sid = String(e.studentId != null ? e.studentId : e.studentID || '');
+      if (sid) educationByStudent[sid] = true;
+    });
+
+    var attentionStudents = [];
+    var breakdownCounts = {
+      missing_identity: 0,
+      missing_address: 0,
+      missing_family: 0,
+      missing_health: 0,
+      missing_education: 0,
+      no_class: 0,
+      duplicate_nis: 0,
+      duplicate_nisn: 0,
+      age_review: 0,
+    };
+
+    activeStudents.forEach(function(s) {
+      var sid = String(s.id);
+      var issues = [];
+      var parent = parentByStudent[sid] || {};
+      var fatherOrGuardian = (parent.father && parent.father.fullName) || (parent.guardian && parent.guardian.fullName);
+      var mother = parent.mother && parent.mother.fullName;
+      var h = healthByStudent[sid];
+
+      var identityFields = ['nis','nisn','fullName','gender','birthPlace','birthDate','religion','nationality'];
+      var addressFields = ['address','village','district','city','province'];
+      var healthFields = ['bloodType','heightCm','weightKg'];
+
+      if (!identityFields.every(function(field) { return hasValue(s[field]); })) issues.push('missing_identity');
+      if (!addressFields.every(function(field) { return hasValue(s[field]); })) issues.push('missing_address');
+      if (!hasValue(fatherOrGuardian) || !hasValue(mother)) issues.push('missing_family');
+      if (!h || !healthFields.every(function(field) { return hasValue(h[field]); })) issues.push('missing_health');
+      if (!educationByStudent[sid]) issues.push('missing_education');
+      if (!activeEnrollmentByStudent[sid]) issues.push('no_class');
+      if (duplicateNisIds[sid]) issues.push('duplicate_nis');
+      if (duplicateNisnIds[sid]) issues.push('duplicate_nisn');
+      
+      var age = getAge(s.birthDate);
+      if (age !== null && (age < 10 || age > 20)) issues.push('age_review');
+
+      issues.forEach(function(key) { breakdownCounts[key]++; });
+
+      if (issues.length) {
+        attentionStudents.push({
+          studentId: sid,
+          fullName: s.fullName || 'Tanpa nama',
+          nis: normalizeIdentifier(s.nis),
+          classroomName: activeEnrollmentByStudent[sid]
+            ? (classroomNameById[String(activeEnrollmentByStudent[sid].classroomId)] || '')
+            : '',
+          issues: issues.map(function(key) {
+            return {
+              key: key,
+              label: issueDefinitions[key].label,
+              severity: issueDefinitions[key].severity,
+            };
+          }),
+        });
+      }
+    });
+
+    attentionStudents.sort(function(a, b) {
+      if (b.issues.length !== a.issues.length) return b.issues.length - a.issues.length;
+      return (a.fullName || '').localeCompare(b.fullName || '');
+    });
+
+    var breakdownOrder = [
+      ['no_class', 'Belum ada rombel aktif'],
+      ['duplicate_nis', 'NIS terduplikasi'],
+      ['duplicate_nisn', 'NISN terduplikasi'],
+      ['missing_identity', 'Identitas belum lengkap'],
+      ['missing_address', 'Alamat belum lengkap'],
+      ['missing_family', 'Orang tua/wali belum lengkap'],
+      ['missing_health', 'Kesehatan belum lengkap'],
+      ['missing_education', 'Riwayat pendidikan belum ada'],
+      ['age_review', 'Usia/tanggal lahir perlu ditinjau'],
+    ];
+
+    var maxCount = breakdownOrder.reduce(function(max, pair) {
+      return Math.max(max, breakdownCounts[pair[0]]);
+    }, 0);
+
+    var breakdown = breakdownOrder.map(function(pair) {
+      return {
+        key: pair[0],
+        label: pair[1],
+        count: breakdownCounts[pair[0]],
+        percent: maxCount ? Math.round((breakdownCounts[pair[0]] / maxCount) * 100) : 0,
+      };
+    });
+
+    var studentsNeedingAttention = attentionStudents.length;
+    var studentsWithoutIssues = Math.max(0, activeStudents.length - studentsNeedingAttention);
+    var totalIssueHits = breakdownOrder.reduce(function(sum, pair) {
+      return sum + breakdownCounts[pair[0]];
+    }, 0);
+
+    var insights = [];
+
+    if (!activeStudents.length) {
+      insights.push({
+        id: 'empty',
+        title: 'Belum ada siswa aktif',
+        description: 'Belum ada populasi siswa aktif yang dapat dianalisis oleh Intelligence Center.',
+        severity: 'low',
+        count: 0,
+      });
+    } else {
+      if (breakdownCounts.no_class > 0) {
+        insights.push({
+          id: 'no-class',
+          title: 'Ada siswa aktif tanpa rombel',
+          description: 'Periksa penempatan rombel agar data siswa aktif terhubung dengan kelas yang sesuai.',
+          severity: 'high',
+          count: breakdownCounts.no_class,
+        });
+      }
+      if (duplicateNisGroups > 0 || duplicateNisnGroups > 0) {
+        var duplicateTotal = Object.keys(duplicateNisIds).length + Object.keys(duplicateNisnIds).length;
+        insights.push({
+          id: 'duplicates',
+          title: 'Ditemukan identifier berulang',
+          description: 'NIS/NISN yang terindikasi ganda perlu diperiksa sebelum dipakai untuk integrasi atau pelaporan.',
+          severity: 'high',
+          count: duplicateTotal,
+        });
+      }
+      if (breakdownCounts.missing_identity + breakdownCounts.missing_address > 0) {
+        insights.push({
+          id: 'profile',
+          title: 'Profil dasar masih perlu dilengkapi',
+          description: 'Lengkapi identitas dan alamat untuk mengurangi data yang tidak siap digunakan pada laporan.',
+          severity: 'medium',
+          count: breakdownCounts.missing_identity + breakdownCounts.missing_address,
+        });
+      }
+      if (breakdownCounts.age_review > 0) {
+        insights.push({
+          id: 'age',
+          title: 'Ada tanggal lahir yang perlu ditinjau',
+          description: 'Sebagian tanggal lahir menghasilkan usia di luar rentang pemeriksaan 10–20 tahun. Verifikasi data sumber.',
+          severity: 'low',
+          count: breakdownCounts.age_review,
+        });
+      }
+      if (!insights.length) {
+        insights.push({
+          id: 'clean',
+          title: 'Tidak ada temuan utama',
+          description: 'Tidak ditemukan pola data utama yang masuk ke aturan pemeriksaan Intelligence Center.',
+          severity: 'low',
+          count: 0,
+        });
+      }
+    }
+
+    insights = insights.slice(0, 4);
+
+    var result = {
+      summary: {
+        activeStudents: activeStudents.length,
+        studentsNeedingAttention: studentsNeedingAttention,
+        studentsWithoutIssues: studentsWithoutIssues,
+        studentsWithoutClass: breakdownCounts.no_class,
+        duplicateStudents: Math.max(Object.keys(duplicateNisIds).length, Object.keys(duplicateNisnIds).length),
+        duplicateNis: Object.keys(duplicateNisIds).length,
+        duplicateNisn: Object.keys(duplicateNisnIds).length,
+        ageReviewStudents: breakdownCounts.age_review,
+        averageIssuesPerStudent: activeStudents.length
+          ? Number((totalIssueHits / activeStudents.length).toFixed(2))
+          : 0,
+      },
+      insights: insights,
+      breakdown: breakdown,
+      attentionStudents: attentionStudents.slice(0, 12),
+      generatedAt: now(),
+    };
+
+    cacheSet('reports_intelligence', result, 30);
     return successResponse(result);
   },
 
