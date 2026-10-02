@@ -3,7 +3,7 @@
     <PageHeader :title="isEdit ? 'Edit Pengguna' : 'Tambah Pengguna'"
       show-back :breadcrumbs="[{ label: 'Pengguna', to: '/users' }, { label: isEdit ? 'Edit' : 'Tambah' }]" />
 
-    <BaseAlert v-if="errorMsg" type="error" dismissible>{{ errorMsg }}</BaseAlert>
+    <BaseAlert v-if="errorMsg" type="error" dismissible @dismiss="errorMsg = ''">{{ errorMsg }}</BaseAlert>
 
     <BaseCard>
       <form class="space-y-4 mt-2" @submit.prevent="handleSubmit">
