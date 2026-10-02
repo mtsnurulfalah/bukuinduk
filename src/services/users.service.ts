@@ -22,11 +22,11 @@ export interface UpdateUserPayload {
 
 export const usersService = {
   async list(params?: { search?: string; role?: string; page?: number; limit?: number }): Promise<PaginatedResponse<User>> {
-    return gasRequest<PaginatedResponse<User>>('users.list', params)
+    return gasRequest<PaginatedResponse<User>>('users.list', params, { retry404: 2 })
   },
 
   async get(id: string): Promise<User> {
-    return gasRequest<User>('users.get', { id })
+    return gasRequest<User>('users.get', { id }, { retry404: 2 })
   },
 
   async create(data: CreateUserPayload): Promise<User> {
