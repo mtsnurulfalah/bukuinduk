@@ -2,6 +2,7 @@
   <div class="flex h-screen bg-slate-50 overflow-hidden">
 
     <ConnectionStatus />
+    <PwaInstallPrompt />
 
     <!-- ── Sidebar Desktop ──────────────────────────────────── -->
     <aside
@@ -232,24 +233,36 @@
     </div>
 
     <!-- ── Mobile Bottom Navigation ─────────────────────────── -->
-    <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 flex items-center justify-around px-2 pb-safe">
-      <RouterLink
-        v-for="item in mobileNavItems"
-        :key="item.name"
-        :to="item.to"
-        :class="[
-          'flex flex-col items-center gap-0.5 py-2 px-3 rounded-lg transition-colors min-w-0',
-          isActive(item.to)
-            ? 'text-primary-600'
-            : 'text-slate-400',
-        ]"
-      >
-        <component :is="item.icon" class="h-5 w-5 shrink-0" />
-        <span class="text-xs truncate">{{ item.mobileLabel || item.label }}</span>
-      </RouterLink>
-    </nav>
+    <nav
+      class="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 pb-safe"
+      aria-label="Navigasi utama"
+    >
+      <div class="grid grid-cols-5 items-center px-1">
+        <RouterLink
+          v-for="item in mobilePrimaryNavItems"
+          :key="item.name"
+          :to="item.to"
+          :class="[
+            'flex min-w-0 flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors',
+            isActive(item.to) ? 'text-primary-600' : 'text-slate-400',
+          ]"
+          :aria-current="isActive(item.to) ? 'page' : undefined"
+        >
+          <component :is="item.icon" class="h-5 w-5 shrink-0" />
+          <span class="text-[11px] font-medium truncate max-w-full">{{ item.mobileLabel || item.label }}</span>
+        </RouterLink>
 
-  </div>
+        <button
+          type="button"
+          class="flex min-w-0 flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+          aria-label="Buka menu"
+          @click="uiStore.openMobileSidebar()"
+        >
+          <MoreHorizontal class="h-5 w-5 shrink-0" />
+          <span class="text-[11px] font-medium">Menu</span>
+        </button>
+      </div>
+    </nav>  </div>
 </template>
 
 <script setup lang="ts">
@@ -258,10 +271,11 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import {
   LayoutDashboard, Users, GraduationCap, School,
   BookOpen, BarChart3, Settings, UserCog,
-  LogOut, Menu, X, PanelLeft, CalendarDays, Layers,
+  LogOut, Menu, X, PanelLeft, CalendarDays, Layers, MoreHorizontal, Home, Search,
 } from 'lucide-vue-next'
 import BaseAvatar from '@/components/ui/BaseAvatar.vue'
 import ConnectionStatus from '@/components/shared/ConnectionStatus.vue'
+import PwaInstallPrompt from '@/components/shared/PwaInstallPrompt.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { useSettingsStore } from '@/stores/settings'
@@ -401,10 +415,24 @@ function hasPermission(item: NavItem): boolean {
 
 const filteredNavItems = computed(() => navItems.filter(hasPermission))
 
-// Bottom nav: ambil 4–5 item terpenting per role
-const mobileNavItems = computed(() => {
-  const items = filteredNavItems.value.filter(i => !i.section || true)
-  return items.slice(0, 5)
+// Bottom nav: empat fungsi utama + Menu untuk seluruh navigasi.
+const mobilePrimaryNavItems = computed<NavItem[]>(() => {
+  const preferred = [
+    { to: '/dashboard', icon: Home, label: 'Dashboard', mobileLabel: 'Beranda' },
+    { to: authStore.user?.role === 'teacher' ? '/my-students' : '/students', icon: Search, label: authStore.user?.role === 'teacher' ? 'Siswa Saya' : 'Data Siswa', mobileLabel: 'Siswa' },
+    { to: '/classrooms', icon: School, label: 'Kelas & Rombel', mobileLabel: 'Kelas' },
+    { to: '/reports', icon: BarChart3, label: 'Laporan', mobileLabel: 'Laporan' },
+  ] as const
+
+  return preferred
+    .map((item, index) => ({
+      name: `mobile-${index}-${item.to}`,
+      ...item,
+      section: undefined,
+      roles: undefined,
+      permission: undefined,
+    }))
+    .filter(item => filteredNavItems.value.some(nav => nav.to === item.to))
 })
 
 // BUG-30 FIX: Gunakan route.matched untuk pengecekan isActive yang lebih presisi.
