@@ -1,4 +1,5 @@
 export { default as StatCard } from './StatCard.vue'
+export { default as DataQualityCard } from './DataQualityCard.vue'
 export { default as DataTable } from './DataTable.vue'
 export { default as SearchFilter } from './SearchFilter.vue'
 export { default as PageHeader } from './PageHeader.vue'
