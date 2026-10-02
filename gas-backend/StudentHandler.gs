@@ -22,6 +22,12 @@ var StudentHandler = {
       case 'importBatch':    return this.importBatch(payload, user);
       case 'exportData':     return this.exportData(payload, user);
       case 'getStats':       return this.getStats(payload, user);
+      case 'getVerifications': return this.getVerifications(payload, user);
+      case 'updateVerification': return this.updateVerification(payload, user);
+      case 'getDocuments':    return this.getDocuments(payload, user);
+      case 'createDocument':  return this.createDocument(payload, user);
+      case 'updateDocument':  return this.updateDocument(payload, user);
+      case 'deleteDocument':  return this.deleteDocument(payload, user);
       default: return errorResponse(404, 'Student method tidak ditemukan.');
     }
   },
@@ -246,6 +252,210 @@ var StudentHandler = {
     }
 
     return successResponse(result);
+  },
+
+  // ── Verifikasi administrasi ─────────────────────────────────
+  getVerifications: function(payload, user) {
+    checkPermission(user, 'student:view:sensitive');
+    var student = this._getViewableStudent(payload.studentId, user);
+    if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    var headers = ['id','studentId','section','label','status','verifiedBy','verifiedAt','notes'];
+    var sheet = getOrCreateSheet(CONFIG.SHEETS.VERIFICATIONS, headers);
+    var all = sheetToObjects(sheet);
+    var existing = all.filter(function(v) {
+      return String(v.studentId) === String(payload.studentId);
+    });
+
+    var definitions = [
+      { section: 'identity', label: 'Identitas' },
+      { section: 'address', label: 'Alamat' },
+      { section: 'family', label: 'Orang Tua/Wali' },
+      { section: 'health', label: 'Kesehatan' },
+      { section: 'education', label: 'Pendidikan' },
+      { section: 'enrollment', label: 'Riwayat Kelas' },
+    ];
+
+    var result = definitions.map(function(definition) {
+      var row = existing.find(function(v) { return v.section === definition.section; });
+      return Object.assign({
+        id: row ? row.id : '',
+        studentId: String(payload.studentId),
+        section: definition.section,
+        label: definition.label,
+        status: 'unverified',
+        verifiedBy: '',
+        verifiedAt: '',
+        notes: '',
+      }, row || {});
+    });
+
+    return successResponse(result);
+  },
+
+  updateVerification: function(payload, user) {
+    checkPermission(user, 'student:verify');
+    var student = this._getViewableStudent(payload.studentId, user);
+    if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    var allowed = ['identity','address','family','health','education','enrollment'];
+    if (allowed.indexOf(payload.section) === -1) {
+      return errorResponse(400, 'Bagian verifikasi tidak valid.');
+    }
+
+    var validStatuses = ['unverified','verified','needs_revision'];
+    if (validStatuses.indexOf(payload.status) === -1) {
+      return errorResponse(400, 'Status verifikasi tidak valid.');
+    }
+
+    var headers = ['id','studentId','section','label','status','verifiedBy','verifiedAt','notes'];
+    var sheet = getOrCreateSheet(CONFIG.SHEETS.VERIFICATIONS, headers);
+    var all = sheetToObjects(sheet);
+    var existing = all.find(function(v) {
+      return String(v.studentId) === String(payload.studentId) && v.section === payload.section;
+    });
+
+    var labels = {
+      identity: 'Identitas',
+      address: 'Alamat',
+      family: 'Orang Tua/Wali',
+      health: 'Kesehatan',
+      education: 'Pendidikan',
+      enrollment: 'Riwayat Kelas',
+    };
+
+    var old = existing ? Object.assign({}, existing) : null;
+    var data = {
+      id: existing ? existing.id : generateUUID(),
+      studentId: String(payload.studentId),
+      section: payload.section,
+      label: labels[payload.section],
+      status: payload.status,
+      verifiedBy: payload.status === 'verified'
+        ? (user.fullName || user.username || user.id)
+        : '',
+      verifiedAt: payload.status === 'verified' ? now() : '',
+      notes: payload.notes ? String(payload.notes).trim() : '',
+    };
+
+    if (existing) {
+      updateRow(sheet, findRowById(sheet, existing.id), data, headers);
+    } else {
+      appendRow(sheet, data, headers);
+    }
+
+    cacheRemove('students_completeness');
+    AuditService.log(
+      user.id,
+      'VERIFY',
+      'student_verification',
+      String(payload.studentId),
+      old,
+      data,
+      'Verifikasi ' + labels[payload.section] + ' siswa'
+    );
+
+    return successResponse(data);
+  },
+
+  // ── Dokumen siswa ────────────────────────────────────────────
+  getDocuments: function(payload, user) {
+    checkPermission(user, 'student:view:sensitive');
+    var student = this._getViewableStudent(payload.studentId, user);
+    if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    var headers = ['id','studentId','documentType','documentName','documentNumber','fileUrl','status','notes','createdAt','updatedAt','createdBy'];
+    var sheet = getOrCreateSheet(CONFIG.SHEETS.DOCUMENTS, headers);
+    var data = sheetToObjects(sheet)
+      .filter(function(d) { return String(d.studentId) === String(payload.studentId); })
+      .sort(function(a,b) { return String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')); });
+    return successResponse(data);
+  },
+
+  createDocument: function(payload, user) {
+    checkPermission(user, 'student:update');
+    var student = this._getViewableStudent(payload.studentId, user);
+    if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    if (!payload.documentType || !payload.documentName) {
+      return errorResponse(400, 'Jenis dan nama dokumen wajib diisi.');
+    }
+
+    var headers = ['id','studentId','documentType','documentName','documentNumber','fileUrl','status','notes','createdAt','updatedAt','createdBy'];
+    var sheet = getOrCreateSheet(CONFIG.SHEETS.DOCUMENTS, headers);
+    var ts = now();
+    var data = {
+      id: generateUUID(),
+      studentId: String(payload.studentId),
+      documentType: String(payload.documentType).trim(),
+      documentName: String(payload.documentName).trim(),
+      documentNumber: payload.documentNumber ? String(payload.documentNumber).trim() : '',
+      fileUrl: payload.fileUrl ? String(payload.fileUrl).trim() : '',
+      status: payload.status === 'needs_update' ? 'needs_update' : 'available',
+      notes: payload.notes ? String(payload.notes).trim() : '',
+      createdAt: ts,
+      updatedAt: ts,
+      createdBy: user.id,
+    };
+
+    appendRow(sheet, data, headers);
+    AuditService.log(user.id, 'CREATE', 'student_document', data.id, null, data, 'Tambah dokumen siswa');
+    return successResponse(data);
+  },
+
+  updateDocument: function(payload, user) {
+    checkPermission(user, 'student:update');
+    if (!payload.id) return errorResponse(400, 'ID dokumen diperlukan.');
+
+    var headers = ['id','studentId','documentType','documentName','documentNumber','fileUrl','status','notes','createdAt','updatedAt','createdBy'];
+    var sheet = getOrCreateSheet(CONFIG.SHEETS.DOCUMENTS, headers);
+    var rowIdx = findRowById(sheet, payload.id);
+    if (rowIdx < 0) return errorResponse(404, 'Dokumen tidak ditemukan.');
+
+    var all = sheetToObjects(sheet);
+    var existing = all.find(function(d) { return String(d.id) === String(payload.id); });
+    if (!existing) return errorResponse(404, 'Dokumen tidak ditemukan.');
+
+    var studentId = String(existing.studentId);
+    if (payload.studentId && String(payload.studentId) !== studentId) {
+      return errorResponse(400, 'Dokumen tidak boleh dipindahkan ke siswa lain.');
+    }
+
+    var updated = Object.assign({}, existing, {
+      documentType: payload.documentType !== undefined ? String(payload.documentType).trim() : existing.documentType,
+      documentName: payload.documentName !== undefined ? String(payload.documentName).trim() : existing.documentName,
+      documentNumber: payload.documentNumber !== undefined ? String(payload.documentNumber).trim() : existing.documentNumber,
+      fileUrl: payload.fileUrl !== undefined ? String(payload.fileUrl).trim() : existing.fileUrl,
+      status: payload.status === 'needs_update' ? 'needs_update' : 'available',
+      notes: payload.notes !== undefined ? String(payload.notes).trim() : existing.notes,
+      updatedAt: now(),
+    });
+
+    if (!updated.documentType || !updated.documentName) {
+      return errorResponse(400, 'Jenis dan nama dokumen wajib diisi.');
+    }
+
+    updateRow(sheet, rowIdx, updated, headers);
+    AuditService.log(user.id, 'UPDATE', 'student_document', String(payload.id), existing, updated, 'Perbarui dokumen siswa');
+    return successResponse(updated);
+  },
+
+  deleteDocument: function(payload, user) {
+    checkPermission(user, 'student:update');
+    if (!payload.id) return errorResponse(400, 'ID dokumen diperlukan.');
+
+    var headers = ['id','studentId','documentType','documentName','documentNumber','fileUrl','status','notes','createdAt','updatedAt','createdBy'];
+    var sheet = getOrCreateSheet(CONFIG.SHEETS.DOCUMENTS, headers);
+    var rowIdx = findRowById(sheet, payload.id);
+    if (rowIdx < 0) return errorResponse(404, 'Dokumen tidak ditemukan.');
+
+    var all = sheetToObjects(sheet);
+    var existing = all.find(function(d) { return String(d.id) === String(payload.id); });
+    if (!existing) return errorResponse(404, 'Dokumen tidak ditemukan.');
+
+    sheet.deleteRow(rowIdx);
+    AuditService.log(user.id, 'DELETE', 'student_document', String(payload.id), existing, null, 'Hapus dokumen siswa');
+    return successResponse({ id: String(payload.id), message: 'Dokumen berhasil dihapus.' });
   },
 
   create: function(payload, user) {
