@@ -22,7 +22,7 @@
             : 'border-slate-300 focus:border-primary-500 focus:ring-primary-100',
           !modelValue ? 'text-slate-400' : 'text-slate-800',
         ]"
-        @change="handleChange"
+        @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
       >
         <option v-if="placeholder" value="" :disabled="!clearable" :selected="!modelValue">
           {{ placeholder }}
@@ -82,27 +82,7 @@ const props = withDefaults(defineProps<Props>(), {
   clearable: false,
 })
 
-const emit = defineEmits<{
-  'update:modelValue': [value: string | number | undefined]
-}>()
-
-/**
- * Preserve the declared option value type for custom v-model.
- * Native select events are always strings, so numeric option values need
- * to be resolved back to the original option.value explicitly.
- */
-function handleChange(event: Event) {
-  const rawValue = (event.target as HTMLSelectElement).value
-
-  if (props.placeholder && rawValue === '') {
-    emit('update:modelValue', undefined)
-    return
-  }
-
-  const selected = props.options.find(option => String(option.value) === rawValue)
-  emit('update:modelValue', selected?.value ?? rawValue)
-}
-
+defineEmits<{ 'update:modelValue': [value: string] }>()
 const selectId = computed(() => props.id ?? `select-${uid()}`)
 const hasError = computed(() => Boolean(props.errorMessage))
 </script>
