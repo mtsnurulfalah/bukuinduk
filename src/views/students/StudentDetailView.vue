@@ -364,7 +364,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Pencil, Archive, GraduationCap, School,
@@ -811,6 +811,18 @@ onMounted(async () => {
     if (_isMounted) isLoading.value = false
   }
 })
+
+watch(
+  () => route.params.id,
+  async (newId) => {
+    const nextId = String(newId ?? '')
+    // Komponen detail dapat dipakai ulang Vue Router saat hanya parameter ID berubah.
+    // Pastikan data siswa dan relasinya dimuat ulang untuk ID yang baru.
+    if (!_isMounted || !nextId || nextId === _loadedStudentId) return
+    _loadedStudentId = nextId
+    await retryLoad()
+  }
+)
 
 onUnmounted(() => {
   // Set flag agar tidak ada response yang masuk setelah komponen unmount
