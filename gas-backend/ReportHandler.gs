@@ -237,16 +237,17 @@ var ReportHandler = {
     Object.keys(nisGroups).forEach(function(key) {
       if (nisGroups[key].length > 1) {
         duplicateNisGroups++;
-        nisGroups[key].forEach(function(id) { duplicateNisIds[id] = true; });
+        nisGroups[key].forEach(function(id) { duplicateNisIds[id] = true; duplicateStudentIds[id] = true; });
       }
     });
 
     var duplicateNisnIds = {};
+    var duplicateStudentIds = {};
     var duplicateNisnGroups = 0;
     Object.keys(nisnGroups).forEach(function(key) {
       if (nisnGroups[key].length > 1) {
         duplicateNisnGroups++;
-        nisnGroups[key].forEach(function(id) { duplicateNisnIds[id] = true; });
+        nisnGroups[key].forEach(function(id) { duplicateNisnIds[id] = true; duplicateStudentIds[id] = true; });
       }
     });
 
@@ -275,6 +276,7 @@ var ReportHandler = {
       duplicate_nis: { label: 'NIS terduplikasi', severity: 'high' },
       duplicate_nisn: { label: 'NISN terduplikasi', severity: 'high' },
       age_review: { label: 'Usia/tanggal lahir perlu ditinjau', severity: 'low' },
+      invalid_nisn: { label: 'Format NISN perlu ditinjau', severity: 'high' },
     };
 
     // Data relasi cukup dibaca sekali.
@@ -313,6 +315,7 @@ var ReportHandler = {
       duplicate_nis: 0,
       duplicate_nisn: 0,
       age_review: 0,
+      invalid_nisn: 0,
     };
 
     activeStudents.forEach(function(s) {
@@ -335,7 +338,9 @@ var ReportHandler = {
       if (!activeEnrollmentByStudent[sid]) issues.push('no_class');
       if (duplicateNisIds[sid]) issues.push('duplicate_nis');
       if (duplicateNisnIds[sid]) issues.push('duplicate_nisn');
-      
+      var nisn = normalizeIdentifier(s.nisn);
+      if (nisn && !/^\\d{10}$/.test(nisn)) issues.push('invalid_nisn');
+
       var age = getAge(s.birthDate);
       if (age !== null && (age < 10 || age > 20)) issues.push('age_review');
 
@@ -375,6 +380,7 @@ var ReportHandler = {
       ['missing_health', 'Kesehatan belum lengkap'],
       ['missing_education', 'Riwayat pendidikan belum ada'],
       ['age_review', 'Usia/tanggal lahir perlu ditinjau'],
+      ['invalid_nisn', 'Format NISN perlu ditinjau'],
     ];
 
     var maxCount = breakdownOrder.reduce(function(max, pair) {
@@ -435,6 +441,15 @@ var ReportHandler = {
           count: breakdownCounts.missing_identity + breakdownCounts.missing_address,
         });
       }
+      if (breakdownCounts.invalid_nisn > 0) {
+        insights.push({
+          id: 'invalid-nisn',
+          title: 'Ada format NISN yang perlu ditinjau',
+          description: 'NISN yang terisi tetapi tidak mengikuti format 10 digit perlu diverifikasi dari dokumen sumber.',
+          severity: 'high',
+          count: breakdownCounts.invalid_nisn,
+        });
+      }
       if (breakdownCounts.age_review > 0) {
         insights.push({
           id: 'age',
@@ -463,7 +478,7 @@ var ReportHandler = {
         studentsNeedingAttention: studentsNeedingAttention,
         studentsWithoutIssues: studentsWithoutIssues,
         studentsWithoutClass: breakdownCounts.no_class,
-        duplicateStudents: Math.max(Object.keys(duplicateNisIds).length, Object.keys(duplicateNisnIds).length),
+        duplicateStudents: Object.keys(duplicateStudentIds).length,
         duplicateNis: Object.keys(duplicateNisIds).length,
         duplicateNisn: Object.keys(duplicateNisnIds).length,
         ageReviewStudents: breakdownCounts.age_review,
