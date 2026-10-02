@@ -62,6 +62,35 @@ export interface ClassroomStats {
   femaleStudents: number
 }
 
+export type VerificationStatus = 'unverified' | 'verified' | 'needs_revision'
+
+export interface StudentVerification {
+  id: string
+  studentId: string
+  section: string
+  label: string
+  status: VerificationStatus
+  verifiedBy?: string
+  verifiedAt?: string
+  notes?: string
+}
+
+export type StudentDocumentStatus = 'available' | 'needs_update'
+
+export interface StudentDocument {
+  id: string
+  studentId: string
+  documentType: string
+  documentName: string
+  documentNumber?: string
+  fileUrl?: string
+  status: StudentDocumentStatus
+  notes?: string
+  createdAt: string
+  updatedAt: string
+  createdBy?: string
+}
+
 export interface AuditLog {
   id: string
   userId: string
