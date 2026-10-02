@@ -28,6 +28,14 @@ window.addEventListener('vite:preloadError', event => {
   window.location.reload()
 })
 
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js', { scope: '/' }).catch(error => {
+      console.warn('Service worker tidak dapat didaftarkan:', error)
+    })
+  })
+}
+
 const app = createApp(App)
 
 app.use(createPinia())
