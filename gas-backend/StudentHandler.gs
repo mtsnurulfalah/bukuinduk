@@ -626,11 +626,13 @@ var StudentHandler = {
       updated.updatedAt = now();
       updateRow(sheet, rowIdx, updated, headers);
       cacheRemove('students_completeness');
+      AuditService.log(user.id, 'UPDATE', 'student_parent', String(existing.id), existing, updated, 'Perbarui data orang tua/wali');
       return successResponse(updated);
     } else {
       var newParent = Object.assign({ id: generateUUID(), createdAt: now(), updatedAt: now(), isAlive: true }, payload);
       appendRow(sheet, newParent, headers);
       cacheRemove('students_completeness');
+      AuditService.log(user.id, 'CREATE', 'student_parent', String(newParent.id), null, newParent, 'Tambah data orang tua/wali');
       return successResponse(newParent);
     }
   },
@@ -657,11 +659,13 @@ var StudentHandler = {
       var updated = Object.assign({}, existing, payload, { updatedAt: now() });
       updateRow(sheet, rowIdx, updated, headers);
       cacheRemove('students_completeness');
+      AuditService.log(user.id, 'UPDATE', 'student_health', String(existing.id), existing, updated, 'Perbarui data kesehatan siswa');
       return successResponse(updated);
     } else {
       var newHealth = Object.assign({ id: generateUUID(), createdAt: now(), updatedAt: now() }, payload);
       appendRow(sheet, newHealth, headers);
       cacheRemove('students_completeness');
+      AuditService.log(user.id, 'CREATE', 'student_health', String(newHealth.id), null, newHealth, 'Tambah data kesehatan siswa');
       return successResponse(newHealth);
     }
   },
