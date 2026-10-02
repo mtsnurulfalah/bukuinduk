@@ -626,6 +626,42 @@ function getParent(rel: 'father' | 'mother' | 'guardian'): StudentParent | undef
   return parents.find(p => p.relationship === rel)
 }
 
+/**
+ * Muat relasi siswa secara eksplisit sebagai fallback/normalisasi.
+ * Beberapa respons students.getFull dapat mengembalikan data utama tanpa
+ * menyertakan relasi, sementara endpoint relasi tersedia terpisah.
+ * Kegagalan satu relasi tidak boleh menghilangkan data dari relasi lainnya.
+ */
+async function loadStudentRelations(studentId: string): Promise<void> {
+  const [parentsResult, healthResult, educationResult] = await Promise.allSettled([
+    studentsService.getParents(studentId),
+    studentsService.getHealth(studentId),
+    studentsService.getEducationHistory(studentId),
+  ])
+
+  if (!_isMounted || String(route.params.id) !== studentId || !studentsStore.current) return
+
+  const current = studentsStore.current
+  const parents = parentsResult.status === 'fulfilled' && Array.isArray(parentsResult.value)
+    ? parentsResult.value
+    : (Array.isArray(current.parents) ? current.parents : [])
+  const health = healthResult.status === 'fulfilled'
+    ? healthResult.value
+    : current.health
+  const educationHistory = educationResult.status === 'fulfilled' && Array.isArray(educationResult.value)
+    ? educationResult.value
+    : (Array.isArray(current.educationHistory) ? current.educationHistory : [])
+
+  // Jangan mengganti data relasi yang sudah tersedia dengan nilai kosong
+  // jika endpoint terpisah gagal atau tidak mengembalikan array yang valid.
+  studentsStore.current = {
+    ...current,
+    parents,
+    health: health ?? current.health,
+    educationHistory,
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Data loading — FIX RACE CONDITION
 // _loadedStudentId di-set sekali di onMounted dan tidak berubah.
@@ -665,6 +701,7 @@ async function retryLoad(): Promise<void> {
   try {
     await studentsStore.fetchDetail(_loadedStudentId)
     if (!_isMounted) return
+    await loadStudentRelations(_loadedStudentId)
     _studentData.value = studentsStore.current
     await loadEnrollments()
   } catch (e: unknown) {
@@ -755,6 +792,11 @@ onMounted(async () => {
   try {
     // fetchDetail set store.current → student computed otomatis reaktif
     await studentsStore.fetchDetail(_loadedStudentId)
+    if (!_isMounted) return
+
+    // Ambil relasi lewat endpoint masing-masing agar tab tidak bergantung
+    // pada apakah students.getFull menyertakan seluruh relasi.
+    await loadStudentRelations(_loadedStudentId)
     if (!_isMounted) return
 
     // Simpan snapshot untuk operasi restore
