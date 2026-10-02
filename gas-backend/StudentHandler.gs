@@ -105,19 +105,45 @@ var StudentHandler = {
     return successResponse(paginate(all, payload.page, payload.limit));
   },
 
-  get: function(payload, user) {
+  /**
+   * Ambil siswa yang boleh dilihat user. Teacher hanya boleh melihat siswa
+   * yang terdaftar aktif pada kelas yang diampunya.
+   */
+  _getViewableStudent: function(studentId, user) {
     if (!hasPermission(user, 'student:view:all') && !hasPermission(user, 'student:view:own_class')) {
       throw new Error('FORBIDDEN');
     }
-    var all = this._getAll();
-    var s = all.find(function(x) { return String(x.id) === String(payload.id); });
-    if (!s) return errorResponse(404, 'Siswa tidak ditemukan.');
 
-    // Sembunyikan field sensitif untuk teacher
+    var source = this._getAll().find(function(x) {
+      return String(x.id) === String(studentId);
+    });
+    if (!source) return null;
+
     if (user.role === 'teacher') {
-      delete s.nik;
+      if (!user.teacherId) throw new Error('FORBIDDEN');
+      var classrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
+      var classIds = classrooms
+        .filter(function(c) { return String(c.homeroomTeacherId) === String(user.teacherId); })
+        .map(function(c) { return String(c.id); });
+      var isMyStudent = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS)).some(function(e) {
+        return String(e.studentId) === String(studentId) &&
+          classIds.indexOf(String(e.classroomId)) !== -1 &&
+          e.status === 'active';
+      });
+      if (!isMyStudent) throw new Error('FORBIDDEN');
     }
-    return successResponse(s);
+
+    return source;
+  },
+
+  get: function(payload, user) {
+    var source = this._getViewableStudent(payload.id, user);
+    if (!source) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    // Jangan mutasi objek cache _getAll(): salin sebelum menghapus field sensitif.
+    var student = Object.assign({}, source);
+    if (user.role === 'teacher') delete student.nik;
+    return successResponse(student);
   },
 
   getFull: function(payload, user) {
@@ -295,6 +321,9 @@ var StudentHandler = {
   },
 
   getParents: function(payload, user) {
+    var student = this._getViewableStudent(payload.studentId, user);
+    if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
+
     var parents = sheetToObjects(getSheet(CONFIG.SHEETS.PARENTS))
       .filter(function(p) { return String(p.studentId) === String(payload.studentId); });
     if (user.role === 'teacher') {
@@ -327,6 +356,9 @@ var StudentHandler = {
 
   getHealth: function(payload, user) {
     checkPermission(user, 'student:view:sensitive');
+    var student = this._getViewableStudent(payload.studentId, user);
+    if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
+
     var h = sheetToObjects(getSheet(CONFIG.SHEETS.HEALTH))
       .find(function(x) { return String(x.studentId) === String(payload.studentId); });
     return successResponse(h || null);
@@ -352,12 +384,18 @@ var StudentHandler = {
   },
 
   getEducationHistory: function(payload, user) {
+    var student = this._getViewableStudent(payload.studentId, user);
+    if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
+
     var data = sheetToObjects(getSheet(CONFIG.SHEETS.EDUCATION))
       .filter(function(e) { return String(e.studentId) === String(payload.studentId); });
     return successResponse(data);
   },
 
   getEnrollments: function(payload, user) {
+    var student = this._getViewableStudent(payload.studentId, user);
+    if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
+
     var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS))
       .filter(function(e) { return String(e.studentId) === String(payload.studentId); });
     var classrooms  = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
