@@ -22,6 +22,8 @@ export default defineConfig({
           vendor: ['vue', 'vue-router', 'pinia'],
           utils: ['axios', 'date-fns'],
           icons: ['lucide-vue-next'],
+          excel: ['xlsx'],
+          pdf: ['jspdf', 'jspdf-autotable'],
         },
       },
     },
