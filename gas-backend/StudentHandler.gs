@@ -404,7 +404,7 @@ var StudentHandler = {
     var sheet   = getSheet(CONFIG.SHEETS.HEALTH);
     var headers = getHeaders(sheet);
     var all     = sheetToObjects(sheet);
-    var existing = all.find(function(h) { return String(h.studentId) === String(payload.studentId); });
+    var existing = all.find(function(h) { return String(h.studentId != null ? h.studentId : h.studentID) === String(payload.studentId); });
 
     if (existing) {
       var rowIdx = findRowById(sheet, existing.id);
@@ -585,7 +585,7 @@ var StudentHandler = {
       var headers = getHeaders(sheet);
       var all     = sheetToObjects(sheet);
       var existing = all.find(function(p) {
-        return String(p.studentId) === String(studentId) && p.relationship === rel;
+        return String(p.studentId != null ? p.studentId : p.studentID) === String(studentId) && p.relationship === rel;
       });
 
       var data = Object.assign({ id: generateUUID(), createdAt: now(), isAlive: true },
@@ -605,7 +605,7 @@ var StudentHandler = {
     if (!health) return;
     var sheet    = getSheet(CONFIG.SHEETS.HEALTH);
     var headers  = getHeaders(sheet);
-    var existing = sheetToObjects(sheet).find(function(h) { return String(h.studentId) === String(studentId); });
+    var existing = sheetToObjects(sheet).find(function(h) { return String(h.studentId != null ? h.studentId : h.studentID) === String(studentId); });
     var data     = Object.assign({ id: generateUUID(), createdAt: now() }, health, { studentId: studentId, updatedAt: now() });
 
     if (existing) {
