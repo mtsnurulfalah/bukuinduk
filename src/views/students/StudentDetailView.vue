@@ -347,6 +347,7 @@
               <!-- ── Tab: Administrasi ──────────────────────── -->
               <div v-else-if="activeTab === 'admin'">
                 <StudentAdministrationPanel
+                  :key="student.id"
                   :student-id="student.id"
                   :can-verify="can(PERMISSIONS.STUDENT_VERIFY)"
                   :can-manage-documents="can(PERMISSIONS.STUDENT_UPDATE)"
