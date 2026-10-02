@@ -175,14 +175,35 @@ function sheetToObjects(sheet) {
   });
 }
 
+// Bantu CRUD menangani variasi nama header yang sudah terlanjur dipakai
+// pada spreadsheet. Nama kanonis di frontend tetap camelCase.
+function _valueForHeader(obj, header) {
+  if (obj && obj[header] !== undefined) return obj[header];
+  var aliases = {
+    address: ['addres'],
+    addres: ['address'],
+    entryDate: ['endryDate'],
+    endryDate: ['entryDate'],
+    healthNotes: ['HealthNotes'],
+    HealthNotes: ['healthNotes'],
+    studentId: ['studentID'],
+    studentID: ['studentId']
+  };
+  var candidates = aliases[header] || [];
+  for (var i = 0; i < candidates.length; i++) {
+    if (obj && obj[candidates[i]] !== undefined) return obj[candidates[i]];
+  }
+  return '';
+}
+
 function appendRow(sheet, obj, headers) {
-  var row = headers.map(function(h) { return obj[h] !== undefined ? obj[h] : ''; });
+  var row = headers.map(function(h) { return _valueForHeader(obj, h); });
   sheet.appendRow(row);
 }
 
 function updateRow(sheet, rowIndex, obj, headers) {
   // rowIndex: 1-based (row 1 = header, row 2 = first data)
-  var row = headers.map(function(h) { return obj[h] !== undefined ? obj[h] : ''; });
+  var row = headers.map(function(h) { return _valueForHeader(obj, h); });
   sheet.getRange(rowIndex, 1, 1, headers.length).setValues([row]);
 }
 
