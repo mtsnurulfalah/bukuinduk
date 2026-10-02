@@ -570,7 +570,7 @@ var StudentHandler = {
         return s.entryDate && s.entryDate.toString().startsWith(thisYear.toString());
       }).length,
       totalTeachers:    sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS)).filter(function(t){ return t.status === 'active'; }).length,
-      totalClassrooms:  sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS)).filter(function(c){ return c.isActive === true || c.isActive === 'TRUE'; }).length,
+      totalClassrooms:  sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS)).filter(function(c){ return normalizeBoolean(c.isActive, false); }).length,
     };
 
     cacheSet(cacheKey, stats, 300);
