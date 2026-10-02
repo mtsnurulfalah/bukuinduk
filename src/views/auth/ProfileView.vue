@@ -35,8 +35,8 @@
 
       <!-- Ganti password -->
       <BaseCard title="Ganti Password" subtitle="Direkomendasikan rutin mengganti password" class="lg:col-span-2">
-        <BaseAlert v-if="successMsg" type="success" dismissible class="mb-4">{{ successMsg }}</BaseAlert>
-        <BaseAlert v-if="errorMsg" type="error" dismissible class="mb-4">{{ errorMsg }}</BaseAlert>
+        <BaseAlert v-if="successMsg" type="success" dismissible class="mb-4" @dismiss="successMsg = ''">{{ successMsg }}</BaseAlert>
+        <BaseAlert v-if="errorMsg" type="error" dismissible class="mb-4" @dismiss="errorMsg = ''">{{ errorMsg }}</BaseAlert>
 
         <form class="space-y-4" @submit.prevent="handleChangePassword">
           <BaseInput
