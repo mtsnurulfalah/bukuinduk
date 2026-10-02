@@ -2,7 +2,7 @@
   <div class="space-y-5 max-w-2xl">
     <PageHeader :title="isEdit ? 'Edit Guru' : 'Tambah Guru'" show-back
       :breadcrumbs="[{ label: 'Data Guru', to: '/teachers' }, { label: isEdit ? 'Edit' : 'Tambah' }]" />
-    <BaseAlert v-if="errorMsg" type="error" dismissible>{{ errorMsg }}</BaseAlert>
+    <BaseAlert v-if="errorMsg" type="error" dismissible @dismiss="errorMsg = ''">{{ errorMsg }}</BaseAlert>
     <BaseCard>
       <form class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3" @submit.prevent="handleSubmit">
         <BaseInput v-model="form.fullName" label="Nama Lengkap" required class="sm:col-span-2" />
