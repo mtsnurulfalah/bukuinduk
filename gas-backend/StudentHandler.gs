@@ -305,11 +305,35 @@ var StudentHandler = {
 
     var all = this._getAll();
     var old = all.find(function(s) { return String(s.id) === String(id); });
+    if (!old) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    var normalizedNis = payload.nis !== undefined ? normalizeIdentifier(payload.nis) : undefined;
+    var normalizedNisn = payload.nisn !== undefined ? normalizeIdentifier(payload.nisn) : undefined;
+
+    if (normalizedNisn !== undefined && !/^\d{10}$/.test(normalizedNisn)) {
+      return errorResponse(400, 'NISN harus 10 digit angka.');
+    }
+
+    if (normalizedNis !== undefined && all.some(function(s) {
+      return String(s.id) !== String(id) &&
+        normalizeIdentifier(s.nis) === normalizedNis;
+    })) {
+      return errorResponse(409, 'NIS "' + normalizedNis + '" sudah digunakan.');
+    }
+
+    if (normalizedNisn !== undefined && all.some(function(s) {
+      return String(s.id) !== String(id) &&
+        normalizeIdentifier(s.nisn) === normalizedNisn;
+    })) {
+      return errorResponse(409, 'NISN "' + normalizedNisn + '" sudah digunakan.');
+    }
 
     var updated = Object.assign({}, old);
     headers.forEach(function(h) {
       if (h === 'id' || h === 'createdAt' || h === 'createdBy') return;
       var value = _valueForHeader(payload, h);
+      if (h === 'nis' && normalizedNis !== undefined) value = normalizedNis;
+      if (h === 'nisn' && normalizedNisn !== undefined) value = normalizedNisn;
       // Alias kosong tidak boleh menimpa nilai lama; update hanya field yang dikirim.
       var hasExact = payload[h] !== undefined;
       var aliasNames = {
