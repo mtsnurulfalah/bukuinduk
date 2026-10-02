@@ -598,16 +598,16 @@ const studentAge = computed((): number | null =>
   calculateAge(student.value?.birthDate)
 )
 
-const nikDisplay = computed((): string | null => {
+const nikDisplay = computed((): string | undefined => {
   if (can(PERMISSIONS.STUDENT_VIEW_SENSITIVE)) {
     return str(student.value?.nik)
   }
   // Backend sudah hapus field nik untuk teacher → null → InfoRow tampil '—'
-  if (!student.value?.nik) return null
+  if (!student.value?.nik) return undefined
   return '••••••••••••••••'
 })
 
-const familyStatusLabel = computed((): string | null => {
+const familyStatusLabel = computed((): string | undefined => {
   const map: Record<string, string> = {
     kandung:     'Anak Kandung',
     tiri:        'Anak Tiri',
@@ -617,7 +617,7 @@ const familyStatusLabel = computed((): string | null => {
     yatim_piatu: 'Yatim Piatu',
   }
   const val = student.value?.familyStatus
-  if (!val) return null
+  if (!val) return undefined
   return map[val] ?? val
 })
 
