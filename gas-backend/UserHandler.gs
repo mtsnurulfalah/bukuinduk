@@ -112,7 +112,7 @@ var UserHandler = {
     if (rowIdx < 0) return errorResponse(404, 'Pengguna tidak ditemukan.');
     var all = sheetToObjects(sheet);
     var found = all.find(function(u){ return String(u.id) === String(payload.id); });
-    var newStatus = !(found.isActive === true || found.isActive === 'TRUE');
+    var newStatus = !normalizeBoolean(found.isActive, false);
     var colActive = headers.indexOf('isActive') + 1;
     if (colActive > 0) sheet.getRange(rowIdx, colActive).setValue(newStatus);
     var colUpdated = headers.indexOf('updatedAt') + 1;
