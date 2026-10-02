@@ -71,6 +71,9 @@
       />
     </div>
 
+    <!-- ── Kualitas Data ──────────────────────────────────────── -->
+    <DataQualityCard />
+
     <!-- ── Rekap Kelas ────────────────────────────────────────── -->
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
       <div class="flex items-center justify-between p-5 pb-0">
@@ -205,7 +208,7 @@ import {
   Users, User, CheckCircle, GraduationCap, ArrowRightLeft,
   FileText, RefreshCw, AlertCircle, ChevronRight, School,
 } from 'lucide-vue-next'
-import { StatCard } from '@/components/shared'
+import { DataQualityCard, StatCard } from '@/components/shared'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolYearStore } from '@/stores/schoolYear'
