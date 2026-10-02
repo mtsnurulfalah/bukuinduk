@@ -364,7 +364,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, h, defineComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Pencil, Archive, GraduationCap, School,
@@ -407,18 +407,19 @@ function numStr(val: number | null | undefined): string | null {
 // Prop value bertipe String (konstruktor Vue) agar menerima null/undefined
 // dan template `value || '—'` menampilkan fallback secara konsisten.
 // ─────────────────────────────────────────────────────────────────
-const InfoRow = {
+const InfoRow = defineComponent({
+  name: 'InfoRow',
   props: {
     label: { type: String, required: true },
     value: { type: String, default: null },
   },
-  template: `
-    <div class="min-w-0">
-      <p class="text-xs text-slate-400 mb-0.5 truncate">{{ label }}</p>
-      <p class="text-slate-700 font-medium break-words">{{ value || '—' }}</p>
-    </div>
-  `,
-}
+  setup(props) {
+    return () => h('div', { class: 'min-w-0' }, [
+      h('p', { class: 'text-xs text-slate-400 mb-0.5 truncate' }, props.label),
+      h('p', { class: 'text-slate-700 font-medium break-words' }, props.value || '—'),
+    ])
+  },
+})
 
 // ─────────────────────────────────────────────────────────────────
 // EnrollmentStatusBadge
@@ -431,101 +432,98 @@ const enrollmentStatusMap: Record<string, { label: string; color: string }> = {
   dropped_out: { label: 'Keluar',      color: 'bg-red-100 text-red-700'      },
 }
 
-const EnrollmentStatusBadge = {
-  props: { status: { type: String, default: null } },
-  setup(props: { status: string | null }) {
-    const entry      = computed(() => enrollmentStatusMap[props.status ?? ''])
-    const label      = computed(() => entry.value?.label ?? props.status ?? '—')
-    const colorClass = computed(() => entry.value?.color ?? 'bg-slate-100 text-slate-600')
-    return { label, colorClass }
+const EnrollmentStatusBadge = defineComponent({
+  name: 'EnrollmentStatusBadge',
+  props: {
+    status: { type: String, default: null },
   },
-  template: `
-    <span :class="['inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium', colorClass]">
-      {{ label }}
-    </span>
-  `,
-}
+  setup(props) {
+    return () => {
+      const entry = enrollmentStatusMap[props.status ?? '']
+      const label = entry?.label ?? props.status ?? '—'
+      const colorClass = entry?.color ?? 'bg-slate-100 text-slate-600'
+      return h('span', {
+        class: [
+          'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+          colorClass,
+        ],
+      }, label)
+    }
+  },
+})
 
 // ─────────────────────────────────────────────────────────────────
 // ParentCard — kartu satu entri orang tua / wali.
-//
-// FIX: Terima prop `label` eksplisit (string judul kartu) daripada
-// mengandalkan method `relationLabel` dalam template string Options API.
-// Sebelumnya `formatDate` dipanggil sebagai method — ini bekerja di Options API
-// tapi bisa fail jika GAS mengembalikan Date object (bukan string ISO).
-// Sekarang semua konversi dilakukan lewat prop yang sudah diproses di parent.
+// Render function dipakai agar kompatibel dengan build Vue runtime-only.
+// Inline template strings membutuhkan runtime compiler dan dapat membuat
+// seluruh blok InfoRow/ParentCard tidak dirender pada production build.
 // ─────────────────────────────────────────────────────────────────
-const ParentCard = {
+const ParentCard = defineComponent({
+  name: 'ParentCard',
+  components: { BaseCard, InfoRow },
   props: {
-    parent:        { type: Object,  default: null  },
-    relationship:  { type: String,  required: true },
-    // FIX: label kartu diterima sebagai prop eksplisit, tidak dihitung ulang di sini
-    label:         { type: String,  required: true },
+    parent:        { type: Object, default: null },
+    relationship:  { type: String, required: true },
+    label:         { type: String, required: true },
     showSensitive: { type: Boolean, default: false },
   },
-  components: { BaseCard, InfoRow },
-  methods: {
-    /**
-     * FIX: Format tanggal orang tua. GAS sheetToObjects bisa mengembalikan
-     * Date object (saat data tidak di-cache) atau string ISO (saat dari cache).
-     * Konversi eksplisit ke string sebelum format agar `parseISO` bekerja benar.
-     */
-    fmtDate(val: unknown): string {
+  setup(props) {
+    function fmtDate(val: unknown): string {
       if (val == null) return '—'
-      // Date object dari GAS (getValues() mengembalikan Date untuk cell tanggal)
       if (val instanceof Date) {
         const y = val.getFullYear()
         const m = String(val.getMonth() + 1).padStart(2, '0')
         const d = String(val.getDate()).padStart(2, '0')
         return `${d}/${m}/${y}`
       }
-      // String ISO atau format lain — delegasikan ke formatDate utility
       const s = String(val)
       if (!s || s === 'null') return '—'
-      try {
-        // Import formatDate tidak tersedia di Options API object, gunakan inline
-        const date = new Date(s)
-        if (isNaN(date.getTime())) return s
-        const y = date.getFullYear()
-        const m = String(date.getMonth() + 1).padStart(2, '0')
-        const d2 = String(date.getDate()).padStart(2, '0')
-        return `${d2}/${m}/${y}`
-      } catch {
-        return s
-      }
-    },
-    toStr(val: unknown): string | null {
+      const date = new Date(s)
+      if (isNaN(date.getTime())) return s
+      const y = date.getFullYear()
+      const m = String(date.getMonth() + 1).padStart(2, '0')
+      const d = String(date.getDate()).padStart(2, '0')
+      return `${d}/${m}/${y}`
+    }
+
+    function toStr(val: unknown): string | null {
       if (val == null || val === '') return null
       return String(val)
-    },
-    /**
-     * isAlive dari GAS bisa: boolean true/false, string "TRUE"/"FALSE",
-     * angka 1/0, atau null (sel kosong). Default: masih hidup jika tidak ada data.
-     */
-    normalizeIsAlive(val: unknown): boolean {
+    }
+
+    function normalizeIsAlive(val: unknown): boolean {
       if (val === false || val === 'FALSE' || val === 'false' || val === 0) return false
       return true
-    },
+    }
+
+    return () => {
+      const parent = props.parent as Record<string, unknown> | null
+      const fields = [
+        h(InfoRow, { label: 'Nama', value: toStr(parent?.fullName) }),
+        ...(props.showSensitive
+          ? [h(InfoRow, { label: 'NIK', value: toStr(parent?.nik) })]
+          : []),
+        h(InfoRow, { label: 'Tgl Lahir', value: fmtDate(parent?.birthDate) }),
+        h(InfoRow, { label: 'Pendidikan', value: toStr(parent?.education) }),
+        h(InfoRow, { label: 'Pekerjaan', value: toStr(parent?.occupation) }),
+        h(InfoRow, { label: 'Penghasilan', value: toStr(parent?.incomeRange) }),
+        h(InfoRow, { label: 'No. HP', value: toStr(parent?.phone) }),
+        h(InfoRow, {
+          label: 'Status',
+          value: normalizeIsAlive(parent?.isAlive) ? 'Masih Hidup' : 'Almarhum/ah',
+        }),
+      ]
+
+      return h(BaseCard, { title: props.label }, {
+        default: () => parent
+          ? h('div', {
+              class: 'grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 mt-2 text-sm',
+            }, fields)
+          : h('p', { class: 'text-sm text-slate-400 mt-2 italic' }, 'Data tidak tersedia.'),
+      })
+    }
   },
-  template: `
-    <BaseCard :title="label">
-      <div v-if="parent" class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 mt-2 text-sm">
-        <InfoRow label="Nama"        :value="toStr(parent.fullName)" />
-        <InfoRow v-if="showSensitive" label="NIK" :value="toStr(parent.nik)" />
-        <InfoRow label="Tgl Lahir"   :value="fmtDate(parent.birthDate)" />
-        <InfoRow label="Pendidikan"  :value="toStr(parent.education)" />
-        <InfoRow label="Pekerjaan"   :value="toStr(parent.occupation)" />
-        <InfoRow label="Penghasilan" :value="toStr(parent.incomeRange)" />
-        <InfoRow label="No. HP"      :value="toStr(parent.phone)" />
-        <InfoRow
-          label="Status"
-          :value="normalizeIsAlive(parent.isAlive) ? 'Masih Hidup' : 'Almarhum/ah'"
-        />
-      </div>
-      <p v-else class="text-sm text-slate-400 mt-2 italic">Data tidak tersedia.</p>
-    </BaseCard>
-  `,
-}
+})
 
 // ─────────────────────────────────────────────────────────────────
 // Setup
