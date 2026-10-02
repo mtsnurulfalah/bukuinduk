@@ -141,6 +141,7 @@ export function useExport() {
     student: Student,
     school: AppSettings | null = null,
     includeSensitive = true,
+    enrollmentHistory: Student['currentEnrollment'][] = [],
   ) {
     if (!student?.id || !student.fullName) {
       toast.warning('Data siswa belum siap untuk dicetak.')
@@ -301,7 +302,10 @@ export function useExport() {
 
       addPageIfNeeded()
       section('Riwayat Kelas')
-      const enrollmentRows = (student.currentEnrollment ? [student.currentEnrollment] : []).map(enr => [
+      const history = enrollmentHistory.length
+        ? enrollmentHistory
+        : (student.currentEnrollment ? [student.currentEnrollment] : [])
+      const enrollmentRows = history.map(enr => [
         textValue(enr.classroomName),
         textValue(enr.schoolYearName),
         fmtDate(enr.entryDate),
