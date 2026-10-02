@@ -85,6 +85,9 @@
       />
     </div>
 
+    <!-- ── Kualitas Data ──────────────────────────────────────── -->
+    <DataQualityCard />
+
     <!-- ── Row 2: Gender + Status ─────────────────────────────── -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -328,7 +331,7 @@ import {
   FileText, Settings, UserCog, RefreshCw,
   AlertCircle, ChevronRight,
 } from 'lucide-vue-next'
-import { StatCard } from '@/components/shared'
+import { DataQualityCard, StatCard } from '@/components/shared'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolYearStore } from '@/stores/schoolYear'
