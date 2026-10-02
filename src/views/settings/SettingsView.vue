@@ -57,7 +57,7 @@
           </div>
         </BaseCard>
 
-        <div class="lg:col-span-2 flex justify-end">
+        <div v-if="canManageSettings" class="lg:col-span-2 flex justify-end">
           <BaseButton type="submit" :loading="isSaving" loading-text="Menyimpan...">
             <Save class="h-4 w-4" /> Simpan Pengaturan
           </BaseButton>
@@ -239,6 +239,7 @@ const schoolForm = reactive({
 })
 
 async function saveSchoolSettings() {
+  if (!canManageSettings.value) return
   isSaving.value = true
   successMsg.value = ''
   errorMsg.value = ''
@@ -268,6 +269,7 @@ function openAddSY() {
 }
 
 async function saveSY() {
+  if (!canManageSettings.value) return
   Object.keys(syErrors).forEach(k => delete syErrors[k])
   try {
     await schoolYearSchema.validate(syForm, { abortEarly: false })
@@ -290,6 +292,7 @@ async function saveSY() {
 }
 
 async function setActiveSY(id: string) {
+  if (!canManageSettings.value) return
   try {
     const updated = await classroomsService.setActiveSchoolYear(id)
     schoolYearStore.updateSchoolYear(updated)
@@ -300,6 +303,7 @@ async function setActiveSY(id: string) {
 }
 
 function handleDeleteSY(id: string, name: string) {
+  if (!canManageSettings.value) return
   // BUG-57 FIX: Gunakan dialog konfirmasi custom, bukan window.confirm()
   _deleteSYId = id
   confirmDeleteSY.options.value = { message: name, type: 'danger' }
@@ -307,6 +311,7 @@ function handleDeleteSY(id: string, name: string) {
 }
 
 async function confirmDoDeleteSY() {
+  if (!canManageSettings.value) return
   confirmDeleteSY.isLoading.value = true
   try {
     await classroomsService.deleteSchoolYear(_deleteSYId)
@@ -320,6 +325,7 @@ async function confirmDoDeleteSY() {
 
 // ── Backup ────────────────────────────────────────────────────
 async function handleBackup() {
+  if (!canManageSettings.value) return
   isBackingUp.value = true
   try {
     const data = await settingsService.exportBackup()
