@@ -34,7 +34,7 @@
           $slots.suffix || suffixIcon ? 'pr-9' : 'pr-3',
           'py-2',
         ]"
-        @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+        @input="handleInput"
         @blur="$emit('blur', $event)"
       />
 
@@ -65,6 +65,11 @@ import { uid } from '@/utils'
 
 interface Props {
   modelValue?: string | number | null
+  /** Modifiers supplied by component v-model, e.g. v-model.number */
+  modelModifiers?: {
+    number?: boolean
+    trim?: boolean
+  }
   label?: string
   placeholder?: string
   type?: string
@@ -85,10 +90,39 @@ const props = withDefaults(defineProps<Props>(), {
   required: false,
 })
 
-defineEmits<{
-  'update:modelValue': [value: string]
+const emit = defineEmits<{
+  'update:modelValue': [value: string | number | undefined]
   'blur': [event: FocusEvent]
 }>()
+
+/**
+ * Normalize custom-component v-model modifiers.
+ * Vue passes .number as modelModifiers.number; unlike a native input,
+ * a component must handle the conversion itself.
+ */
+function handleInput(event: Event) {
+  const target = event.target as HTMLInputElement
+  let value = target.value
+
+  if (props.modelModifiers?.trim) {
+    value = value.trim()
+  }
+
+  if (props.modelModifiers?.number || props.type === 'number') {
+    if (value === '') {
+      emit('update:modelValue', undefined)
+      return
+    }
+
+    const numericValue = Number(value)
+    if (Number.isFinite(numericValue)) {
+      emit('update:modelValue', numericValue)
+      return
+    }
+  }
+
+  emit('update:modelValue', value)
+}
 
 const inputId = computed(() => props.id ?? `input-${uid()}`)
 const hasError = computed(() => Boolean(props.errorMessage))
