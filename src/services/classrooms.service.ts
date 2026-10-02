@@ -6,11 +6,11 @@ export const classroomsService = {
   // ── Classrooms ───────────────────────────────────────────────
 
   async list(schoolYearId?: string): Promise<Classroom[]> {
-    return gasRequest<Classroom[]>('classrooms.list', { schoolYearId })
+    return gasRequest<Classroom[]>('classrooms.list', { schoolYearId }, { retry404: 2 })
   },
 
   async get(id: string): Promise<Classroom> {
-    return gasRequest<Classroom>('classrooms.get', { id })
+    return gasRequest<Classroom>('classrooms.get', { id }, { retry404: 2 })
   },
 
   async create(data: ClassroomFormData): Promise<Classroom> {
@@ -26,18 +26,18 @@ export const classroomsService = {
   },
 
   async getStats(schoolYearId?: string): Promise<ClassroomStats[]> {
-    return gasRequest<ClassroomStats[]>('classrooms.getStats', { schoolYearId })
+    return gasRequest<ClassroomStats[]>('classrooms.getStats', { schoolYearId }, { retry404: 2 })
   },
 
   /** Kelas yang diampu guru tertentu */
   async getByTeacher(teacherId: string): Promise<Classroom[]> {
-    return gasRequest<Classroom[]>('classrooms.getByTeacher', { teacherId })
+    return gasRequest<Classroom[]>('classrooms.getByTeacher', { teacherId }, { retry404: 2 })
   },
 
   // ── Grades ───────────────────────────────────────────────────
 
   async listGrades(): Promise<Grade[]> {
-    return gasRequest<Grade[]>('grades.list')
+    return gasRequest<Grade[]>('grades.list', undefined, { retry404: 2 })
   },
 
   async createGrade(data: { name: string; level: number }): Promise<Grade> {
@@ -55,7 +55,7 @@ export const classroomsService = {
   // ── School Years ─────────────────────────────────────────────
 
   async listSchoolYears(): Promise<SchoolYear[]> {
-    return gasRequest<SchoolYear[]>('schoolYears.list')
+    return gasRequest<SchoolYear[]>('schoolYears.list', undefined, { retry404: 2 })
   },
 
   async createSchoolYear(data: SchoolYearFormData): Promise<SchoolYear> {
