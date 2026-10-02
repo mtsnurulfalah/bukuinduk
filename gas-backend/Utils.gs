@@ -150,6 +150,27 @@ function getSheet(name) {
   return sheet;
 }
 
+/**
+ * Ambil sheet administrasi atau buat otomatis jika belum tersedia.
+ * Ini menjaga fitur baru tetap mudah diadopsi tanpa harus membuat
+ * dua sheet tambahan secara manual terlebih dahulu.
+ */
+function getOrCreateSheet(name, headers) {
+  var ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    if (headers && headers.length) {
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sheet.setFrozenRows(1);
+    }
+  } else if (headers && headers.length && sheet.getLastColumn() === 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
 function sheetToObjects(sheet) {
   var data = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
