@@ -253,9 +253,9 @@ var StudentHandler = {
 
     // Cek duplikat NIS/NISN
     var all = this._getAll();
-    if (all.find(function(s) { return s.nis === payload.nis; }))
+    if (all.find(function(s) { return normalizeIdentifier(s.nis) === normalizeIdentifier(payload.nis); }))
       return errorResponse(409, 'NIS "' + payload.nis + '" sudah digunakan.');
-    if (all.find(function(s) { return s.nisn === payload.nisn; }))
+    if (all.find(function(s) { return normalizeIdentifier(s.nisn) === normalizeIdentifier(payload.nisn); }))
       return errorResponse(409, 'NISN "' + payload.nisn + '" sudah digunakan.');
 
     var id = generateUUID();
@@ -506,11 +506,11 @@ var StudentHandler = {
         if (!row.nisn)               throw new Error('NISN kosong');
         if (!/^\d{10}$/.test(String(row.nisn))) throw new Error('NISN harus 10 digit angka');
 
-        if (all.find(function(s) { return s.nis === row.nis; })) {
+        if (all.find(function(s) { return normalizeIdentifier(s.nis) === normalizeIdentifier(row.nis); })) {
           throw new Error('NIS "' + row.nis + '" sudah ada');
         }
         // BUG-43 FIX: Cek duplikat NISN juga.
-        if (all.find(function(s) { return s.nisn === row.nisn; })) {
+        if (all.find(function(s) { return normalizeIdentifier(s.nisn) === normalizeIdentifier(row.nisn); })) {
           throw new Error('NISN "' + row.nisn + '" sudah ada');
         }
 
