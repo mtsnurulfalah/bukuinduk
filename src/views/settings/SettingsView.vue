@@ -166,7 +166,7 @@
           >
             <div class="flex items-center justify-between gap-3 mb-3">
               <div>
-                <p class="text-sm font-semibold text-slate-700">Manifest Backup Terakhir</p>
+                <p class="text-sm font-semibold text-slate-700">Manifest Backup yang Baru Dibuat</p>
                 <p class="text-xs text-slate-400 mt-0.5">{{ formatDateTime(backupMeta.generatedAt) }}</p>
               </div>
               <BaseBadge color="green" dot>Siap</BaseBadge>
