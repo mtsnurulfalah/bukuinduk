@@ -1,6 +1,6 @@
 import { gasRequest } from './api'
 import type {
-  Student, StudentFormData, StudentFilters,
+  Student, StudentFormData, StudentFilters, StudentVerification, StudentDocument,
   StudentParent, StudentHealth, StudentEducationHistory,
   StudentEnrollment,
 } from '@/types'
@@ -261,6 +261,58 @@ export const studentsService = {
     return gasRequest<StudentEnrollment>('students.enroll', {
       studentId, classroomId, schoolYearId,
     })
+  },
+
+  // ── Administrasi siswa ─────────────────────────────────────
+  async getVerifications(studentId: string): Promise<StudentVerification[]> {
+    return gasRequest<StudentVerification[]>(
+      'students.getVerifications',
+      { studentId },
+      { retry404: 2 },
+    )
+  },
+
+  async updateVerification(
+    studentId: string,
+    section: string,
+    status: StudentVerification['status'],
+    notes?: string,
+  ): Promise<StudentVerification> {
+    return gasRequest<StudentVerification>('students.updateVerification', {
+      studentId,
+      section,
+      status,
+      notes,
+    })
+  },
+
+  async getDocuments(studentId: string): Promise<StudentDocument[]> {
+    return gasRequest<StudentDocument[]>(
+      'students.getDocuments',
+      { studentId },
+      { retry404: 2 },
+    )
+  },
+
+  async createDocument(
+    studentId: string,
+    data: Omit<StudentDocument, 'id' | 'studentId' | 'createdAt' | 'updatedAt' | 'createdBy'>,
+  ): Promise<StudentDocument> {
+    return gasRequest<StudentDocument>('students.createDocument', {
+      studentId,
+      ...data,
+    })
+  },
+
+  async updateDocument(
+    id: string,
+    data: Partial<Pick<StudentDocument, 'documentType' | 'documentName' | 'documentNumber' | 'fileUrl' | 'status' | 'notes'>>,
+  ): Promise<StudentDocument> {
+    return gasRequest<StudentDocument>('students.updateDocument', { id, ...data })
+  },
+
+  async deleteDocument(id: string): Promise<void> {
+    return gasRequest<void>('students.deleteDocument', { id })
   },
 
   // ── Import / Export ──────────────────────────────────────────
