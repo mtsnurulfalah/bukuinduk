@@ -12,6 +12,16 @@
     >
       <template v-if="student" #actions>
         <BaseButton
+          v-if="can(PERMISSIONS.STUDENT_EXPORT)"
+          variant="outline"
+          size="sm"
+          :loading="isExporting"
+          @click="handlePrintBook"
+        >
+          <Printer class="h-4 w-4" />
+          <span class="hidden sm:inline">Buku Induk PDF</span>
+        </BaseButton>
+        <BaseButton
           v-if="can(PERMISSIONS.STUDENT_UPDATE)"
           variant="outline"
           size="sm"
@@ -136,6 +146,7 @@
           <div class="flex border-b border-slate-200 overflow-x-auto scrollbar-thin pb-px mb-4">
             <button
               v-for="tab in tabs"
+              v-if="tab.key !== 'admin' || can(PERMISSIONS.STUDENT_VIEW_SENSITIVE)"
               :key="tab.key"
               type="button"
               :class="[
@@ -333,6 +344,15 @@
                 </BaseCard>
               </div>
 
+              <!-- ── Tab: Administrasi ──────────────────────── -->
+              <div v-else-if="activeTab === 'admin'">
+                <StudentAdministrationPanel
+                  :student-id="student.id"
+                  :can-verify="can(PERMISSIONS.STUDENT_VERIFY)"
+                  :can-manage-documents="can(PERMISSIONS.STUDENT_UPDATE)"
+                />
+              </div>
+
             </div>
           </Transition>
         </div>
@@ -368,9 +388,9 @@ import { ref, computed, watch, onMounted, onUnmounted, h, defineComponent } from
 import { useRoute, useRouter } from 'vue-router'
 import {
   Pencil, Archive, GraduationCap, School,
-  RotateCcw, User, Users, Heart, BookOpen, History,
+  RotateCcw, User, Users, Heart, BookOpen, History, ClipboardCheck, Printer,
 } from 'lucide-vue-next'
-import { PageHeader, StudentStatusBadge } from '@/components/shared'
+import { PageHeader, StudentAdministrationPanel, StudentStatusBadge } from '@/components/shared'
 import {
   BaseCard, BaseButton, BaseAlert, BaseAvatar,
   BaseSkeleton, BaseEmpty, BaseConfirmDialog,
@@ -379,6 +399,8 @@ import { useStudentsStore } from '@/stores/students'
 import { usePermission } from '@/composables'
 import { studentsService } from '@/services'
 import { PERMISSIONS } from '@/constants'
+import { useSettingsStore } from '@/stores/settings'
+import { useExport } from '@/composables'
 import { formatDate, formatGender, calculateAge } from '@/utils'
 import { toast } from 'vue-sonner'
 import type { Student, StudentParent, StudentEnrollment } from '@/types'
@@ -540,6 +562,8 @@ const route  = useRoute()
 const router = useRouter()
 const studentsStore = useStudentsStore()
 const { can } = usePermission()
+const settingsStore = useSettingsStore()
+const { exportStudentBook, isExporting } = useExport()
 
 /**
  * student = data siswa yang sedang ditampilkan.
@@ -579,9 +603,10 @@ const tabs = [
   { key: 'health',     label: 'Kesehatan',     icon: Heart    },
   { key: 'education',  label: 'Pendidikan',    icon: BookOpen },
   { key: 'enrollment', label: 'Riwayat Kelas', icon: History  },
+  { key: 'admin',      label: 'Administrasi',  icon: ClipboardCheck  },
 ]
 const activeTab = ref('identity')
-const tabSkeletonWidths = ['w-20', 'w-24', 'w-24', 'w-24', 'w-28']
+const tabSkeletonWidths = ['w-20', 'w-24', 'w-24', 'w-24', 'w-28', 'w-28']
 
 // Definisi parent relation sebagai data (bukan object yang di-iterate)
 // agar label tidak perlu dihitung ulang di dalam template string komponen.
@@ -755,6 +780,12 @@ async function confirmRestore(): Promise<void> {
     isRestoring.value       = false
     showRestoreDialog.value = false
   }
+}
+
+async function handlePrintBook(): Promise<void> {
+  if (!student.value || !can(PERMISSIONS.STUDENT_EXPORT)) return
+  if (!settingsStore.initialized) await settingsStore.fetch()
+  await exportStudentBook(student.value, settingsStore.data, true)
 }
 
 // ─────────────────────────────────────────────────────────────────
