@@ -55,3 +55,25 @@
   .no-print { display: none !important; }
   body { @apply bg-white; }
 }
+
+/* Accessibility & motion */
+:focus-visible {
+  @apply outline-none ring-2 ring-primary-400 ring-offset-2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@supports (padding: max(0px)) {
+  .pb-safe {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+}
