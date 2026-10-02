@@ -178,7 +178,18 @@ function sheetToObjects(sheet) {
 // Bantu CRUD menangani variasi nama header yang sudah terlanjur dipakai
 // pada spreadsheet. Nama kanonis di frontend tetap camelCase.
 function _valueForHeader(obj, header) {
+  // Saat objek hasil merge memuat nilai lama dengan nama header typo dan nilai
+  // baru dengan nama kanonis, nilai kanonis harus menang untuk proses update.
+  var preferred = {
+    addres: 'address',
+    endryDate: 'entryDate',
+    HealthNotes: 'healthNotes',
+    studentID: 'studentId'
+  };
+  var canonical = preferred[header];
+  if (canonical && obj && obj[canonical] !== undefined) return obj[canonical];
   if (obj && obj[header] !== undefined) return obj[header];
+
   var aliases = {
     address: ['addres'],
     addres: ['address'],
