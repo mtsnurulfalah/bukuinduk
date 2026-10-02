@@ -35,6 +35,24 @@ export interface DashboardStats {
   transferredStudents: number
 }
 
+export interface DataCompletenessSection {
+  key: string
+  label: string
+  percent: number
+  completed: number
+  missing: number
+}
+
+export interface DataCompleteness {
+  totalStudents: number
+  completeStudents: number
+  needsAttention: number
+  overallPercent: number
+  sections: DataCompletenessSection[]
+  insights: string[]
+  generatedAt: string
+}
+
 export interface ClassroomStats {
   classroomId: string
   classroomName: string
