@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-slate-200;
+  }
+
+  html {
+    @apply text-slate-800 antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    @apply bg-slate-50 min-h-screen;
+  }
+
+  h1 { @apply text-2xl font-bold text-slate-900; }
+  h2 { @apply text-xl font-semibold text-slate-900; }
+  h3 { @apply text-base font-semibold text-slate-700; }
+}
+
+@layer components {
+  /* Scrollbar */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-slate-100;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full;
+  }
+
+  /* Table responsive wrapper */
+  .table-container {
+    @apply overflow-x-auto -mx-4 sm:mx-0;
+  }
+
+  /* Page transitions */
+  .page-enter-active,
+  .page-leave-active {
+    transition: opacity 0.2s ease;
+  }
+  .page-enter-from,
+  .page-leave-to {
+    opacity: 0;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print { display: none !important; }
+  body { @apply bg-white; }
+}
