@@ -626,42 +626,6 @@ function getParent(rel: 'father' | 'mother' | 'guardian'): StudentParent | undef
   return parents.find(p => p.relationship === rel)
 }
 
-/**
- * Muat relasi siswa secara eksplisit sebagai fallback/normalisasi.
- * Beberapa respons students.getFull dapat mengembalikan data utama tanpa
- * menyertakan relasi, sementara endpoint relasi tersedia terpisah.
- * Kegagalan satu relasi tidak boleh menghilangkan data dari relasi lainnya.
- */
-async function loadStudentRelations(studentId: string): Promise<void> {
-  const [parentsResult, healthResult, educationResult] = await Promise.allSettled([
-    studentsService.getParents(studentId),
-    studentsService.getHealth(studentId),
-    studentsService.getEducationHistory(studentId),
-  ])
-
-  if (!_isMounted || String(route.params.id) !== studentId || !studentsStore.current) return
-
-  const current = studentsStore.current
-  const parents = parentsResult.status === 'fulfilled' && Array.isArray(parentsResult.value)
-    ? parentsResult.value
-    : (Array.isArray(current.parents) ? current.parents : [])
-  const health = healthResult.status === 'fulfilled'
-    ? healthResult.value
-    : current.health
-  const educationHistory = educationResult.status === 'fulfilled' && Array.isArray(educationResult.value)
-    ? educationResult.value
-    : (Array.isArray(current.educationHistory) ? current.educationHistory : [])
-
-  // Jangan mengganti data relasi yang sudah tersedia dengan nilai kosong
-  // jika endpoint terpisah gagal atau tidak mengembalikan array yang valid.
-  studentsStore.current = {
-    ...current,
-    parents,
-    health: health ?? current.health,
-    educationHistory,
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────
 // Data loading — FIX RACE CONDITION
 // _loadedStudentId di-set sekali di onMounted dan tidak berubah.
@@ -692,24 +656,38 @@ async function retryEnrollments(): Promise<void> {
   await loadEnrollments()
 }
 
-async function retryLoad(): Promise<void> {
-  if (!_isMounted) return
-  isLoading.value   = true
-  error.value       = ''
+async function retryLoad(studentId: string = _loadedStudentId): Promise<void> {
+  if (!_isMounted || !studentId || String(route.params.id) !== studentId) return
+
+  isLoading.value = true
+  error.value = ''
+  enrollmentError.value = ''
   enrollments.value = []
   studentsStore.clearCurrent()
 
   try {
-    await studentsStore.fetchDetail(_loadedStudentId)
-    if (!_isMounted) return
-    await loadStudentRelations(_loadedStudentId)
+    // Endpoint getFull sudah mengembalikan identitas dan seluruh relasi siswa.
+    // Gunakan satu snapshot agar data tidak tercampur dari beberapa request.
+    await studentsStore.fetchDetail(studentId)
+    if (
+      !_isMounted ||
+      String(route.params.id) !== studentId ||
+      _loadedStudentId !== studentId
+    ) return
+
     _studentData.value = studentsStore.current
     await loadEnrollments()
   } catch (e: unknown) {
-    if (!_isMounted) return
+    if (
+      !_isMounted ||
+      String(route.params.id) !== studentId ||
+      _loadedStudentId !== studentId
+    ) return
     error.value = e instanceof Error ? e.message : 'Gagal memuat data siswa.'
   } finally {
-    if (_isMounted) isLoading.value = false
+    if (_isMounted && String(route.params.id) === studentId && _loadedStudentId === studentId) {
+      isLoading.value = false
+    }
   }
 }
 
@@ -778,50 +756,19 @@ async function confirmRestore(): Promise<void> {
 // Lifecycle
 // ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
-  _isMounted       = true
-  _loadedStudentId = route.params.id as string
-
-  // Reset semua state
-  enrollments.value     = []
-  error.value           = ''
-  enrollmentError.value = ''
-  isLoading.value       = true
-
-  // clearCurrent agar skeleton tampil (bukan data siswa lain yang tersisa)
-  studentsStore.clearCurrent()
-
-  try {
-    // fetchDetail set store.current → student computed otomatis reaktif
-    await studentsStore.fetchDetail(_loadedStudentId)
-    if (!_isMounted) return
-
-    // Ambil relasi lewat endpoint masing-masing agar tab tidak bergantung
-    // pada apakah students.getFull menyertakan seluruh relasi.
-    await loadStudentRelations(_loadedStudentId)
-    if (!_isMounted) return
-
-    // Simpan snapshot untuk operasi restore
-    _studentData.value = studentsStore.current
-
-    await loadEnrollments()
-
-  } catch (e: unknown) {
-    if (!_isMounted) return
-    error.value = e instanceof Error ? e.message : 'Gagal memuat data siswa.'
-  } finally {
-    if (_isMounted) isLoading.value = false
-  }
+  _isMounted = true
+  _loadedStudentId = String(route.params.id ?? '')
+  await retryLoad(_loadedStudentId)
 })
 
 watch(
   () => route.params.id,
   async (newId) => {
     const nextId = String(newId ?? '')
-    // Komponen detail dapat dipakai ulang Vue Router saat hanya parameter ID berubah.
-    // Pastikan data siswa dan relasinya dimuat ulang untuk ID yang baru.
+    // Komponen detail dapat dipakai ulang saat hanya parameter ID berubah.
     if (!_isMounted || !nextId || nextId === _loadedStudentId) return
     _loadedStudentId = nextId
-    await retryLoad()
+    await retryLoad(nextId)
   }
 )
 
