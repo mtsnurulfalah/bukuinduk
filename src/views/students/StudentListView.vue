@@ -100,7 +100,7 @@
             <input
               v-model="searchQuery"
               type="search"
-              placeholder="Cari nama, NIS, NISN…"
+              placeholder="Cari nama, NIS, NISN atau NIK…"
               autocomplete="off"
               class="block w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-300 bg-white
                      placeholder-slate-400 text-slate-800
