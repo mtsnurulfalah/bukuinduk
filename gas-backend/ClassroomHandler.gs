@@ -84,7 +84,7 @@ var ClassroomHandler = {
     var cls = {};
     headers.forEach(function(h){ cls[h] = payload[h] !== undefined ? payload[h] : ''; });
     cls.id = id;
-    cls.isActive = payload.isActive !== false;
+    cls.isActive = normalizeBoolean(payload.isActive, true);
     cls.createdAt = ts;
     appendRow(sheet, cls, headers);
     AuditService.log(user.id, 'CREATE', 'classroom', id, null, cls, 'Tambah kelas: ' + cls.name);
@@ -273,7 +273,7 @@ var SchoolYearHandler = {
     var old = all.find(function(s){ return String(s.id) === String(payload.id); });
     var updated = Object.assign({}, old, payload);
     updateRow(sheet, rowIdx, updated, headers);
-    return successResponse(Object.assign({}, updated, { isActive: updated.isActive === true || updated.isActive === 'TRUE' }));
+    return successResponse(Object.assign({}, updated, { isActive: normalizeBoolean(updated.isActive, false) }));
   },
   setActive: function(payload, user) {
     checkPermission(user, 'school_year:manage');
