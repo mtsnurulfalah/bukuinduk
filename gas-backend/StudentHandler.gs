@@ -156,6 +156,11 @@ var StudentHandler = {
     ));
     if (!result) return errorResponse(404, 'Siswa tidak ditemukan.');
 
+    // Normalisasi nama kolom lama/typo dari spreadsheet ke nama field frontend.
+    // Header database saat ini memakai "addres" dan "endryDate".
+    if (result.address == null && result.addres != null) result.address = result.addres;
+    if (result.entryDate == null && result.endryDate != null) result.entryDate = result.endryDate;
+
     // FIX: Baca semua sheet relasi SEKALI di awal function scope.
     // Sebelumnya `var enrollments` dideklarasikan DUA KALI (untuk teacher check
     // dan untuk currentEnrollment). Dengan `var` hoisting di GAS/V8, deklarasi
@@ -182,13 +187,34 @@ var StudentHandler = {
 
     // Lampirkan relasi
     result.parents = sheetToObjects(getSheet(CONFIG.SHEETS.PARENTS))
-      .filter(function(p) { return String(p.studentId) === String(payload.id); });
+      .filter(function(p) {
+        return String(p.studentId != null ? p.studentId : p.studentID) === String(payload.id);
+      })
+      .map(function(p) {
+        var parent = Object.assign({}, p);
+        if (parent.address == null && parent.addres != null) parent.address = parent.addres;
+        return parent;
+      });
 
     result.health = sheetToObjects(getSheet(CONFIG.SHEETS.HEALTH))
-      .find(function(h) { return String(h.studentId) === String(payload.id); }) || null;
+      .find(function(h) {
+        return String(h.studentId != null ? h.studentId : h.studentID) === String(payload.id);
+      }) || null;
+    if (result.health && result.health.healthNotes == null && result.health.HealthNotes != null) {
+      result.health.healthNotes = result.health.HealthNotes;
+    }
 
     result.educationHistory = sheetToObjects(getSheet(CONFIG.SHEETS.EDUCATION))
-      .filter(function(e) { return String(e.studentId) === String(payload.id); });
+      .filter(function(e) {
+        return String(e.studentId != null ? e.studentId : e.studentID) === String(payload.id);
+      })
+      .map(function(e) {
+        var education = Object.assign({}, e);
+        if (education.studentId == null && education.studentID != null) {
+          education.studentId = education.studentID;
+        }
+        return education;
+      });
 
     // Gunakan allEnrollments/allClassrooms/allSchoolYears yang sudah dibaca di atas
     result.currentEnrollment = (function() {
