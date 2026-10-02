@@ -383,6 +383,10 @@ var StudentHandler = {
 
     var headers = ['id','studentId','documentType','documentName','documentNumber','fileUrl','status','notes','createdAt','updatedAt','createdBy'];
     var sheet = getOrCreateSheet(CONFIG.SHEETS.DOCUMENTS, headers);
+    var fileUrl = payload.fileUrl ? String(payload.fileUrl).trim() : '';
+    if (fileUrl && !/^https?:\/\//i.test(fileUrl)) {
+      return errorResponse(400, 'URL dokumen harus menggunakan http:// atau https://.');
+    }
     var ts = now();
     var data = {
       id: generateUUID(),
@@ -421,11 +425,16 @@ var StudentHandler = {
       return errorResponse(400, 'Dokumen tidak boleh dipindahkan ke siswa lain.');
     }
 
+    var nextFileUrl = payload.fileUrl !== undefined ? String(payload.fileUrl).trim() : String(existing.fileUrl || '').trim();
+    if (nextFileUrl && !/^https?:\/\//i.test(nextFileUrl)) {
+      return errorResponse(400, 'URL dokumen harus menggunakan http:// atau https://.');
+    }
+
     var updated = Object.assign({}, existing, {
       documentType: payload.documentType !== undefined ? String(payload.documentType).trim() : existing.documentType,
       documentName: payload.documentName !== undefined ? String(payload.documentName).trim() : existing.documentName,
       documentNumber: payload.documentNumber !== undefined ? String(payload.documentNumber).trim() : existing.documentNumber,
-      fileUrl: payload.fileUrl !== undefined ? String(payload.fileUrl).trim() : existing.fileUrl,
+      fileUrl: nextFileUrl,
       status: payload.status === 'needs_update' ? 'needs_update' : 'available',
       notes: payload.notes !== undefined ? String(payload.notes).trim() : existing.notes,
       updatedAt: now(),
