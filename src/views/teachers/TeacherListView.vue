@@ -17,7 +17,14 @@
       </SearchFilter>
     </BaseCard>
 
-    <BaseCard :padding="false">
+    <BaseRetry
+      v-else-if="error"
+      title="Data guru gagal dimuat"
+      :message="error"
+      @retry="load"
+    />
+
+    <BaseCard v-else :padding="false">
       <DataTable :columns="columns" :rows="teachers as Record<string, unknown>[]" :loading="isLoading" row-key="id"
         :clickable="true" empty-title="Tidak ada data guru" empty-type="default"
         @row-click="row => $router.push(`/teachers/${row.id}`)">
@@ -57,7 +64,7 @@ import { ref, onMounted } from 'vue'
 import { Plus, Pencil } from 'lucide-vue-next'
 import { PageHeader, SearchFilter, DataTable } from '@/components/shared'
 import type { TableColumn } from '@/components/shared/DataTable.vue'
-import { BaseCard, BaseButton, BaseSelect, BaseAvatar, BaseBadge, BasePagination } from '@/components/ui'
+import { BaseCard, BaseButton, BaseSelect, BaseAvatar, BaseBadge, BasePagination, BaseRetry } from '@/components/ui'
 import { teachersService } from '@/services'
 import { usePermission, useSearch } from '@/composables'
 import { PERMISSIONS } from '@/constants'
@@ -69,6 +76,7 @@ const total = ref(0)
 const page = ref(1)
 const limit = 20
 const isLoading = ref(true)
+const error = ref('')
 const filterStatus = ref('')
 const statusOpts = [{ value: 'active', label: 'Aktif' }, { value: 'inactive', label: 'Nonaktif' }]
 
@@ -84,11 +92,16 @@ const { query: search } = useSearch((q) => { page.value = 1; load(q) })
 
 async function load(q = search.value) {
   isLoading.value = true
+  error.value = ''
   try {
     const res = await teachersService.list({ search: q, status: filterStatus.value, page: page.value, limit })
     teachers.value = res.items
     total.value = res.total
-  } catch { /* silent */ } finally { isLoading.value = false }
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : 'Gagal memuat data guru.'
+  } finally {
+    isLoading.value = false
+  }
 }
 
 onMounted(load)
