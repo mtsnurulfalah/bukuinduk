@@ -79,17 +79,32 @@ function doPost(e) {
  * doGet untuk health check dan pengujian manual via browser.
  */
 function doGet(e) {
-  // Jika ada parameter action (untuk debug), proses seperti doPost
-  if (e.parameter && e.parameter.action) {
-    return doPost(e);
-  }
+  try {
+    var params = (e && e.parameter) ? e.parameter : {};
 
-  // Health check biasa
-  return createResponse(200, {
-    message: 'Buku Induk Digital API',
-    version: CONFIG.APP_VERSION,
-    timestamp: now()
-  });
+    // GET API tetap menggunakan router yang sama dengan POST.
+    // Terima payload dari dua nama umum: payload dan data.
+    if (params.action) {
+      return doPost({
+        parameter: {
+          action: params.action,
+          payload: params.payload || params.data || '{}',
+          token: params.token || ''
+        }
+      });
+    }
+
+    // Health check biasa — selalu JSON 200 selama deployment GAS aktif.
+    return createResponse(200, {
+      message: 'Buku Induk Digital API',
+      version: CONFIG.APP_VERSION,
+      timestamp: now()
+    });
+  } catch (err) {
+    var errMsg = (err && err.message) ? err.message : String(err);
+    AuditService.logError('doGet', errMsg);
+    return errorResponse(500, 'Terjadi kesalahan server: ' + errMsg);
+  }
 }
 
 // ── Router ────────────────────────────────────────────────────
