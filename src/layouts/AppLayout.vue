@@ -270,7 +270,7 @@ import { computed, onUnmounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import {
   LayoutDashboard, Users, GraduationCap, School,
-  BookOpen, BarChart3, Settings, UserCog,
+  BookOpen, BarChart3, Settings, UserCog, Lightbulb,
   LogOut, Menu, X, PanelLeft, CalendarDays, Layers, MoreHorizontal, Home, Search,
 } from 'lucide-vue-next'
 import BaseAvatar from '@/components/ui/BaseAvatar.vue'
@@ -385,6 +385,13 @@ const navItems: NavItem[] = [
     icon: BarChart3,
     section: 'Laporan',
     permission: PERMISSIONS.REPORT_VIEW_ALL,
+  },
+  {
+    name: 'intelligence',
+    label: 'Intelligence Center',
+    to: '/reports/intelligence',
+    icon: Lightbulb,
+    permission: PERMISSIONS.REPORT_INTELLIGENCE,
   },
   // Admin only
   {
