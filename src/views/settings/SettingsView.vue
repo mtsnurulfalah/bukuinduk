@@ -28,19 +28,19 @@
       <form class="grid grid-cols-1 lg:grid-cols-2 gap-5" @submit.prevent="saveSchoolSettings">
         <BaseCard title="Identitas Sekolah/Madrasah">
           <div class="space-y-4 mt-3">
-            <BaseInput v-model="schoolForm.schoolName" label="Nama Sekolah/Madrasah" placeholder="MTs..." required />
-            <BaseInput v-model="schoolForm.schoolNpsn" label="NPSN" placeholder="8 digit angka" />
-            <BaseInput v-model="schoolForm.schoolAddress" label="Alamat" placeholder="Jalan, desa, kecamatan..." />
-            <BaseInput v-model="schoolForm.schoolPhone" label="Nomor Telepon" placeholder="(0xx) xxxx-xxxx" />
-            <BaseInput v-model="schoolForm.schoolEmail" label="Email Sekolah" type="email" placeholder="info@sekolah.sch.id" />
-            <BaseInput v-model="schoolForm.schoolWebsite" label="Website" placeholder="https://sekolah.sch.id" />
+            <BaseInput v-model="schoolForm.schoolName" :disabled="!canManageSettings" label="Nama Sekolah/Madrasah" placeholder="MTs..." required />
+            <BaseInput v-model="schoolForm.schoolNpsn" :disabled="!canManageSettings" label="NPSN" placeholder="8 digit angka" />
+            <BaseInput v-model="schoolForm.schoolAddress" :disabled="!canManageSettings" label="Alamat" placeholder="Jalan, desa, kecamatan..." />
+            <BaseInput v-model="schoolForm.schoolPhone" :disabled="!canManageSettings" label="Nomor Telepon" placeholder="(0xx) xxxx-xxxx" />
+            <BaseInput v-model="schoolForm.schoolEmail" :disabled="!canManageSettings" label="Email Sekolah" type="email" placeholder="info@sekolah.sch.id" />
+            <BaseInput v-model="schoolForm.schoolWebsite" :disabled="!canManageSettings" label="Website" placeholder="https://sekolah.sch.id" />
           </div>
         </BaseCard>
 
         <BaseCard title="Kepala Sekolah/Madrasah">
           <div class="space-y-4 mt-3">
-            <BaseInput v-model="schoolForm.principalName" label="Nama Kepala Sekolah" placeholder="Nama lengkap beserta gelar" />
-            <BaseInput v-model="schoolForm.principalNip" label="NIP Kepala Sekolah" placeholder="NIP (opsional)" />
+            <BaseInput v-model="schoolForm.principalName" :disabled="!canManageSettings" label="Nama Kepala Sekolah" placeholder="Nama lengkap beserta gelar" />
+            <BaseInput v-model="schoolForm.principalNip" :disabled="!canManageSettings" label="NIP Kepala Sekolah" placeholder="NIP (opsional)" />
           </div>
 
           <!-- BUG-58 FIX: Tahun pelajaran aktif ditangani terpisah via setActiveSY(),
