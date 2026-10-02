@@ -14,7 +14,12 @@
     </PageHeader>
 
     <BaseSkeleton v-if="isLoading" height="h-32" />
-    <BaseAlert v-else-if="error" type="error">{{ error }}</BaseAlert>
+    <BaseRetry
+      v-else-if="error"
+      title="Data kelas gagal dimuat"
+      :message="error"
+      @retry="loadClassroom"
+    />
 
     <template v-else-if="classroom">
       <!-- Info kelas -->
@@ -49,6 +54,12 @@
         <div v-if="isLoadingStudents" class="space-y-2">
           <BaseSkeleton v-for="i in 5" :key="i" height="h-12" />
         </div>
+        <BaseRetry
+          v-else-if="studentsError"
+          title="Daftar siswa gagal dimuat"
+          :message="studentsError"
+          @retry="loadStudents"
+        />
         <BaseEmpty v-else-if="!filtered.length" title="Tidak ada siswa" type="students" />
         <div v-else class="divide-y divide-slate-100">
           <RouterLink
@@ -78,7 +89,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { Users, User, School, Pencil } from 'lucide-vue-next'
 import { PageHeader, SearchFilter, StatCard } from '@/components/shared'
-import { BaseCard, BaseButton, BaseAlert, BaseAvatar, BaseSkeleton, BaseEmpty, BaseBadge } from '@/components/ui'
+import { BaseCard, BaseButton, BaseRetry, BaseAvatar, BaseSkeleton, BaseEmpty, BaseBadge } from '@/components/ui'
 import { usePermission } from '@/composables'
 import { classroomsService, studentsService } from '@/services'
 import { PERMISSIONS } from '@/constants'
@@ -91,6 +102,7 @@ const students = ref<Student[]>([])
 const isLoading = ref(true)
 const isLoadingStudents = ref(true)
 const error = ref('')
+const studentsError = ref('')
 const search = ref('')
 
 const filtered = computed(() => {
@@ -101,17 +113,47 @@ const filtered = computed(() => {
   )
 })
 
-onMounted(async () => {
-  const id = route.params.id as string
+async function loadClassroom() {
+  const id = String(route.params.id ?? '')
+  if (!id) {
+    error.value = 'ID kelas tidak valid.'
+    isLoading.value = false
+    return
+  }
+
+  isLoading.value = true
+  error.value = ''
   try {
     classroom.value = await classroomsService.get(id)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Gagal memuat data kelas.'
-  } finally { isLoading.value = false }
+  } finally {
+    isLoading.value = false
+  }
+}
 
+async function loadStudents() {
+  const id = String(route.params.id ?? '')
+  if (!id) {
+    studentsError.value = 'ID kelas tidak valid.'
+    isLoadingStudents.value = false
+    return
+  }
+
+  isLoadingStudents.value = true
+  studentsError.value = ''
   try {
     const { items } = await studentsService.list({ classroomId: id, limit: 500 })
     students.value = items
-  } catch { /* silent */ } finally { isLoadingStudents.value = false }
+  } catch (e: unknown) {
+    studentsError.value = e instanceof Error ? e.message : 'Gagal memuat daftar siswa.'
+  } finally {
+    isLoadingStudents.value = false
+  }
+}
+
+onMounted(() => {
+  void loadClassroom()
+  void loadStudents()
 })
 </script>
