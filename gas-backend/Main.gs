@@ -115,9 +115,10 @@ var Router = {
           return errorResponse(404, 'Action "' + action + '" tidak ditemukan.');
       }
     } catch (err) {
-      if (err.message === 'FORBIDDEN') return errorResponse(403, 'Anda tidak memiliki izin.');
-      AuditService.logError(action, err.message);
-      return errorResponse(500, err.message || 'Terjadi kesalahan.');
+      var errMsg = (err && err.message) ? err.message : String(err);
+      if (errMsg === 'FORBIDDEN') return errorResponse(403, 'Anda tidak memiliki izin.');
+      AuditService.logError(action, errMsg);
+      return errorResponse(500, errMsg || 'Terjadi kesalahan.');
     }
   }
 };
