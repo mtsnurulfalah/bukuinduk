@@ -339,7 +339,7 @@ var ReportHandler = {
       if (duplicateNisIds[sid]) issues.push('duplicate_nis');
       if (duplicateNisnIds[sid]) issues.push('duplicate_nisn');
       var nisn = normalizeIdentifier(s.nisn);
-      if (nisn && !/^\\d{10}$/.test(nisn)) issues.push('invalid_nisn');
+      if (nisn && !/^\d{10}$/.test(nisn)) issues.push('invalid_nisn');
 
       var age = getAge(s.birthDate);
       if (age !== null && (age < 10 || age > 20)) issues.push('age_review');
