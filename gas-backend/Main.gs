@@ -145,14 +145,14 @@ var ROLE_PERMISSIONS = {
   admin: [
     'student:view:all','student:view:detail','student:view:sensitive',
     'student:create','student:update','student:archive','student:delete',
-    'student:import','student:export',
+    'student:import','student:export','student:verify',
     'teacher:view','teacher:manage','classroom:view:all','classroom:manage',
     'school_year:view','school_year:manage','report:view:all','report:export',
     'user:view','user:manage','settings:view','settings:manage','audit:view',
     'dashboard:admin','dashboard:principal',
   ],
   principal: [
-    'student:view:all','student:view:detail','student:view:sensitive','student:export',
+    'student:view:all','student:view:detail','student:view:sensitive','student:export','student:verify',
     'teacher:view','classroom:view:all','school_year:view',
     'report:view:all','report:export',
     'settings:view',
