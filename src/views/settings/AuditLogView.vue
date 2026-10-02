@@ -58,7 +58,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { Search, X, Plus, Pencil, Trash2, LogIn, LogOut, Download } from 'lucide-vue-next'
+import { Search, X, Plus, Pencil, Trash2, LogIn, LogOut, Download, ShieldCheck, FileDown, AlertTriangle, ChevronDown } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import { BaseCard, BaseInput, BaseSelect, BaseButton, BaseSkeleton, BaseEmpty, BaseBadge, BasePagination, BaseRetry } from '@/components/ui'
 import { reportsService } from '@/services'
@@ -74,19 +74,30 @@ const error = ref('')
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)))
 
 const filters = reactive({ startDate: '', endDate: '', action: '', resourceType: '' })
+const expandedLogId = ref('')
+
+function toggleDetails(id: string) {
+  expandedLogId.value = expandedLogId.value === id ? '' : id
+}
+
+function prettyJson(value?: string) {
+  if (!value) return ''
+  try { return JSON.stringify(JSON.parse(value), null, 2) } catch { return value }
+}
 
 const actionOptions = [
-  'CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'ARCHIVE', 'IMPORT',
+  'CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'ARCHIVE', 'IMPORT', 'VERIFY', 'EXPORT', 'ERROR',
 ].map(v => ({ value: v, label: v }))
 
 const resourceOptions = [
-  'student', 'teacher', 'classroom', 'user', 'settings', 'school_year',
+  'student', 'student_parent', 'student_health', 'student_document', 'student_verification', 'teacher', 'classroom', 'user', 'settings', 'school_year',
 ].map(v => ({ value: v, label: v }))
 
 function actionIcon(action: string) {
   const map: Record<string, unknown> = {
     CREATE: Plus, UPDATE: Pencil, DELETE: Trash2,
     LOGIN: LogIn, LOGOUT: LogOut, ARCHIVE: Download,
+    VERIFY: ShieldCheck, EXPORT: FileDown, ERROR: AlertTriangle,
   }
   return map[action] ?? Pencil
 }
@@ -94,6 +105,7 @@ function actionIconBg(action: string): string {
   const map: Record<string, string> = {
     CREATE: 'bg-green-100', UPDATE: 'bg-amber-100', DELETE: 'bg-red-100',
     LOGIN: 'bg-blue-100', LOGOUT: 'bg-slate-100', ARCHIVE: 'bg-purple-100',
+    VERIFY: 'bg-green-100', EXPORT: 'bg-teal-100', ERROR: 'bg-red-100',
   }
   return map[action] ?? 'bg-slate-100'
 }
@@ -101,13 +113,15 @@ function actionIconColor(action: string): string {
   const map: Record<string, string> = {
     CREATE: 'text-green-600', UPDATE: 'text-amber-600', DELETE: 'text-red-600',
     LOGIN: 'text-blue-600', LOGOUT: 'text-slate-500', ARCHIVE: 'text-purple-600',
+    VERIFY: 'text-green-600', EXPORT: 'text-teal-600', ERROR: 'text-red-600',
   }
   return map[action] ?? 'text-slate-500'
 }
-function actionBadge(action: string): 'green' | 'amber' | 'red' | 'blue' | 'slate' | 'purple' {
+function actionBadge(action: string): 'green' | 'amber' | 'red' | 'blue' | 'slate' | 'purple' | 'teal' {
   const map: Record<string, 'green' | 'amber' | 'red' | 'blue' | 'slate' | 'purple'> = {
     CREATE: 'green', UPDATE: 'amber', DELETE: 'red',
     LOGIN: 'blue', LOGOUT: 'slate', ARCHIVE: 'purple',
+    VERIFY: 'green', EXPORT: 'teal', ERROR: 'red',
   }
   return map[action] ?? 'slate'
 }
