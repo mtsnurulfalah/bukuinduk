@@ -22,8 +22,8 @@
 
     <!-- Tab: Profil Sekolah -->
     <template v-if="activeTab === 'school'">
-      <BaseAlert v-if="successMsg" type="success" dismissible>{{ successMsg }}</BaseAlert>
-      <BaseAlert v-if="errorMsg" type="error" dismissible>{{ errorMsg }}</BaseAlert>
+      <BaseAlert v-if="successMsg" type="success" dismissible @dismiss="successMsg = ''">{{ successMsg }}</BaseAlert>
+      <BaseAlert v-if="errorMsg" type="error" dismissible @dismiss="errorMsg = ''">{{ errorMsg }}</BaseAlert>
 
       <form class="grid grid-cols-1 lg:grid-cols-2 gap-5" @submit.prevent="saveSchoolSettings">
         <BaseCard title="Identitas Sekolah/Madrasah">
