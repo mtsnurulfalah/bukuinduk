@@ -17,7 +17,14 @@
       </SearchFilter>
     </BaseCard>
 
-    <BaseCard :padding="false">
+    <BaseRetry
+      v-else-if="error"
+      title="Data pengguna gagal dimuat"
+      :message="error"
+      @retry="loadUsers"
+    />
+
+    <BaseCard v-else :padding="false">
       <DataTable
         :columns="columns" :rows="users as Record<string, unknown>[]"
         :loading="isLoading" row-key="id"
@@ -97,7 +104,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { UserPlus, Pencil, UserX, UserCheck, KeyRound } from 'lucide-vue-next'
 import { PageHeader, SearchFilter, DataTable } from '@/components/shared'
 import type { TableColumn } from '@/components/shared/DataTable.vue'
-import { BaseCard, BaseButton, BaseSelect, BaseAvatar, BaseBadge, BasePagination, BaseConfirmDialog, BaseModal, BaseInput } from '@/components/ui'
+import { BaseCard, BaseButton, BaseSelect, BaseAvatar, BaseBadge, BasePagination, BaseConfirmDialog, BaseModal, BaseInput, BaseRetry } from '@/components/ui'
 import { usersService } from '@/services'
 import { useConfirm, useSearch } from '@/composables'
 import { ROLE_LABELS, ROLES } from '@/constants'
@@ -109,6 +116,7 @@ import type { User } from '@/types'
 const users = ref<User[]>([])
 const total = ref(0)
 const isLoading = ref(true)
+const error = ref('')
 const page = ref(1)
 const limit = ref(20)
 const filterRole = ref('')
@@ -138,12 +146,16 @@ const { query: search } = useSearch((q) => { page.value = 1; loadUsers(q) })
 
 async function loadUsers(q = search.value) {
   isLoading.value = true
+  error.value = ''
   try {
     const res = await usersService.list({ search: q, role: filterRole.value, page: page.value, limit: limit.value })
     users.value = res.items
     total.value = res.total
-  } catch { toast.error('Gagal memuat data pengguna.') }
-  finally { isLoading.value = false }
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : 'Gagal memuat data pengguna.'
+  } finally {
+    isLoading.value = false
+  }
 }
 
 function onPageChange(p: number) { page.value = p; loadUsers() }
