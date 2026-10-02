@@ -672,18 +672,19 @@ async function loadStudentRelations(studentId: string): Promise<void> {
 
 async function loadEnrollments(): Promise<void> {
   if (!_isMounted) return
+  const requestStudentId = _loadedStudentId
   enrollmentError.value      = ''
   isLoadingEnrollments.value = true
   try {
-    const data = await studentsService.getEnrollments(_loadedStudentId)
-    // Guard: cek komponen masih mounted dan id masih sama
-    if (!_isMounted) return
+    const data = await studentsService.getEnrollments(requestStudentId)
+    // Abaikan respons lama jika ID rute berubah selama request berjalan.
+    if (!_isMounted || String(route.params.id) !== requestStudentId || _loadedStudentId !== requestStudentId) return
     enrollments.value = Array.isArray(data) ? data : []
   } catch (e: unknown) {
-    if (!_isMounted) return
+    if (!_isMounted || String(route.params.id) !== requestStudentId || _loadedStudentId !== requestStudentId) return
     enrollmentError.value = e instanceof Error ? e.message : 'Gagal memuat riwayat kelas.'
   } finally {
-    if (_isMounted) isLoadingEnrollments.value = false
+    if (_isMounted && _loadedStudentId === requestStudentId) isLoadingEnrollments.value = false
   }
 }
 
