@@ -778,7 +778,9 @@ var StudentHandler = {
         var id = generateUUID();
         var ts = now();
         var student = {};
-        headers.forEach(function(h) { student[h] = row[h] !== undefined ? row[h] : ''; });
+        // Gunakan helper alias agar import tetap kompatibel dengan header lama
+        // seperti `addres` / `endryDate` di Spreadsheet.
+        headers.forEach(function(h) { student[h] = _valueForHeader(row, h); });
         student.id = id;
         student.status = 'active';
         student.createdAt = ts;
