@@ -35,6 +35,13 @@
       </div>
     </BaseCard>
 
+    <BaseRetry
+      v-if="loadError"
+      title="Data laporan gagal dimuat"
+      :message="loadError"
+      @retry="loadAll"
+    />
+
     <!-- Stat Cards -->
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       <StatCard label="Total Siswa" :value="stats?.totalStudents" :icon="Users" color="blue" :loading="isLoading" />
@@ -203,7 +210,7 @@ import {
   ArrowRightLeft, FileSpreadsheet, FileText, Printer, X,
 } from 'lucide-vue-next'
 import { PageHeader, SearchFilter, StatCard, StudentStatusBadge } from '@/components/shared'
-import { BaseCard, BaseButton, BaseSelect, BaseSkeleton, BaseEmpty } from '@/components/ui'
+import { BaseCard, BaseButton, BaseSelect, BaseSkeleton, BaseEmpty, BaseRetry } from '@/components/ui'
 import { useSchoolYearStore } from '@/stores/schoolYear'
 import { useClassroomsStore } from '@/stores/classrooms'
 import { reportsService, studentsService } from '@/services'
@@ -225,6 +232,7 @@ const tableSearch = ref('')
 const isLoading = ref(true)
 const isLoadingStatus = ref(true)
 const isLoadingTable = ref(true)
+const loadError = ref('')
 
 const filters = reactive({ schoolYearId: '', classroomId: '', gender: '', status: '' })
 const hasFilters = computed(() => Object.values(filters).some(v => v !== ''))
@@ -262,6 +270,7 @@ async function loadAll() {
   isLoading.value = true
   isLoadingStatus.value = true
   isLoadingTable.value = true
+  loadError.value = ''
 
   try {
     const [s, cs, sd, tableData] = await Promise.all([
@@ -274,7 +283,9 @@ async function loadAll() {
     classStats.value = cs
     statusDist.value = sd
     tableRows.value = tableData
-  } catch { /* silent */ } finally {
+  } catch (e: unknown) {
+    loadError.value = e instanceof Error ? e.message : 'Gagal memuat data laporan.'
+  } finally {
     isLoading.value = false
     isLoadingStatus.value = false
     isLoadingTable.value = false
