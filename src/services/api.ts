@@ -41,7 +41,7 @@ export function setUnauthorizedHandler(handler: () => void) {
 export async function gasRequest<T = unknown>(
   action: string,
   payload?: unknown,
-  options?: { skipAuth?: boolean; timeout?: number }
+  options?: { skipAuth?: boolean; timeout?: number; retry404?: number }
 ): Promise<T> {
   const token = getToken()
 
@@ -56,18 +56,30 @@ export async function gasRequest<T = unknown>(
   formData.set('payload', JSON.stringify(payload ?? {}))
   if (token) formData.set('token', token)
 
-  const controller = new AbortController()
   const timeoutMs  = options?.timeout ?? 60_000   // GAS cold start bisa ~10–20 detik
-  const timer      = setTimeout(() => controller.abort(), timeoutMs)
+  const max404Retries = Math.max(0, Math.floor(options?.retry404 ?? 0))
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const response = await fetch(GAS_URL, {
-      method:   'POST',
-      headers:  { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body:     formData.toString(),
-      redirect: 'follow',
-      signal:   controller.signal,
-    })
+    let response: Response
+
+    for (let attempt = 0; ; attempt++) {
+      response = await fetch(GAS_URL, {
+        method:   'POST',
+        headers:  { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body:     formData.toString(),
+        redirect: 'follow',
+        signal:   controller.signal,
+        cache:    'no-store',
+      })
+
+      if (response.status !== 404 || attempt >= max404Retries) break
+
+      // A 404 can briefly occur at the edge during deployment propagation.
+      // Retry only for callers that explicitly opted in (read-only operations).
+      await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)))
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
