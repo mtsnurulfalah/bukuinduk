@@ -164,6 +164,12 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/views/reports/ReportView.vue'),
             meta: { title: 'Laporan', permission: PERMISSIONS.REPORT_VIEW_ALL },
           },
+          {
+            path: 'intelligence',
+            name: 'reports.intelligence',
+            component: () => import('@/views/reports/IntelligenceView.vue'),
+            meta: { title: 'Intelligence Center', permission: PERMISSIONS.REPORT_INTELLIGENCE },
+          },
         ],
       },
 
