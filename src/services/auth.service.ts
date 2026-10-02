@@ -23,7 +23,7 @@ export const authService = {
    * Ambil data user yang sedang login dari token.
    */
   async me(): Promise<User> {
-    return gasRequest<User>('auth.me')
+    return gasRequest<User>('auth.me', undefined, { retry404: 2 })
   },
 
   /**
