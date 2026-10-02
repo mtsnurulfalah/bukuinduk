@@ -37,6 +37,8 @@ var CONFIG = (function () {
       SCHOOL_YEARS:  'school_years',
       SETTINGS:      'settings',
       AUDIT_LOGS:    'audit_logs',
+      VERIFICATIONS: 'student_verifications',
+      DOCUMENTS:     'student_documents',
     }
   };
 })();
