@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { formatDate, formatGender } from '@/utils'
-import type { AppSettings, Student } from '@/types'
+import type { AppSettings, Student, StudentEnrollment } from '@/types'
 
 /**
  * Composable untuk export data ke Excel dan PDF.
@@ -141,7 +141,7 @@ export function useExport() {
     student: Student,
     school: AppSettings | null = null,
     includeSensitive = true,
-    enrollmentHistory: Student['currentEnrollment'][] = [],
+    enrollmentHistory: StudentEnrollment[] = [],
   ) {
     if (!student?.id || !student.fullName) {
       toast.warning('Data siswa belum siap untuk dicetak.')
