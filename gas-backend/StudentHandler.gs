@@ -246,17 +246,20 @@ var StudentHandler = {
   create: function(payload, user) {
     checkPermission(user, 'student:create');
 
-    if (!payload.fullName) return errorResponse(400, 'Nama lengkap wajib diisi.');
-    if (!payload.nis)      return errorResponse(400, 'NIS wajib diisi.');
-    if (!payload.nisn)     return errorResponse(400, 'NISN wajib diisi.');
-    if (!/^\d{10}$/.test(payload.nisn)) return errorResponse(400, 'NISN harus 10 digit angka.');
+    var normalizedNis = normalizeIdentifier(payload.nis);
+    var normalizedNisn = normalizeIdentifier(payload.nisn);
 
-    // Cek duplikat NIS/NISN
+    if (!payload.fullName) return errorResponse(400, 'Nama lengkap wajib diisi.');
+    if (!normalizedNis)    return errorResponse(400, 'NIS wajib diisi.');
+    if (!normalizedNisn)   return errorResponse(400, 'NISN wajib diisi.');
+    if (!/^\d{10}$/.test(normalizedNisn)) return errorResponse(400, 'NISN harus 10 digit angka.');
+
+    // Cek duplikat NIS/NISN setelah normalisasi tipe dan whitespace.
     var all = this._getAll();
-    if (all.find(function(s) { return normalizeIdentifier(s.nis) === normalizeIdentifier(payload.nis); }))
-      return errorResponse(409, 'NIS "' + payload.nis + '" sudah digunakan.');
-    if (all.find(function(s) { return normalizeIdentifier(s.nisn) === normalizeIdentifier(payload.nisn); }))
-      return errorResponse(409, 'NISN "' + payload.nisn + '" sudah digunakan.');
+    if (all.find(function(s) { return normalizeIdentifier(s.nis) === normalizedNis; }))
+      return errorResponse(409, 'NIS "' + normalizedNis + '" sudah digunakan.');
+    if (all.find(function(s) { return normalizeIdentifier(s.nisn) === normalizedNisn; }))
+      return errorResponse(409, 'NISN "' + normalizedNisn + '" sudah digunakan.');
 
     var id = generateUUID();
     var ts = now();
@@ -266,6 +269,8 @@ var StudentHandler = {
     var student = {};
     headers.forEach(function(h) { student[h] = _valueForHeader(payload, h); });
     student.id        = id;
+    student.nis       = normalizedNis;
+    student.nisn      = normalizedNisn;
     student.status    = payload.status || 'active';
     student.createdAt = ts;
     student.updatedAt = ts;
@@ -501,16 +506,24 @@ var StudentHandler = {
     rows.forEach(function(row, i) {
       try {
         if (!row.fullName) throw new Error('Nama lengkap kosong');
+
+        // Normalisasi identifier agar hasil import konsisten meski XLSX/GAS
+        // mengirimkannya sebagai number atau mengandung whitespace.
+        row.nis = normalizeIdentifier(row.nis);
+        row.nisn = normalizeIdentifier(row.nisn);
+        if (row.nik !== undefined) row.nik = normalizeIdentifier(row.nik);
+        if (row.phone !== undefined) row.phone = normalizeIdentifier(row.phone);
+
         if (!row.nis)      throw new Error('NIS kosong');
         // BUG-43 FIX: Validasi NISN — wajib ada dan harus 10 digit angka.
         if (!row.nisn)               throw new Error('NISN kosong');
-        if (!/^\d{10}$/.test(String(row.nisn))) throw new Error('NISN harus 10 digit angka');
+        if (!/^\d{10}$/.test(row.nisn)) throw new Error('NISN harus 10 digit angka');
 
-        if (all.find(function(s) { return normalizeIdentifier(s.nis) === normalizeIdentifier(row.nis); })) {
+        if (all.find(function(s) { return normalizeIdentifier(s.nis) === row.nis; })) {
           throw new Error('NIS "' + row.nis + '" sudah ada');
         }
         // BUG-43 FIX: Cek duplikat NISN juga.
-        if (all.find(function(s) { return normalizeIdentifier(s.nisn) === normalizeIdentifier(row.nisn); })) {
+        if (all.find(function(s) { return normalizeIdentifier(s.nisn) === row.nisn; })) {
           throw new Error('NISN "' + row.nisn + '" sudah ada');
         }
 
