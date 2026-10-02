@@ -118,3 +118,52 @@ export interface AppSettings {
   academicYear?: string
   [key: string]: string | undefined
 }
+
+export type IntelligenceSeverity = 'high' | 'medium' | 'low'
+
+export interface IntelligenceIssue {
+  key: string
+  label: string
+  severity: IntelligenceSeverity
+}
+
+export interface IntelligenceInsight {
+  id: string
+  title: string
+  description: string
+  severity: IntelligenceSeverity
+  count: number
+}
+
+export interface IntelligenceBreakdown {
+  key: string
+  label: string
+  count: number
+  percent: number
+}
+
+export interface IntelligenceAttentionStudent {
+  studentId: string
+  fullName: string
+  nis: string
+  classroomName: string
+  issues: IntelligenceIssue[]
+}
+
+export interface IntelligenceReport {
+  summary: {
+    activeStudents: number
+    studentsNeedingAttention: number
+    studentsWithoutIssues: number
+    studentsWithoutClass: number
+    duplicateStudents: number
+    duplicateNis: number
+    duplicateNisn: number
+    ageReviewStudents: number
+    averageIssuesPerStudent: number
+  }
+  insights: IntelligenceInsight[]
+  breakdown: IntelligenceBreakdown[]
+  attentionStudents: IntelligenceAttentionStudent[]
+  generatedAt: string
+}
