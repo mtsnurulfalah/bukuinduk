@@ -627,11 +627,9 @@ function getParent(rel: 'father' | 'mother' | 'guardian'): StudentParent | undef
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Data loading — FIX RACE CONDITION
-// _loadedStudentId di-set sekali di onMounted dan tidak berubah.
-// Semua async call menggunakan nilai ini, bukan computed route.params.id.
-// Setelah response diterima, cek apakah _loadedStudentId masih sama
-// dengan id di response — jika berbeda (navigasi sudah pindah), abaikan.
+// Data loading — gunakan ID snapshot per request dan abaikan respons kedaluwarsa.
+// _loadedStudentId diperbarui saat parameter rute berubah; setiap respons async
+// harus cocok dengan ID rute dan ID yang sedang dimuat sebelum memperbarui UI.
 // ─────────────────────────────────────────────────────────────────
 
 async function loadEnrollments(): Promise<void> {
@@ -663,6 +661,7 @@ async function retryLoad(studentId: string = _loadedStudentId): Promise<void> {
   error.value = ''
   enrollmentError.value = ''
   enrollments.value = []
+  isLoadingEnrollments.value = false
   studentsStore.clearCurrent()
 
   try {
