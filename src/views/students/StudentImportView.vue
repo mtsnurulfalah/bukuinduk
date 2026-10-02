@@ -56,19 +56,65 @@
       </div>
     </BaseCard>
 
+    <!-- Validasi -->
+    <BaseCard v-if="previewRows.length" title="Validasi Data">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="rounded-lg bg-slate-50 border border-slate-100 p-3">
+          <p class="text-xs text-slate-400">Total baris</p>
+          <p class="text-xl font-bold text-slate-800 mt-1">{{ previewRows.length }}</p>
+        </div>
+        <div class="rounded-lg bg-green-50 border border-green-100 p-3">
+          <p class="text-xs text-green-600">Valid</p>
+          <p class="text-xl font-bold text-green-700 mt-1">{{ validRowCount }}</p>
+        </div>
+        <div class="rounded-lg bg-red-50 border border-red-100 p-3">
+          <p class="text-xs text-red-600">Perlu diperbaiki</p>
+          <p class="text-xl font-bold text-red-700 mt-1">{{ invalidRowCount }}</p>
+        </div>
+        <div class="rounded-lg bg-blue-50 border border-blue-100 p-3">
+          <p class="text-xs text-blue-600">Siap diimpor</p>
+          <p class="text-xl font-bold text-blue-700 mt-1">{{ canImport ? 'Ya' : 'Belum' }}</p>
+        </div>
+      </div>
+
+      <BaseAlert v-if="missingRequiredHeaders.length" type="error" class="mt-4">
+        <p class="font-medium">Header wajib tidak lengkap.</p>
+        <p class="text-xs mt-1">
+          Wajib tersedia: {{ missingRequiredHeaders.join(', ') }}.
+        </p>
+      </BaseAlert>
+
+      <BaseAlert v-else-if="invalidRowCount" type="warning" class="mt-4">
+        <p class="font-medium">Perbaiki {{ invalidRowCount }} baris sebelum melanjutkan.</p>
+        <p class="text-xs mt-1">Baris yang tidak valid tidak dikirim ke server.</p>
+      </BaseAlert>
+    </BaseCard>
+
     <!-- Preview hasil parse -->
     <BaseCard v-if="previewRows.length" :title="`Preview Data (${previewRows.length} baris)`">
       <div class="overflow-x-auto mt-3 -mx-5 sm:mx-0">
         <table class="min-w-full text-xs">
           <thead>
             <tr class="bg-slate-50 text-slate-500 uppercase">
+              <th class="px-3 py-2 text-left font-semibold">No</th>
               <th v-for="col in previewColumns" :key="col" class="px-3 py-2 text-left font-semibold">{{ col }}</th>
+              <th class="px-3 py-2 text-left font-semibold">Status</th>
+              <th class="px-3 py-2 text-left font-semibold">Catatan</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             <tr v-for="(row, i) in previewRows.slice(0, 10)" :key="i" class="hover:bg-slate-50">
-              <td v-for="col in previewColumns" :key="col" class="px-3 py-2 text-slate-700">
+              <td class="px-3 py-2 text-slate-400">{{ i + 1 }}</td>
+              <td v-for="col in previewColumns" :key="col" class="px-3 py-2 text-slate-700 whitespace-nowrap">
                 {{ row[col] ?? '-' }}
+              </td>
+              <td class="px-3 py-2">
+                <BaseBadge :color="rowValidation[i]?.valid ? 'green' : 'red'" dot>
+                  {{ rowValidation[i]?.valid ? 'Valid' : 'Perlu diperbaiki' }}
+                </BaseBadge>
+              </td>
+              <td class="px-3 py-2 text-red-600 max-w-xs">
+                {{ rowValidation[i]?.errors.join('; ') || '—' }}
               </td>
             </tr>
           </tbody>
@@ -96,7 +142,7 @@
     <div class="flex gap-3 justify-end">
       <BaseButton variant="outline" @click="$router.push('/students')">Batal</BaseButton>
       <BaseButton
-        :disabled="!previewRows.length"
+        :disabled="!canImport"
         :loading="isImporting"
         loading-text="Mengimpor..."
         @click="handleImport"
@@ -112,7 +158,7 @@
 import { ref, computed } from 'vue'
 import { Download, Upload } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
-import { BaseCard, BaseButton, BaseAlert } from '@/components/ui'
+import { BaseCard, BaseButton, BaseAlert, BaseBadge } from '@/components/ui'
 import { studentsService } from '@/services'
 import { toast } from 'vue-sonner'
 
@@ -123,12 +169,88 @@ const previewRows = ref<Record<string, string>[]>([])
 const previewColumns = ref<string[]>([])
 const isImporting = ref(false)
 const importResult = ref<{ success: number; failed: number; errors: string[] } | null>(null)
+const missingRequiredHeaders = ref<string[]>([])
+const rowValidation = ref<Array<{ valid: boolean; errors: string[] }>>([])
 
 const fileSize = computed(() => {
   if (!selectedFile.value) return ''
   const kb = selectedFile.value.size / 1024
   return kb < 1024 ? `${kb.toFixed(1)} KB` : `${(kb / 1024).toFixed(1)} MB`
 })
+
+const REQUIRED_COLUMNS = [
+  { label: 'Nama Lengkap', aliases: ['Nama Lengkap', 'fullName'] },
+  { label: 'NIS', aliases: ['NIS', 'nis'] },
+  { label: 'NISN', aliases: ['NISN', 'nisn'] },
+  { label: 'Jenis Kelamin', aliases: ['Jenis Kelamin', 'gender'] },
+  { label: 'Tanggal Masuk', aliases: ['Tanggal Masuk', 'entryDate'] },
+]
+
+function normalizeCell(value: unknown): string {
+  if (value == null || value === '') return ''
+  if (value instanceof Date) {
+    const year = value.getFullYear()
+    const month = String(value.getMonth() + 1).padStart(2, '0')
+    const day = String(value.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  return String(value).trim()
+}
+
+function headerValue(row: Record<string, string>, aliases: string[]): string {
+  for (const key of aliases) {
+    const value = normalizeCell(row[key])
+    if (value) return value
+  }
+  return ''
+}
+
+const validRowCount = computed(() => rowValidation.value.filter(row => row.valid).length)
+const invalidRowCount = computed(() => rowValidation.value.filter(row => !row.valid).length)
+const canImport = computed(() =>
+  previewRows.value.length > 0 &&
+  missingRequiredHeaders.value.length === 0 &&
+  invalidRowCount.value === 0 &&
+  !isImporting.value
+)
+
+function validateRows(rows: Record<string, string>[]) {
+  const seenNis = new Set<string>()
+  const seenNisn = new Set<string>()
+  rowValidation.value = rows.map(row => {
+    const errors: string[] = []
+    const nis = headerValue(row, ['NIS', 'nis'])
+    const nisn = headerValue(row, ['NISN', 'nisn'])
+    const fullName = headerValue(row, ['Nama Lengkap', 'fullName'])
+    const gender = headerValue(row, ['Jenis Kelamin', 'gender']).toUpperCase()
+    const birthDate = headerValue(row, ['Tanggal Lahir', 'birthDate'])
+    const entryDate = headerValue(row, ['Tanggal Masuk', 'entryDate'])
+
+    if (!fullName) errors.push('Nama lengkap kosong')
+    if (!nis) errors.push('NIS kosong')
+    if (!nisn) errors.push('NISN kosong')
+    else if (!/^\d{10}$/.test(nisn)) errors.push('NISN harus 10 digit')
+    if (!['L', 'P'].includes(gender)) errors.push('Jenis kelamin harus L/P')
+    if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) errors.push('Tanggal lahir harus YYYY-MM-DD')
+    if (!entryDate) errors.push('Tanggal masuk kosong')
+    else if (!/^\d{4}-\d{2}-\d{2}$/.test(entryDate)) errors.push('Tanggal masuk harus YYYY-MM-DD')
+
+    const nisKey = nis.toLowerCase()
+    const nisnKey = nisn.toLowerCase()
+    if (nisKey && seenNis.has(nisKey)) errors.push('NIS duplikat di file')
+    if (nisnKey && seenNisn.has(nisnKey)) errors.push('NISN duplikat di file')
+    if (nisKey) seenNis.add(nisKey)
+    if (nisnKey) seenNisn.add(nisnKey)
+
+    return { valid: errors.length === 0, errors }
+  })
+}
+
+function getMissingRequiredHeaders(columns: string[]): string[] {
+  return REQUIRED_COLUMNS
+    .filter(column => !column.aliases.some(alias => columns.includes(alias)))
+    .map(column => column.label)
+}
 
 function handleDrop(e: DragEvent) {
   isDragOver.value = false
@@ -153,13 +275,18 @@ async function processFile(file: File) {
 
   selectedFile.value = file
   importResult.value = null
+  missingRequiredHeaders.value = []
+  rowValidation.value = []
 
   try {
     const XLSX = await import('xlsx')
     const buffer = await file.arrayBuffer()
-    const wb = XLSX.read(buffer, { type: 'array' })
+    const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
     const ws = wb.Sheets[wb.SheetNames[0]]
-    const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: '' })
+    const rawJson = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: false })
+    const json = rawJson.map(row =>
+      Object.fromEntries(Object.entries(row).map(([key, value]) => [key, normalizeCell(value)]))
+    ) as Record<string, string>[]
 
     if (!json.length) {
       toast.warning('File kosong atau format tidak valid.')
@@ -168,6 +295,8 @@ async function processFile(file: File) {
 
     previewColumns.value = Object.keys(json[0])
     previewRows.value = json
+    missingRequiredHeaders.value = getMissingRequiredHeaders(previewColumns.value)
+    validateRows(json)
     toast.success(`${json.length} baris data terdeteksi.`)
   } catch {
     toast.error('Gagal membaca file Excel.')
@@ -179,18 +308,22 @@ async function handleImport() {
   isImporting.value = true
   importResult.value = null
   try {
-    // Map dari kolom Excel ke field form (sesuaikan dengan template)
+    if (!canImport.value) return
+
+    // Hanya kirim data yang sudah lolos validasi client.
     const mapped = previewRows.value.map(row => ({
-      fullName: row['Nama Lengkap'] ?? row['fullName'] ?? '',
-      nis: row['NIS'] ?? row['nis'] ?? '',
-      nisn: row['NISN'] ?? row['nisn'] ?? '',
-      gender: row['Jenis Kelamin'] ?? row['gender'] ?? '',
-      birthDate: row['Tanggal Lahir'] ?? row['birthDate'] ?? '',
-      birthPlace: row['Tempat Lahir'] ?? row['birthPlace'] ?? '',
-      religion: row['Agama'] ?? row['religion'] ?? '',
-      entryDate: row['Tanggal Masuk'] ?? row['entryDate'] ?? '',
-      address: row['Alamat'] ?? row['address'] ?? '',
-      phone: row['No. HP'] ?? row['phone'] ?? '',
+      fullName: headerValue(row, ['Nama Lengkap', 'fullName']),
+      nis: headerValue(row, ['NIS', 'nis']),
+      nisn: headerValue(row, ['NISN', 'nisn']),
+      nik: headerValue(row, ['NIK', 'nik']),
+      gender: headerValue(row, ['Jenis Kelamin', 'gender']).toUpperCase(),
+      birthDate: headerValue(row, ['Tanggal Lahir', 'birthDate']),
+      birthPlace: headerValue(row, ['Tempat Lahir', 'birthPlace']),
+      religion: headerValue(row, ['Agama', 'religion']),
+      entryDate: headerValue(row, ['Tanggal Masuk', 'entryDate']),
+      address: headerValue(row, ['Alamat', 'address']),
+      phone: headerValue(row, ['No. HP', 'phone']),
+      email: headerValue(row, ['Email', 'email']),
     }))
 
     const result = await studentsService.importBatch(mapped)
