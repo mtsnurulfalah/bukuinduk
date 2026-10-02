@@ -158,7 +158,7 @@ export const studentsService = {
    * Ambil daftar siswa dengan filter & pagination.
    */
   async list(filters: StudentFilters): Promise<PaginatedResponse<Student>> {
-    const response = await gasRequest<PaginatedResponse<Student>>('students.list', filters)
+    const response = await gasRequest<PaginatedResponse<Student>>('students.list', filters, { retry404: 2 })
     return normalizeStudentList(response)
   },
 
@@ -166,7 +166,7 @@ export const studentsService = {
    * Ambil detail satu siswa (tanpa sub-data sensitif).
    */
   async get(id: string): Promise<Student> {
-    const student = await gasRequest<Student>('students.get', { id })
+    const student = await gasRequest<Student>('students.get', { id }, { retry404: 2 })
     return normalizeStudent(student)
   },
 
@@ -174,7 +174,7 @@ export const studentsService = {
    * Ambil detail lengkap siswa termasuk relasi (parents, health, dll).
    */
   async getFull(id: string): Promise<Student> {
-    const student = await gasRequest<Student>('students.getFull', { id })
+    const student = await gasRequest<Student>('students.getFull', { id }, { retry404: 2 })
     return normalizeStudent(student)
   },
 
@@ -211,7 +211,7 @@ export const studentsService = {
   // ── Parents ─────────────────────────────────────────────────
 
   async getParents(studentId: string): Promise<StudentParent[]> {
-    const parents = await gasRequest<StudentParent[]>('students.getParents', { studentId })
+    const parents = await gasRequest<StudentParent[]>('students.getParents', { studentId }, { retry404: 2 })
     return Array.isArray(parents) ? parents.map(normalizeParent) : []
   },
 
@@ -228,7 +228,7 @@ export const studentsService = {
   // ── Health ───────────────────────────────────────────────────
 
   async getHealth(studentId: string): Promise<StudentHealth> {
-    return gasRequest<StudentHealth>('students.getHealth', { studentId })
+    return gasRequest<StudentHealth>('students.getHealth', { studentId }, { retry404: 2 })
   },
 
   async updateHealth(studentId: string, data: Partial<StudentHealth>): Promise<StudentHealth> {
@@ -241,6 +241,7 @@ export const studentsService = {
     const history = await gasRequest<StudentEducationHistory[]>(
       'students.getEducationHistory',
       { studentId },
+      { retry404: 2 },
     )
     return Array.isArray(history) ? history.map(normalizeEducationHistory) : []
   },
@@ -251,6 +252,7 @@ export const studentsService = {
     const enrollments = await gasRequest<StudentEnrollment[]>(
       'students.getEnrollments',
       { studentId },
+      { retry404: 2 },
     )
     return Array.isArray(enrollments) ? enrollments.map(normalizeEnrollment) : []
   },
@@ -274,7 +276,7 @@ export const studentsService = {
    * Export data siswa (GAS mengembalikan array, frontend yang format ke Excel/PDF).
    */
   async exportData(filters: Partial<StudentFilters>): Promise<Student[]> {
-    const students = await gasRequest<Student[]>('students.exportData', filters, { timeout: 60_000 })
+    const students = await gasRequest<Student[]>('students.exportData', filters, { timeout: 60_000, retry404: 2 })
     return Array.isArray(students) ? students.map(normalizeStudent) : []
   },
 
@@ -296,6 +298,6 @@ export const studentsService = {
     totalTeachers: number
     totalClassrooms: number
   }> {
-    return gasRequest('students.getStats')
+    return gasRequest('students.getStats', undefined, { retry404: 2 })
   },
 }
