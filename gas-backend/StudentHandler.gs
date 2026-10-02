@@ -264,7 +264,7 @@ var StudentHandler = {
     var headers = getHeaders(sheet);
 
     var student = {};
-    headers.forEach(function(h) { student[h] = payload[h] !== undefined ? payload[h] : ''; });
+    headers.forEach(function(h) { student[h] = _valueForHeader(payload, h); });
     student.id        = id;
     student.status    = payload.status || 'active';
     student.createdAt = ts;
@@ -303,9 +303,18 @@ var StudentHandler = {
 
     var updated = Object.assign({}, old);
     headers.forEach(function(h) {
-      if (payload[h] !== undefined && h !== 'id' && h !== 'createdAt' && h !== 'createdBy') {
-        updated[h] = payload[h];
-      }
+      if (h === 'id' || h === 'createdAt' || h === 'createdBy') return;
+      var value = _valueForHeader(payload, h);
+      // Alias kosong tidak boleh menimpa nilai lama; update hanya field yang dikirim.
+      var hasExact = payload[h] !== undefined;
+      var aliasNames = {
+        address: ['addres'], addres: ['address'],
+        entryDate: ['endryDate'], endryDate: ['entryDate'],
+        healthNotes: ['HealthNotes'], HealthNotes: ['healthNotes'],
+        studentId: ['studentID'], studentID: ['studentId']
+      };
+      var hasAlias = (aliasNames[h] || []).some(function(key) { return payload[key] !== undefined; });
+      if (hasExact || hasAlias) updated[h] = value;
     });
     updated.updatedAt = now();
 
@@ -364,7 +373,7 @@ var StudentHandler = {
     var headers = getHeaders(sheet);
     var all     = sheetToObjects(sheet);
     var existing = all.find(function(p) {
-      return String(p.studentId) === String(payload.studentId) && p.relationship === payload.relationship;
+      return String(p.studentId != null ? p.studentId : p.studentID) === String(payload.studentId) && p.relationship === payload.relationship;
     });
 
     if (existing) {
@@ -616,7 +625,7 @@ var StudentHandler = {
     var headers = getHeaders(sheet);
     var all     = sheetToObjects(sheet);
     var existing = all.find(function(e) {
-      return String(e.studentId) === String(studentId) &&
+      return String(e.studentId != null ? e.studentId : e.studentID) === String(studentId) &&
              e.schoolName === ed.schoolName &&
              e.level === ed.level;
     });
