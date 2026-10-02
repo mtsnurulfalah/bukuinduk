@@ -144,10 +144,9 @@
         <!-- ── Panel Tab Kanan ───────────────────────────────── -->
         <div class="lg:col-span-2">
           <div class="flex border-b border-slate-200 overflow-x-auto scrollbar-thin pb-px mb-4">
-            <button
-              v-for="tab in tabs"
-              v-if="tab.key !== 'admin' || can(PERMISSIONS.STUDENT_VIEW_SENSITIVE)"
-              :key="tab.key"
+            <template v-for="tab in tabs" :key="tab.key">
+              <button
+                v-if="tab.key !== 'admin' || can(PERMISSIONS.STUDENT_VIEW_SENSITIVE)"
               type="button"
               :class="[
                 'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap',
@@ -157,11 +156,12 @@
                   ? 'border-primary-600 text-primary-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300',
               ]"
-              @click="activeTab = tab.key"
-            >
-              <component :is="tab.icon" class="h-3.5 w-3.5 shrink-0" />
-              {{ tab.label }}
-            </button>
+                @click="activeTab = tab.key"
+              >
+                <component :is="tab.icon" class="h-3.5 w-3.5 shrink-0" />
+                {{ tab.label }}
+              </button>
+            </template>
           </div>
 
           <Transition name="tab-fade" mode="out-in">
