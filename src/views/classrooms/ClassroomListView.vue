@@ -19,6 +19,13 @@
       <BaseSkeleton v-for="i in 6" :key="i" height="h-32" />
     </div>
 
+    <BaseRetry
+      v-else-if="error"
+      title="Data kelas gagal dimuat"
+      :message="error"
+      @retry="loadClassrooms"
+    />
+
     <BaseEmpty v-else-if="!classrooms.length" title="Belum ada kelas" description="Tambah kelas untuk tahun pelajaran ini." type="data">
       <template #action>
         <BaseButton v-if="can(PERMISSIONS.CLASSROOM_MANAGE)" @click="$router.push('/classrooms/create')">
@@ -94,7 +101,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { Plus, School, Users, GraduationCap, Pencil, Trash2 } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
-import { BaseButton, BaseSelect, BaseBadge, BaseSkeleton, BaseEmpty, BaseConfirmDialog } from '@/components/ui'
+import { BaseButton, BaseSelect, BaseBadge, BaseSkeleton, BaseEmpty, BaseRetry, BaseConfirmDialog } from '@/components/ui'
 import { useClassroomsStore } from '@/stores/classrooms'
 import { useSchoolYearStore } from '@/stores/schoolYear'
 import { usePermission, useConfirm } from '@/composables'
@@ -110,6 +117,7 @@ const confirm = useConfirm()
 
 const classrooms = ref<Classroom[]>([])
 const isLoading = ref(true)
+const error = ref('')
 
 // BUG-61 FIX: Gunakan computed agar selectedSchoolYearId reaktif terhadap
 // perubahan activeSchoolYear. Sebelumnya ref() hanya di-set sekali saat
@@ -124,10 +132,14 @@ let deleteTargetId = ''
 
 async function loadClassrooms() {
   isLoading.value = true
+  error.value = ''
   try {
     classrooms.value = await classroomsService.list(selectedSchoolYearId.value || undefined)
-  } catch { toast.error('Gagal memuat data kelas.') }
-  finally { isLoading.value = false }
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : 'Gagal memuat data kelas.'
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // BUG-61 FIX: Watch selectedSchoolYearId agar reload otomatis saat tahun pelajaran
