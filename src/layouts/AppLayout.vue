@@ -1,6 +1,8 @@
 <template>
   <div class="flex h-screen bg-slate-50 overflow-hidden">
 
+    <ConnectionStatus />
+
     <!-- ── Sidebar Desktop ──────────────────────────────────── -->
     <aside
       :class="[
@@ -259,6 +261,7 @@ import {
   LogOut, Menu, X, PanelLeft, CalendarDays, Layers,
 } from 'lucide-vue-next'
 import BaseAvatar from '@/components/ui/BaseAvatar.vue'
+import ConnectionStatus from '@/components/shared/ConnectionStatus.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { useSettingsStore } from '@/stores/settings'
