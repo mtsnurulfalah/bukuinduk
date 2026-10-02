@@ -16,13 +16,22 @@
           </div>
         </div>
 
-        <RouterLink
-          to="/students"
-          class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:text-primary-700 shrink-0"
-        >
-          Lihat data siswa
-          <ChevronRight class="h-3.5 w-3.5" />
-        </RouterLink>
+        <div class="flex items-center gap-3 shrink-0">
+          <RouterLink
+            to="/reports/intelligence"
+            class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:text-primary-700"
+          >
+            Intelligence
+            <Lightbulb class="h-3.5 w-3.5" />
+          </RouterLink>
+          <RouterLink
+            to="/students"
+            class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700"
+          >
+            Data siswa
+            <ChevronRight class="h-3.5 w-3.5" />
+          </RouterLink>
+        </div>
       </div>
     </div>
 
