@@ -1,0 +1,572 @@
+// ============================================================
+// StudentHandler.gs
+// ============================================================
+
+var StudentHandler = {
+  handle: function(method, payload, user) {
+    switch (method) {
+      case 'list':           return this.list(payload, user);
+      case 'get':            return this.get(payload, user);
+      case 'getFull':        return this.getFull(payload, user);
+      case 'create':         return this.create(payload, user);
+      case 'update':         return this.update(payload, user);
+      case 'archive':        return this.archive(payload, user);
+      case 'restore':        return this.restore(payload, user);
+      case 'getParents':     return this.getParents(payload, user);
+      case 'updateParent':   return this.updateParent(payload, user);
+      case 'getHealth':      return this.getHealth(payload, user);
+      case 'updateHealth':   return this.updateHealth(payload, user);
+      case 'getEducationHistory': return this.getEducationHistory(payload, user);
+      case 'getEnrollments': return this.getEnrollments(payload, user);
+      case 'enroll':         return this.enroll(payload, user);
+      case 'importBatch':    return this.importBatch(payload, user);
+      case 'exportData':     return this.exportData(payload, user);
+      case 'getStats':       return this.getStats(payload, user);
+      default: return errorResponse(404, 'Student method tidak ditemukan.');
+    }
+  },
+
+  _getAll: function() {
+    var cacheKey = 'students_all';
+    var cached = cacheGet(cacheKey);
+    if (cached) return cached;
+    var data = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
+    cacheSet(cacheKey, data, 120);
+    return data;
+  },
+
+  _invalidateCache: function() {
+    cacheRemove('students_all');
+    cacheRemove('students_stats');
+  },
+
+  list: function(payload, user) {
+    // Permission: admin & principal melihat semua; teacher hanya kelas sendiri
+    var all = this._getAll();
+
+    // BUG-DUP FIX: Angkat pembacaan sheet ke atas function — dibaca SEKALI,
+    // dipakai di blok teacher-filter, classroomId-filter, dan enrich.
+    // Sebelumnya: enrollments dibaca 2–3× dan classrooms dibaca 2× per request.
+    var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
+    var classrooms  = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
+
+    // Teacher filter: hanya siswa di kelas yang diampu
+    if (user.role === 'teacher') {
+      if (!user.teacherId) return successResponse({ items: [], total: 0, page: 1, limit: 20, totalPages: 0 });
+      var myClassrooms = classrooms
+        .filter(function(c) { return String(c.homeroomTeacherId) === String(user.teacherId); })
+        .map(function(c) { return String(c.id); });
+
+      var myStudentIds = enrollments
+        .filter(function(e) { return myClassrooms.indexOf(String(e.classroomId)) !== -1 && e.status === 'active'; })
+        .map(function(e) { return String(e.studentId); });
+
+      all = all.filter(function(s) { return myStudentIds.indexOf(String(s.id)) !== -1; });
+    } else {
+      checkPermission(user, 'student:view:all');
+    }
+
+    // Filters
+    if (payload.status)      all = all.filter(function(s) { return s.status === payload.status; });
+    if (payload.gender)      all = all.filter(function(s) { return s.gender === payload.gender; });
+    if (payload.classroomId) {
+      // BUG-DUP FIX: Gunakan variabel enrollments yang sudah dibaca di atas
+      var ids = enrollments
+        .filter(function(e) { return String(e.classroomId) === String(payload.classroomId) && e.status === 'active'; })
+        .map(function(e) { return String(e.studentId); });
+      all = all.filter(function(s) { return ids.indexOf(String(s.id)) !== -1; });
+    }
+    if (payload.search) {
+      all = all.filter(function(s) {
+        return searchInObject(s, payload.search, ['fullName','nis','nisn','nickname']);
+      });
+    }
+
+    // Sort
+    var sortBy  = payload.sortBy  || 'fullName';
+    var sortDir = payload.sortDir || 'asc';
+    all.sort(function(a, b) {
+      var va = (a[sortBy] || '').toString().toLowerCase();
+      var vb = (b[sortBy] || '').toString().toLowerCase();
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+
+    // Enrich dengan nama kelas dari enrollment aktif
+    // BUG-DUP FIX: Gunakan enrollments & classrooms yang sama — tidak ada pembacaan ulang
+    all = all.map(function(s) {
+      var enr = enrollments.find(function(e) { return String(e.studentId) === String(s.id) && e.status === 'active'; });
+      if (enr) {
+        var cls = classrooms.find(function(c) { return String(c.id) === String(enr.classroomId); });
+        s.classroomName = cls ? cls.name : '';
+      }
+      return s;
+    });
+
+    return successResponse(paginate(all, payload.page, payload.limit));
+  },
+
+  get: function(payload, user) {
+    if (!hasPermission(user, 'student:view:all') && !hasPermission(user, 'student:view:own_class')) {
+      throw new Error('FORBIDDEN');
+    }
+    var all = this._getAll();
+    var s = all.find(function(x) { return String(x.id) === String(payload.id); });
+    if (!s) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    // Sembunyikan field sensitif untuk teacher
+    if (user.role === 'teacher') {
+      delete s.nik;
+    }
+    return successResponse(s);
+  },
+
+  getFull: function(payload, user) {
+    if (!hasPermission(user, 'student:view:all') && !hasPermission(user, 'student:view:own_class')) {
+      throw new Error('FORBIDDEN');
+    }
+
+    var result = JSON.parse(JSON.stringify(
+      this._getAll().find(function(x) { return String(x.id) === String(payload.id); }) || null
+    ));
+    if (!result) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    // FIX: Baca semua sheet relasi SEKALI di awal function scope.
+    // Sebelumnya `var enrollments` dideklarasikan DUA KALI (untuk teacher check
+    // dan untuk currentEnrollment). Dengan `var` hoisting di GAS/V8, deklarasi
+    // kedua adalah reassignment sehingga sheet dibaca 2x tanpa perlu.
+    // Sekarang dibaca satu kali dan dipakai di kedua blok.
+    var allEnrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
+    var allClassrooms  = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
+    var allSchoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
+
+    // BUG-40 FIX: Untuk teacher, pastikan siswa ada di kelas yang diampu.
+    if (user.role === 'teacher') {
+      if (!user.teacherId) throw new Error('FORBIDDEN');
+      var myClassroomIds = allClassrooms
+        .filter(function(c) { return String(c.homeroomTeacherId) === String(user.teacherId); })
+        .map(function(c) { return String(c.id); });
+      var isMyStudent = allEnrollments.some(function(e) {
+        return String(e.studentId) === String(payload.id) &&
+               myClassroomIds.indexOf(String(e.classroomId)) !== -1 &&
+               e.status === 'active';
+      });
+      if (!isMyStudent) throw new Error('FORBIDDEN');
+      delete result.nik;
+    }
+
+    // Lampirkan relasi
+    result.parents = sheetToObjects(getSheet(CONFIG.SHEETS.PARENTS))
+      .filter(function(p) { return String(p.studentId) === String(payload.id); });
+
+    result.health = sheetToObjects(getSheet(CONFIG.SHEETS.HEALTH))
+      .find(function(h) { return String(h.studentId) === String(payload.id); }) || null;
+
+    result.educationHistory = sheetToObjects(getSheet(CONFIG.SHEETS.EDUCATION))
+      .filter(function(e) { return String(e.studentId) === String(payload.id); });
+
+    // Gunakan allEnrollments/allClassrooms/allSchoolYears yang sudah dibaca di atas
+    result.currentEnrollment = (function() {
+      var enr = allEnrollments.find(function(e) {
+        return String(e.studentId) === String(payload.id) && e.status === 'active';
+      });
+      if (!enr) return null;
+      var cls = allClassrooms.find(function(c) { return String(c.id) === String(enr.classroomId); });
+      var sy  = allSchoolYears.find(function(s) { return String(s.id) === String(enr.schoolYearId); });
+      return Object.assign({}, enr, {
+        classroomName:  cls ? cls.name : '',
+        schoolYearName: sy  ? sy.name  : '',
+      });
+    })();
+
+    // Teacher role: hapus data sensitif
+    if (user.role === 'teacher') {
+      result.parents = result.parents.map(function(p) {
+        var c = Object.assign({}, p);
+        delete c.nik;
+        return c;
+      });
+      result.health = null;
+    }
+
+    return successResponse(result);
+  },
+
+  create: function(payload, user) {
+    checkPermission(user, 'student:create');
+
+    if (!payload.fullName) return errorResponse(400, 'Nama lengkap wajib diisi.');
+    if (!payload.nis)      return errorResponse(400, 'NIS wajib diisi.');
+    if (!payload.nisn)     return errorResponse(400, 'NISN wajib diisi.');
+    if (!/^\d{10}$/.test(payload.nisn)) return errorResponse(400, 'NISN harus 10 digit angka.');
+
+    // Cek duplikat NIS/NISN
+    var all = this._getAll();
+    if (all.find(function(s) { return s.nis === payload.nis; }))
+      return errorResponse(409, 'NIS "' + payload.nis + '" sudah digunakan.');
+    if (all.find(function(s) { return s.nisn === payload.nisn; }))
+      return errorResponse(409, 'NISN "' + payload.nisn + '" sudah digunakan.');
+
+    var id = generateUUID();
+    var ts = now();
+    var sheet   = getSheet(CONFIG.SHEETS.STUDENTS);
+    var headers = getHeaders(sheet);
+
+    var student = {};
+    headers.forEach(function(h) { student[h] = payload[h] !== undefined ? payload[h] : ''; });
+    student.id        = id;
+    student.status    = payload.status || 'active';
+    student.createdAt = ts;
+    student.updatedAt = ts;
+    student.createdBy = user.id;
+
+    appendRow(sheet, student, headers);
+
+    // Simpan data terkait
+    this._saveParents(id, payload);
+    this._saveHealth(id, payload.health);
+    this._saveEducationHistory(id, payload.educationHistory);
+
+    // Enroll ke kelas
+    if (payload.classroomId && payload.schoolYearId) {
+      this._doEnroll(id, payload.classroomId, payload.schoolYearId);
+    }
+
+    this._invalidateCache();
+    AuditService.log(user.id, 'CREATE', 'student', id, null, student, 'Tambah siswa: ' + student.fullName);
+    return successResponse(Object.assign({}, student, { id: id }));
+  },
+
+  update: function(payload, user) {
+    checkPermission(user, 'student:update');
+    var id = payload.id;
+    if (!id) return errorResponse(400, 'ID siswa diperlukan.');
+
+    var sheet   = getSheet(CONFIG.SHEETS.STUDENTS);
+    var headers = getHeaders(sheet);
+    var rowIdx  = findRowById(sheet, id);
+    if (rowIdx < 0) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    var all = this._getAll();
+    var old = all.find(function(s) { return String(s.id) === String(id); });
+
+    var updated = Object.assign({}, old);
+    headers.forEach(function(h) {
+      if (payload[h] !== undefined && h !== 'id' && h !== 'createdAt' && h !== 'createdBy') {
+        updated[h] = payload[h];
+      }
+    });
+    updated.updatedAt = now();
+
+    updateRow(sheet, rowIdx, updated, headers);
+
+    if (payload.father || payload.mother || payload.guardian) {
+      this._saveParents(id, payload);
+    }
+    if (payload.health) this._saveHealth(id, payload.health);
+    if (payload.educationHistory) this._saveEducationHistory(id, payload.educationHistory);
+
+    this._invalidateCache();
+    AuditService.log(user.id, 'UPDATE', 'student', id, old, updated, 'Edit siswa: ' + updated.fullName);
+    return successResponse(updated);
+  },
+
+  archive: function(payload, user) {
+    checkPermission(user, 'student:archive');
+    return this._setStatus(payload.id, 'inactive', payload.reason, user);
+  },
+
+  restore: function(payload, user) {
+    checkPermission(user, 'student:update');
+    return this._setStatus(payload.id, 'active', null, user);
+  },
+
+  _setStatus: function(id, status, reason, user) {
+    var sheet   = getSheet(CONFIG.SHEETS.STUDENTS);
+    var headers = getHeaders(sheet);
+    var rowIdx  = findRowById(sheet, id);
+    if (rowIdx < 0) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    var colStatus = headers.indexOf('status') + 1;
+    if (colStatus > 0) sheet.getRange(rowIdx, colStatus).setValue(status);
+
+    this._invalidateCache();
+    AuditService.log(user.id, 'ARCHIVE', 'student', id, null, { status: status }, 'Status siswa: ' + status);
+    return successResponse({ message: 'Status siswa diperbarui.' });
+  },
+
+  getParents: function(payload, user) {
+    var parents = sheetToObjects(getSheet(CONFIG.SHEETS.PARENTS))
+      .filter(function(p) { return String(p.studentId) === String(payload.studentId); });
+    if (user.role === 'teacher') {
+      parents = parents.map(function(p) { var c = Object.assign({}, p); delete c.nik; return c; });
+    }
+    return successResponse(parents);
+  },
+
+  updateParent: function(payload, user) {
+    checkPermission(user, 'student:update');
+    var sheet   = getSheet(CONFIG.SHEETS.PARENTS);
+    var headers = getHeaders(sheet);
+    var all     = sheetToObjects(sheet);
+    var existing = all.find(function(p) {
+      return String(p.studentId) === String(payload.studentId) && p.relationship === payload.relationship;
+    });
+
+    if (existing) {
+      var rowIdx = findRowById(sheet, existing.id);
+      var updated = Object.assign({}, existing, payload);
+      updated.updatedAt = now();
+      updateRow(sheet, rowIdx, updated, headers);
+      return successResponse(updated);
+    } else {
+      var newParent = Object.assign({ id: generateUUID(), createdAt: now(), updatedAt: now(), isAlive: true }, payload);
+      appendRow(sheet, newParent, headers);
+      return successResponse(newParent);
+    }
+  },
+
+  getHealth: function(payload, user) {
+    checkPermission(user, 'student:view:sensitive');
+    var h = sheetToObjects(getSheet(CONFIG.SHEETS.HEALTH))
+      .find(function(x) { return String(x.studentId) === String(payload.studentId); });
+    return successResponse(h || null);
+  },
+
+  updateHealth: function(payload, user) {
+    checkPermission(user, 'student:update');
+    var sheet   = getSheet(CONFIG.SHEETS.HEALTH);
+    var headers = getHeaders(sheet);
+    var all     = sheetToObjects(sheet);
+    var existing = all.find(function(h) { return String(h.studentId) === String(payload.studentId); });
+
+    if (existing) {
+      var rowIdx = findRowById(sheet, existing.id);
+      var updated = Object.assign({}, existing, payload, { updatedAt: now() });
+      updateRow(sheet, rowIdx, updated, headers);
+      return successResponse(updated);
+    } else {
+      var newHealth = Object.assign({ id: generateUUID(), createdAt: now(), updatedAt: now() }, payload);
+      appendRow(sheet, newHealth, headers);
+      return successResponse(newHealth);
+    }
+  },
+
+  getEducationHistory: function(payload, user) {
+    var data = sheetToObjects(getSheet(CONFIG.SHEETS.EDUCATION))
+      .filter(function(e) { return String(e.studentId) === String(payload.studentId); });
+    return successResponse(data);
+  },
+
+  getEnrollments: function(payload, user) {
+    var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS))
+      .filter(function(e) { return String(e.studentId) === String(payload.studentId); });
+    var classrooms  = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
+    var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
+
+    var result = enrollments.map(function(e) {
+      var cls = classrooms.find(function(c) { return String(c.id) === String(e.classroomId); });
+      var sy  = schoolYears.find(function(s) { return String(s.id) === String(e.schoolYearId); });
+      return Object.assign({}, e, {
+        classroomName:  cls ? cls.name : '',
+        schoolYearName: sy  ? sy.name  : '',
+      });
+    });
+
+    return successResponse(result);
+  },
+
+  enroll: function(payload, user) {
+    checkPermission(user, 'student:update');
+    var enr = this._doEnroll(payload.studentId, payload.classroomId, payload.schoolYearId);
+    return successResponse(enr);
+  },
+
+  _doEnroll: function(studentId, classroomId, schoolYearId) {
+    var sheet   = getSheet(CONFIG.SHEETS.ENROLLMENTS);
+    var headers = getHeaders(sheet);
+
+    // Nonaktifkan enrollment lama di tahun pelajaran yang sama
+    var all = sheetToObjects(sheet);
+    all.forEach(function(e, i) {
+      if (String(e.studentId) === String(studentId) &&
+          String(e.schoolYearId) === String(schoolYearId) &&
+          e.status === 'active') {
+        var rowIdx = findRowById(sheet, e.id);
+        var colStatus = headers.indexOf('status') + 1;
+        if (rowIdx > 0 && colStatus > 0) {
+          sheet.getRange(rowIdx, colStatus).setValue('transferred');
+        }
+      }
+    });
+
+    var enr = {
+      id:           generateUUID(),
+      studentId:    studentId,
+      classroomId:  classroomId,
+      schoolYearId: schoolYearId,
+      entryDate:    now().slice(0, 10),
+      exitDate:     '',
+      status:       'active',
+      notes:        '',
+      createdAt:    now(),
+    };
+    appendRow(sheet, enr, headers);
+    return enr;
+  },
+
+  importBatch: function(payload, user) {
+    checkPermission(user, 'student:import');
+    var rows    = payload.rows || [];
+    var success = 0;
+    var failed  = 0;
+    var errors  = [];
+
+    var sheet   = getSheet(CONFIG.SHEETS.STUDENTS);
+    var headers = getHeaders(sheet);
+    var all     = this._getAll();
+
+    rows.forEach(function(row, i) {
+      try {
+        if (!row.fullName) throw new Error('Nama lengkap kosong');
+        if (!row.nis)      throw new Error('NIS kosong');
+        // BUG-43 FIX: Validasi NISN — wajib ada dan harus 10 digit angka.
+        if (!row.nisn)               throw new Error('NISN kosong');
+        if (!/^\d{10}$/.test(String(row.nisn))) throw new Error('NISN harus 10 digit angka');
+
+        if (all.find(function(s) { return s.nis === row.nis; })) {
+          throw new Error('NIS "' + row.nis + '" sudah ada');
+        }
+        // BUG-43 FIX: Cek duplikat NISN juga.
+        if (all.find(function(s) { return s.nisn === row.nisn; })) {
+          throw new Error('NISN "' + row.nisn + '" sudah ada');
+        }
+
+        var id = generateUUID();
+        var ts = now();
+        var student = {};
+        headers.forEach(function(h) { student[h] = row[h] !== undefined ? row[h] : ''; });
+        student.id = id;
+        student.status = 'active';
+        student.createdAt = ts;
+        student.updatedAt = ts;
+        student.createdBy = user.id;
+        appendRow(sheet, student, headers);
+        all.push(student);
+        success++;
+      } catch (e) {
+        failed++;
+        errors.push('Baris ' + (i + 2) + ': ' + e.message);
+      }
+    });
+
+    this._invalidateCache();
+    AuditService.log(user.id, 'IMPORT', 'student', null, null, { count: success }, 'Import ' + success + ' siswa');
+    return successResponse({ success: success, failed: failed, errors: errors });
+  },
+
+  exportData: function(payload, user) {
+    if (!hasPermission(user, 'student:export') && !hasPermission(user, 'student:export:own')) {
+      throw new Error('FORBIDDEN');
+    }
+    // BUG-41 FIX: Tangkap status error dari list() sebelum mengakses .data.items
+    // agar error 403/404 dari list() tidak tertelan menjadi 500 generic.
+    var listResponse = this.list(Object.assign({}, payload, { page: 1, limit: 10000 }), user);
+    var listResult = JSON.parse(listResponse.getContent());
+    if (listResult.status >= 400) {
+      return errorResponse(listResult.status, listResult.error || 'Gagal mengambil data untuk ekspor.');
+    }
+    return successResponse(listResult.data.items);
+  },
+
+  getStats: function(payload, user) {
+    checkPermission(user, 'student:view:all');
+    var cacheKey = 'students_stats';
+    var cached = cacheGet(cacheKey);
+    if (cached) return successResponse(cached);
+
+    var all = this._getAll();
+    var thisYear = new Date().getFullYear();
+    var stats = {
+      totalStudents:      all.length,
+      activeStudents:     all.filter(function(s){ return s.status === 'active'; }).length,
+      maleStudents:       all.filter(function(s){ return s.gender === 'L'; }).length,
+      femaleStudents:     all.filter(function(s){ return s.gender === 'P'; }).length,
+      graduatedStudents:  all.filter(function(s){ return s.status === 'graduated'; }).length,
+      transferredStudents:all.filter(function(s){ return s.status === 'transferred'; }).length,
+      newStudentsThisYear:all.filter(function(s){
+        return s.entryDate && s.entryDate.toString().startsWith(thisYear.toString());
+      }).length,
+      totalTeachers:    sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS)).filter(function(t){ return t.status === 'active'; }).length,
+      totalClassrooms:  sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS)).filter(function(c){ return c.isActive === true || c.isActive === 'TRUE'; }).length,
+    };
+
+    cacheSet(cacheKey, stats, 300);
+    return successResponse(stats);
+  },
+
+  // ── Private helpers ──────────────────────────────────────────
+  _saveParents: function(studentId, payload) {
+    ['father','mother','guardian'].forEach(function(rel) {
+      if (!payload[rel] || !payload[rel].fullName) return;
+      var sheet   = getSheet(CONFIG.SHEETS.PARENTS);
+      var headers = getHeaders(sheet);
+      var all     = sheetToObjects(sheet);
+      var existing = all.find(function(p) {
+        return String(p.studentId) === String(studentId) && p.relationship === rel;
+      });
+
+      var data = Object.assign({ id: generateUUID(), createdAt: now(), isAlive: true },
+        payload[rel], { studentId: studentId, relationship: rel, updatedAt: now() });
+
+      if (existing) {
+        data.id = existing.id;
+        data.createdAt = existing.createdAt;
+        updateRow(sheet, findRowById(sheet, existing.id), data, headers);
+      } else {
+        appendRow(sheet, data, headers);
+      }
+    });
+  },
+
+  _saveHealth: function(studentId, health) {
+    if (!health) return;
+    var sheet    = getSheet(CONFIG.SHEETS.HEALTH);
+    var headers  = getHeaders(sheet);
+    var existing = sheetToObjects(sheet).find(function(h) { return String(h.studentId) === String(studentId); });
+    var data     = Object.assign({ id: generateUUID(), createdAt: now() }, health, { studentId: studentId, updatedAt: now() });
+
+    if (existing) {
+      data.id = existing.id;
+      data.createdAt = existing.createdAt;
+      updateRow(sheet, findRowById(sheet, existing.id), data, headers);
+    } else {
+      appendRow(sheet, data, headers);
+    }
+  },
+
+  _saveEducationHistory: function(studentId, ed) {
+    // BUG-42/BUG-24 FIX: Selalu append menyebabkan duplikasi setiap kali siswa diedit.
+    // Sekarang: cek berdasarkan schoolName + level. Jika sudah ada, update; jika belum, append.
+    if (!ed || !ed.schoolName) return;
+    var sheet   = getSheet(CONFIG.SHEETS.EDUCATION);
+    var headers = getHeaders(sheet);
+    var all     = sheetToObjects(sheet);
+    var existing = all.find(function(e) {
+      return String(e.studentId) === String(studentId) &&
+             e.schoolName === ed.schoolName &&
+             e.level === ed.level;
+    });
+
+    var data = Object.assign({ id: generateUUID(), createdAt: now() }, ed, { studentId: studentId });
+
+    if (existing) {
+      // Update row yang sudah ada — jangan duplikasi
+      data.id = existing.id;
+      data.createdAt = existing.createdAt;
+      var rowIdx = findRowById(sheet, existing.id);
+      if (rowIdx > 0) updateRow(sheet, rowIdx, data, headers);
+    } else {
+      appendRow(sheet, data, headers);
+    }
+  },
+};
