@@ -20,7 +20,20 @@ function requiredString(value: unknown): string {
   return value == null ? '' : String(value)
 }
 
+function normalizeBoolean(value: unknown, fallback = false): boolean {
+  if (value == null || value === '') return fallback
+  if (value === false || value === 0) return false
+
+  const normalized = String(value).trim().toLowerCase()
+  if (normalized === 'false' || normalized === '0' || normalized === 'no') return false
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true
+
+  return Boolean(value)
+}
+
 function normalizeParent(parent: StudentParent): StudentParent {
+  const rawIsAlive = parent.isAlive as unknown
+
   return {
     ...parent,
     studentId: requiredString(parent.studentId),
@@ -35,20 +48,22 @@ function normalizeParent(parent: StudentParent): StudentParent {
     incomeRange: optionalString(parent.incomeRange),
     phone: optionalString(parent.phone),
     address: optionalString(parent.address),
-    isAlive: parent.isAlive !== false && parent.isAlive !== 'FALSE' && parent.isAlive !== 'false' && parent.isAlive !== 0,
+    isAlive: normalizeBoolean(rawIsAlive, true),
   }
 }
 
 function normalizeEducationHistory(item: StudentEducationHistory): StudentEducationHistory {
+  const rawGraduationYear = item.graduationYear as unknown
+
   return {
     ...item,
     studentId: requiredString(item.studentId),
     level: optionalString(item.level),
     schoolName: optionalString(item.schoolName),
     graduationYear:
-      item.graduationYear == null || item.graduationYear === ''
+      rawGraduationYear == null || rawGraduationYear === ''
         ? undefined
-        : Number(item.graduationYear),
+        : Number(rawGraduationYear),
     certificateNumber: optionalString(item.certificateNumber),
     participantNumber: optionalString(item.participantNumber),
   }
