@@ -99,6 +99,8 @@ export interface AuditLog {
   resourceType: string
   resourceId?: string
   description: string
+  oldValues?: string
+  newValues?: string
   ipAddress?: string
   createdAt: string
 }
