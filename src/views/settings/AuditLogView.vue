@@ -58,7 +58,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { Search, X, Plus, Pencil, Trash2, LogIn, LogOut, Download, ShieldCheck, FileDown, AlertTriangle, ChevronDown } from 'lucide-vue-next'
+import { Search, X, Plus, Pencil, Trash2, LogIn, LogOut, Download, ShieldCheck, FileDown, AlertTriangle } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import { BaseCard, BaseInput, BaseSelect, BaseButton, BaseSkeleton, BaseEmpty, BaseBadge, BasePagination, BaseRetry } from '@/components/ui'
 import { reportsService } from '@/services'
