@@ -785,7 +785,7 @@ async function confirmRestore(): Promise<void> {
 async function handlePrintBook(): Promise<void> {
   if (!student.value || !can(PERMISSIONS.STUDENT_EXPORT)) return
   if (!settingsStore.initialized) await settingsStore.fetch()
-  await exportStudentBook(student.value, settingsStore.data, true)
+  await exportStudentBook(student.value, settingsStore.data, true, enrollments.value)
 }
 
 // ─────────────────────────────────────────────────────────────────
