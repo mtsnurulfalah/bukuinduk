@@ -78,8 +78,12 @@ var StudentHandler = {
       all = all.filter(function(s) { return ids.indexOf(String(s.id)) !== -1; });
     }
     if (payload.search) {
+      var searchFields = ['fullName','nis','nisn','nickname'];
+      // NIK hanya boleh menjadi target pencarian bagi role yang memiliki
+      // permission data sensitif (admin/principal).
+      if (hasPermission(user, 'student:view:sensitive')) searchFields.push('nik');
       all = all.filter(function(s) {
-        return searchInObject(s, payload.search, ['fullName','nis','nisn','nickname']);
+        return searchInObject(s, payload.search, searchFields);
       });
     }
 
