@@ -20,6 +20,12 @@ function requiredString(value: unknown): string {
   return value == null ? '' : String(value)
 }
 
+function optionalNumber(value: unknown): number | undefined {
+  if (value == null || value === '') return undefined
+  const num = Number(value)
+  return Number.isFinite(num) ? num : undefined
+}
+
 function normalizeBoolean(value: unknown, fallback = false): boolean {
   if (value == null || value === '') return fallback
   if (value === false || value === 0) return false
@@ -53,19 +59,27 @@ function normalizeParent(parent: StudentParent): StudentParent {
 }
 
 function normalizeEducationHistory(item: StudentEducationHistory): StudentEducationHistory {
-  const rawGraduationYear = item.graduationYear as unknown
-
   return {
     ...item,
     studentId: requiredString(item.studentId),
     level: optionalString(item.level),
     schoolName: optionalString(item.schoolName),
-    graduationYear:
-      rawGraduationYear == null || rawGraduationYear === ''
-        ? undefined
-        : Number(rawGraduationYear),
+    graduationYear: optionalNumber(item.graduationYear),
     certificateNumber: optionalString(item.certificateNumber),
     participantNumber: optionalString(item.participantNumber),
+  }
+}
+
+function normalizeHealth(health: StudentHealth): StudentHealth {
+  return {
+    ...health,
+    studentId: requiredString(health.studentId),
+    bloodType: optionalString(health.bloodType),
+    heightCm: optionalNumber(health.heightCm),
+    weightKg: optionalNumber(health.weightKg),
+    specialNeeds: optionalString(health.specialNeeds),
+    healthNotes: optionalString(health.healthNotes),
+    allergies: optionalString(health.allergies),
   }
 }
 
@@ -98,6 +112,8 @@ function normalizeStudent(student: Student): Student {
     religion: optionalString(student.religion),
     nationality: requiredString(student.nationality),
     familyStatus: optionalString(student.familyStatus),
+    childOrder: optionalNumber(student.childOrder),
+    siblingsCount: optionalNumber(student.siblingsCount),
     address: optionalString(student.address),
     rtRw: optionalString(student.rtRw),
     village: optionalString(student.village),
@@ -117,6 +133,9 @@ function normalizeStudent(student: Student): Student {
     createdBy: optionalString(student.createdBy),
     parents: Array.isArray(student.parents)
       ? student.parents.map(normalizeParent)
+      : undefined,
+    health: student.health
+      ? normalizeHealth(student.health)
       : undefined,
     educationHistory: Array.isArray(student.educationHistory)
       ? student.educationHistory.map(normalizeEducationHistory)
