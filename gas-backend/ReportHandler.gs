@@ -233,6 +233,7 @@ var ReportHandler = {
     });
 
     var duplicateNisIds = {};
+    var duplicateStudentIds = {};
     var duplicateNisGroups = 0;
     Object.keys(nisGroups).forEach(function(key) {
       if (nisGroups[key].length > 1) {
@@ -242,7 +243,6 @@ var ReportHandler = {
     });
 
     var duplicateNisnIds = {};
-    var duplicateStudentIds = {};
     var duplicateNisnGroups = 0;
     Object.keys(nisnGroups).forEach(function(key) {
       if (nisnGroups[key].length > 1) {
