@@ -11,7 +11,7 @@ export const settingsService = {
   },
 
   /** Backup: GAS export semua sheet ke array JSON */
-  async exportBackup(): Promise<Record<string, unknown[]>> {
+  async exportBackup(): Promise<Record<string, unknown>> {
     return gasRequest<Record<string, unknown[]>>('settings.exportBackup', undefined, {
       timeout: 120_000,
     })
