@@ -62,7 +62,7 @@ export async function gasRequest<T = unknown>(
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    let response: Response
+    let response: Response | null = null
 
     for (let attempt = 0; ; attempt++) {
       response = await fetch(GAS_URL, {
@@ -79,6 +79,10 @@ export async function gasRequest<T = unknown>(
       // A 404 can briefly occur at the edge during deployment propagation.
       // Retry only for callers that explicitly opted in (read-only operations).
       await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)))
+    }
+
+    if (!response) {
+      throw new Error('Request tidak menghasilkan response dari server.')
     }
 
     if (!response.ok) {
