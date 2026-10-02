@@ -22,6 +22,12 @@
       <div v-if="isLoading" class="p-4 space-y-2">
         <BaseSkeleton v-for="i in 8" :key="i" height="h-12" />
       </div>
+      <BaseRetry
+        v-else-if="error"
+        title="Audit Log gagal dimuat"
+        :message="error"
+        @retry="load"
+      />
       <BaseEmpty v-else-if="!logs.length" title="Tidak ada log aktivitas" type="default" />
       <div v-else class="divide-y divide-slate-100">
         <div v-for="log in logs" :key="log.id" class="flex gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
@@ -54,7 +60,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Search, X, Plus, Pencil, Trash2, LogIn, LogOut, Download } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
-import { BaseCard, BaseInput, BaseSelect, BaseButton, BaseSkeleton, BaseEmpty, BaseBadge, BasePagination } from '@/components/ui'
+import { BaseCard, BaseInput, BaseSelect, BaseButton, BaseSkeleton, BaseEmpty, BaseBadge, BasePagination, BaseRetry } from '@/components/ui'
 import { reportsService } from '@/services'
 import { formatDateTime } from '@/utils'
 import type { AuditLog } from '@/types'
@@ -64,6 +70,7 @@ const total = ref(0)
 const page = ref(1)
 const limit = ref(20)
 const isLoading = ref(true)
+const error = ref('')
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)))
 
 const filters = reactive({ startDate: '', endDate: '', action: '', resourceType: '' })
@@ -115,11 +122,16 @@ function onPageChange(p: number) { page.value = p; load() }
 
 async function load() {
   isLoading.value = true
+  error.value = ''
   try {
     const res = await reportsService.getAuditLogs({ ...filters, page: page.value, limit: limit.value })
     logs.value = res.items
     total.value = res.total
-  } catch { /* silent */ } finally { isLoading.value = false }
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : 'Gagal memuat audit log.'
+  } finally {
+    isLoading.value = false
+  }
 }
 
 onMounted(load)
