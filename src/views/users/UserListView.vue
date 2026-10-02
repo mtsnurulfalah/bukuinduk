@@ -18,7 +18,7 @@
     </BaseCard>
 
     <BaseRetry
-      v-else-if="error"
+      v-if="error"
       title="Data pengguna gagal dimuat"
       :message="error"
       @retry="loadUsers"
