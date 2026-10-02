@@ -70,7 +70,7 @@
       <BaseCard>
         <div class="flex justify-between items-center mb-4">
           <p class="text-sm font-medium text-slate-700">Daftar Tahun Pelajaran</p>
-          <BaseButton size="sm" @click="openAddSY">
+          <BaseButton v-if="canManageSettings" size="sm" @click="openAddSY">
             <Plus class="h-4 w-4" /> Tambah
           </BaseButton>
         </div>
@@ -93,13 +93,14 @@
             <div class="flex items-center gap-2">
               <BaseBadge v-if="sy.isActive" color="green" dot>Aktif</BaseBadge>
               <button
-                v-if="!sy.isActive"
+                v-if="canManageSettings && !sy.isActive"
                 class="text-xs text-primary-600 hover:underline font-medium"
                 @click="setActiveSY(sy.id)"
               >
                 Jadikan Aktif
               </button>
               <button
+                v-if="canManageSettings"
                 class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                 @click="handleDeleteSY(sy.id, sy.name)"
               >
@@ -146,17 +147,45 @@
       <BaseCard title="Backup Data" subtitle="Export semua data dari Google Spreadsheet ke file JSON">
         <div class="mt-4 space-y-4">
           <BaseAlert type="info">
-            Backup akan mengekspor seluruh data dari semua sheet Spreadsheet ke file JSON.
-            Proses ini dapat memakan waktu beberapa menit tergantung jumlah data.
+            Backup mengekspor seluruh data dari Spreadsheet ke file JSON beserta manifest
+            versi dan jumlah record per sheet. Simpan file di lokasi yang aman dan terbatas.
           </BaseAlert>
-          <div class="flex gap-3">
+
+          <div v-if="canManageSettings" class="flex gap-3">
             <BaseButton :loading="isBackingUp" loading-text="Mengekspor..." @click="handleBackup">
               <Download class="h-4 w-4" /> Download Backup JSON
             </BaseButton>
           </div>
-          <p class="text-xs text-slate-400">
-            Disarankan melakukan backup rutin minimal setiap bulan.
-          </p>
+          <BaseAlert v-else type="warning">
+            Akun Anda memiliki akses lihat saja. Fitur backup hanya dapat dijalankan oleh administrator.
+          </BaseAlert>
+
+          <div
+            v-if="backupMeta"
+            class="rounded-xl border border-slate-100 bg-slate-50 p-4"
+          >
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <p class="text-sm font-semibold text-slate-700">Manifest Backup Terakhir</p>
+                <p class="text-xs text-slate-400 mt-0.5">{{ formatDateTime(backupMeta.generatedAt) }}</p>
+              </div>
+              <BaseBadge color="green" dot>Siap</BaseBadge>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div>
+                <p class="text-xs text-slate-400">Versi</p>
+                <p class="text-sm font-semibold text-slate-700">{{ backupMeta.version }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-slate-400">Jumlah Sheet</p>
+                <p class="text-sm font-semibold text-slate-700">{{ backupMeta.sheetCount }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-slate-400">Total Record</p>
+                <p class="text-sm font-semibold text-slate-700">{{ backupTotalRecords }}</p>
+              </div>
+            </div>
+          </div>
         </div>
       </BaseCard>
     </template>
@@ -164,7 +193,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Save, Plus, Trash2, Download, Building2, Calendar, Database } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import {
@@ -173,20 +202,26 @@ import {
 } from '@/components/ui'
 import { useSettingsStore } from '@/stores/settings'
 import { useSchoolYearStore } from '@/stores/schoolYear'
-import { useConfirm } from '@/composables'
+import { useConfirm, usePermission } from '@/composables'
 import { classroomsService, settingsService } from '@/services'
+import { PERMISSIONS } from '@/constants'
+import { formatDateTime } from '@/utils'
 import { formatDate } from '@/utils'
 import { schoolYearSchema } from '@/utils/validation'
 import { toast } from 'vue-sonner'
 
 const settingsStore = useSettingsStore()
 const schoolYearStore = useSchoolYearStore()
+const { can } = usePermission()
+const canManageSettings = computed(() => can(PERMISSIONS.SETTINGS_MANAGE))
 
 const activeTab = ref('school')
 const isSaving = ref(false)
 const successMsg = ref('')
 const errorMsg = ref('')
 const isBackingUp = ref(false)
+const backupMeta = ref<{ version: string; generatedAt: string; sheetCount: number; counts: Record<string, number> } | null>(null)
+const backupTotalRecords = computed(() => backupMeta.value ? Object.values(backupMeta.value.counts).reduce((sum, value) => sum + Number(value || 0), 0) : 0)
 
 const tabs = [
   { key: 'school', label: 'Profil Sekolah', icon: Building2 },
@@ -289,6 +324,24 @@ async function handleBackup() {
   isBackingUp.value = true
   try {
     const data = await settingsService.exportBackup()
+    const meta = data._meta
+    if (meta && typeof meta === 'object') {
+      const candidate = meta as Record<string, unknown>
+      if (
+        typeof candidate.version === 'string' &&
+        typeof candidate.generatedAt === 'string' &&
+        typeof candidate.sheetCount === 'number' &&
+        candidate.counts &&
+        typeof candidate.counts === 'object'
+      ) {
+        backupMeta.value = {
+          version: candidate.version,
+          generatedAt: candidate.generatedAt,
+          sheetCount: candidate.sheetCount,
+          counts: candidate.counts as Record<string, number>,
+        }
+      }
+    }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
