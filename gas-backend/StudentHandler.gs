@@ -38,6 +38,7 @@ var StudentHandler = {
   _invalidateCache: function() {
     cacheRemove('students_all');
     cacheRemove('students_stats');
+    cacheRemove('students_completeness');
   },
 
   list: function(payload, user) {
@@ -410,10 +411,12 @@ var StudentHandler = {
       var updated = Object.assign({}, existing, payload);
       updated.updatedAt = now();
       updateRow(sheet, rowIdx, updated, headers);
+      cacheRemove('students_completeness');
       return successResponse(updated);
     } else {
       var newParent = Object.assign({ id: generateUUID(), createdAt: now(), updatedAt: now(), isAlive: true }, payload);
       appendRow(sheet, newParent, headers);
+      cacheRemove('students_completeness');
       return successResponse(newParent);
     }
   },
@@ -439,10 +442,12 @@ var StudentHandler = {
       var rowIdx = findRowById(sheet, existing.id);
       var updated = Object.assign({}, existing, payload, { updatedAt: now() });
       updateRow(sheet, rowIdx, updated, headers);
+      cacheRemove('students_completeness');
       return successResponse(updated);
     } else {
       var newHealth = Object.assign({ id: generateUUID(), createdAt: now(), updatedAt: now() }, payload);
       appendRow(sheet, newHealth, headers);
+      cacheRemove('students_completeness');
       return successResponse(newHealth);
     }
   },
@@ -480,6 +485,7 @@ var StudentHandler = {
   enroll: function(payload, user) {
     checkPermission(user, 'student:update');
     var enr = this._doEnroll(payload.studentId, payload.classroomId, payload.schoolYearId);
+    cacheRemove('students_completeness');
     return successResponse(enr);
   },
 
