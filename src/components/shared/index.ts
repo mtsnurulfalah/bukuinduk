@@ -1,5 +1,7 @@
 export { default as StatCard } from './StatCard.vue'
 export { default as DataQualityCard } from './DataQualityCard.vue'
+export { default as StudentAdministrationPanel } from './StudentAdministrationPanel.vue'
+export { default as ConnectionStatus } from './ConnectionStatus.vue'
 export { default as DataTable } from './DataTable.vue'
 export { default as SearchFilter } from './SearchFilter.vue'
 export { default as PageHeader } from './PageHeader.vue'
