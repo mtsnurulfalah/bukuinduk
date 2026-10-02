@@ -28,6 +28,21 @@ function errorResponse(status, message) {
   return createResponse(status, undefined, message);
 }
 
+// ── Normalisasi nilai Spreadsheet ─────────────────────────────
+function normalizeBoolean(value, fallback) {
+  if (value === null || value === undefined || value === '') return fallback === undefined ? false : fallback;
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+  var normalized = String(value).trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'ya') return true;
+  if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'tidak') return false;
+  return Boolean(value);
+}
+
+function normalizeIdentifier(value) {
+  return value === null || value === undefined ? '' : String(value).trim();
+}
+
 // ── CORS preflight ────────────────────────────────────────────
 function handleCors() {
   return ContentService
