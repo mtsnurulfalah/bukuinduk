@@ -14,6 +14,9 @@ export const useStudentsStore = defineStore('students', () => {
   const isLoadingDetail = ref(false)
   const error = ref<string | null>(null)
 
+  // Token request detail agar respons lama tidak menimpa siswa yang lebih baru.
+  let detailRequestVersion = 0
+
   // Filters yang aktif saat ini (dipertahankan saat navigasi back)
   const filters = ref<StudentFilters>({
     page: 1,
@@ -50,21 +53,23 @@ export const useStudentsStore = defineStore('students', () => {
   }
 
   async function fetchDetail(id: string): Promise<Student | null> {
+    const requestVersion = ++detailRequestVersion
     isLoadingDetail.value = true
     error.value = null
     try {
       const student = await studentsService.getFull(id)
-      current.value = student
+      // Hanya request terbaru yang boleh memperbarui state global.
+      if (requestVersion === detailRequestVersion) {
+        current.value = student
+      }
       return student
     } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Gagal memuat data siswa.'
-      // BUG-19 FIX: Lempar ulang error agar caller (view) bisa catch dan
-      // menampilkan error state. Sebelumnya silent fail menyebabkan halaman kosong
-      // tanpa loading, tanpa error, karena view mengecek error.value via try/catch
-      // yang tidak pernah masuk blok catch.
-      throw new Error(error.value ?? 'Gagal memuat data siswa.')
+      const message = err instanceof Error ? err.message : 'Gagal memuat data siswa.'
+      if (requestVersion === detailRequestVersion) error.value = message
+      // Caller tetap menerima error agar dapat menampilkan error state.
+      throw new Error(message)
     } finally {
-      isLoadingDetail.value = false
+      if (requestVersion === detailRequestVersion) isLoadingDetail.value = false
     }
   }
 
@@ -100,7 +105,10 @@ export const useStudentsStore = defineStore('students', () => {
   }
 
   function clearCurrent() {
+    // Batalkan efek request detail yang masih berjalan.
+    detailRequestVersion++
     current.value = null
+    isLoadingDetail.value = false
   }
 
   return {
