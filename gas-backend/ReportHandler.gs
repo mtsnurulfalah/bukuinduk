@@ -338,13 +338,22 @@ var SettingsHandler = {
     checkPermission(user, 'settings:manage');
     var backup = {};
     var sheetNames = Object.values(CONFIG.SHEETS);
+    var counts = {};
     sheetNames.forEach(function(name) {
       try {
         backup[name] = sheetToObjects(getSheet(name));
+        counts[name] = backup[name].length;
       } catch(e) {
         backup[name] = [];
+        counts[name] = 0;
       }
     });
+    backup._meta = {
+      version: CONFIG.APP_VERSION,
+      generatedAt: now(),
+      sheetCount: sheetNames.length,
+      counts: counts,
+    };
     AuditService.log(user.id, 'EXPORT', 'settings', null, null, null, 'Backup data');
     return successResponse(backup);
   },
