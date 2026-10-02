@@ -4,3 +4,5 @@ export { useSearch } from './useSearch'
 export { useExport } from './useExport'
 export { useConfirm } from './useConfirm'
 export { useAsync } from './useAsync'
+
+export { usePwaInstall } from './usePwa'
