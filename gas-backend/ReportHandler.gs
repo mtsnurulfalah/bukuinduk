@@ -6,6 +6,7 @@ var ReportHandler = {
   handle: function(method, payload, user) {
     switch (method) {
       case 'dashboardStats':    return this.dashboardStats(payload, user);
+      case 'dataCompleteness': return this.dataCompleteness(payload, user);
       case 'classroomStats':    return ClassroomHandler.getStats(payload, user);
       case 'genderDistribution':return this.genderDistribution(payload, user);
       case 'statusDistribution':return this.statusDistribution(payload, user);
@@ -21,6 +22,168 @@ var ReportHandler = {
     if (!hasPermission(user,'student:view:all') && !hasPermission(user,'report:view:all'))
       throw new Error('FORBIDDEN');
     return StudentHandler.getStats(payload, user);
+  },
+
+  /**
+   * Kualitas data siswa aktif.
+   * Setiap bagian dinilai per siswa agar dashboard dapat menunjukkan
+   * area yang perlu dilengkapi tanpa menampilkan data sensitif.
+   */
+  dataCompleteness: function(payload, user) {
+    checkPermission(user, 'student:view:all');
+
+    var cached = cacheGet('students_completeness');
+    if (cached) return successResponse(cached);
+
+    var students = StudentHandler._getAll().filter(function(s) {
+      return s.status === 'active';
+    });
+    var parents = sheetToObjects(getSheet(CONFIG.SHEETS.PARENTS));
+    var health = sheetToObjects(getSheet(CONFIG.SHEETS.HEALTH));
+    var education = sheetToObjects(getSheet(CONFIG.SHEETS.EDUCATION));
+    var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
+
+    var parentByStudent = {};
+    parents.forEach(function(p) {
+      var studentId = p.studentId != null ? p.studentId : p.studentID;
+      var id = String(studentId || '');
+      if (!id) return;
+      if (!parentByStudent[id]) parentByStudent[id] = {};
+      var relationship = String(p.relationship || '').toLowerCase();
+      parentByStudent[id][relationship] = p;
+    });
+
+    var healthByStudent = {};
+    health.forEach(function(h) {
+      var studentId = h.studentId != null ? h.studentId : h.studentID;
+      var id = String(studentId || '');
+      if (id) healthByStudent[id] = h;
+    });
+
+    var educationByStudent = {};
+    education.forEach(function(e) {
+      var studentId = e.studentId != null ? e.studentId : e.studentID;
+      var id = String(studentId || '');
+      if (id) educationByStudent[id] = true;
+    });
+
+    var enrollmentByStudent = {};
+    enrollments.forEach(function(e) {
+      if (e.status !== 'active') return;
+      var id = String(e.studentId != null ? e.studentId : e.studentID || '');
+      if (id) enrollmentByStudent[id] = true;
+    });
+
+    var sectionDefinitions = [
+      {
+        key: 'identity',
+        label: 'Identitas',
+        complete: function(s) {
+          return ['nis','nisn','fullName','gender','birthPlace','birthDate','religion','nationality']
+            .every(function(field) { return s[field] !== null && s[field] !== undefined && String(s[field]).trim() !== ''; });
+        },
+      },
+      {
+        key: 'address',
+        label: 'Alamat',
+        complete: function(s) {
+          return ['address','village','district','city','province']
+            .every(function(field) { return s[field] !== null && s[field] !== undefined && String(s[field]).trim() !== ''; });
+        },
+      },
+      {
+        key: 'family',
+        label: 'Orang Tua/Wali',
+        complete: function(s) {
+          var p = parentByStudent[String(s.id)] || {};
+          var fatherOrGuardian = (p.father && p.father.fullName) || (p.guardian && p.guardian.fullName);
+          var mother = p.mother && p.mother.fullName;
+          return !!(fatherOrGuardian && String(fatherOrGuardian).trim()) &&
+                 !!(mother && String(mother).trim());
+        },
+      },
+      {
+        key: 'health',
+        label: 'Kesehatan',
+        complete: function(s) {
+          var h = healthByStudent[String(s.id)];
+          if (!h) return false;
+          return ['bloodType','heightCm','weightKg'].every(function(field) {
+            return h[field] !== null && h[field] !== undefined && String(h[field]).trim() !== '';
+          });
+        },
+      },
+      {
+        key: 'education',
+        label: 'Pendidikan',
+        complete: function(s) {
+          return !!educationByStudent[String(s.id)];
+        },
+      },
+      {
+        key: 'enrollment',
+        label: 'Riwayat Kelas',
+        complete: function(s) {
+          return !!enrollmentByStudent[String(s.id)];
+        },
+      },
+    ];
+
+    var sections = sectionDefinitions.map(function(definition) {
+      var completed = students.filter(function(s) { return definition.complete(s); }).length;
+      var missing = Math.max(0, students.length - completed);
+      var percent = students.length ? Math.round((completed / students.length) * 100) : 100;
+      return {
+        key: definition.key,
+        label: definition.label,
+        percent: percent,
+        completed: completed,
+        missing: missing,
+      };
+    });
+
+    var completeStudents = students.filter(function(s) {
+      return sectionDefinitions.every(function(definition) {
+        return definition.complete(s);
+      });
+    }).length;
+
+    var totalStudents = students.length;
+    var overallPercent = sections.length
+      ? Math.round(sections.reduce(function(sum, section) { return sum + section.percent; }, 0) / sections.length)
+      : 100;
+
+    var insights = [];
+    if (!totalStudents) {
+      insights.push('Belum ada siswa aktif yang dapat dianalisis.');
+    } else {
+      var lowest = sections.slice().sort(function(a, b) { return a.percent - b.percent; })[0];
+      if (lowest && lowest.missing > 0) {
+        insights.push(lowest.label + ' merupakan bagian yang paling banyak perlu dilengkapi (' + lowest.percent + '%).');
+      }
+      var noEnrollment = sections.find(function(s) { return s.key === 'enrollment'; });
+      if (noEnrollment && noEnrollment.missing > 0) {
+        insights.push(noEnrollment.missing + ' siswa aktif belum memiliki rombel aktif.');
+      }
+      if (completeStudents < totalStudents) {
+        insights.push('Sebanyak ' + (totalStudents - completeStudents) + ' siswa belum memiliki seluruh bagian data utama yang lengkap.');
+      } else {
+        insights.push('Seluruh siswa aktif telah memenuhi seluruh bagian data utama.');
+      }
+    }
+
+    var result = {
+      totalStudents: totalStudents,
+      completeStudents: completeStudents,
+      needsAttention: Math.max(0, totalStudents - completeStudents),
+      overallPercent: overallPercent,
+      sections: sections,
+      insights: insights.slice(0, 3),
+      generatedAt: now(),
+    };
+
+    cacheSet('students_completeness', result, 60);
+    return successResponse(result);
   },
 
   statusDistribution: function(payload, user) {
