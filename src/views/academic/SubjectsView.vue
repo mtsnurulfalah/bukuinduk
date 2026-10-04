@@ -93,11 +93,10 @@
           <BaseInput v-model="form.groupName" label="Kelompok" placeholder="Umum / Keagamaan / Muatan Lokal" />
           <BaseInput v-model.number="form.sortOrder" label="Urutan" type="number" min="0" placeholder="1" />
         </div>
-        <BaseSelect
-          v-model="form.isActive"
-          label="Status"
-          :options="[{ value: true, label: 'Aktif' }, { value: false, label: 'Nonaktif' }]"
-        />
+        <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 cursor-pointer">
+          <input v-model="form.isActive" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-200" />
+          <span class="text-sm text-slate-700">Mata pelajaran aktif dan dapat digunakan untuk input nilai</span>
+        </label>
       </div>
       <template #footer>
         <div class="flex justify-end gap-2">
