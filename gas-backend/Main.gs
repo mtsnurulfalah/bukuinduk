@@ -126,6 +126,8 @@ var Router = {
         case 'reports':     return ReportHandler.handle(method, payload, user);
         case 'audit':       return AuditHandler.handle(method, payload, user);
         case 'settings':    return SettingsHandler.handle(method, payload, user);
+        case 'subjects':    return SubjectHandler.handle(method, payload, user);
+        case 'scores':      return ScoreHandler.handle(method, payload, user);
         default:
           return errorResponse(404, 'Action "' + action + '" tidak ditemukan.');
       }
@@ -145,14 +147,14 @@ var ROLE_PERMISSIONS = {
   admin: [
     'student:view:all','student:view:detail','student:view:sensitive',
     'student:create','student:update','student:archive','student:delete',
-    'student:import','student:export','student:verify',
+    'student:import','student:export','student:verify','subject:view','subject:manage','score:view:all','score:manage:all',
     'teacher:view','teacher:manage','classroom:view:all','classroom:manage',
     'school_year:view','school_year:manage','report:view:all','report:export','report:intelligence',
     'user:view','user:manage','settings:view','settings:manage','audit:view',
     'dashboard:admin','dashboard:principal',
   ],
   principal: [
-    'student:view:all','student:view:detail','student:view:sensitive','student:export','student:verify',
+    'student:view:all','student:view:detail','student:view:sensitive','student:export','student:verify','subject:view','subject:manage','score:view:all','score:manage:all',
     'teacher:view','classroom:view:all','school_year:view',
     'report:view:all','report:export','report:intelligence',
     'settings:view',
@@ -161,7 +163,7 @@ var ROLE_PERMISSIONS = {
   teacher: [
     'student:view:own_class','student:export:own',
     'classroom:view:own','school_year:view',
-    'report:view:own',
+    'report:view:own','subject:view','score:view:own_class','score:manage:own_class',
   ]
 };
 
