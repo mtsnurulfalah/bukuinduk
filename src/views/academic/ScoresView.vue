@@ -134,7 +134,7 @@ const authStore = useAuthStore()
 const { can } = usePermission()
 
 const schoolYearId = ref('')
-const semester = ref<1 | 2>(1)
+const semester = ref<'1' | '2'>('1')
 const classroomId = ref('')
 const classrooms = ref<Classroom[]>([])
 const subjects = ref<Subject[]>([])
@@ -218,7 +218,7 @@ async function loadStudentsAndScores() {
       }),
       gradesService.list({
         schoolYearId: schoolYearId.value,
-        semester: semester.value,
+        semester: Number(semester.value) as 1 | 2,
         classroomId: classroomId.value || undefined,
       }),
     ])
@@ -258,7 +258,7 @@ async function saveAll() {
       return {
         studentId,
         schoolYearId: schoolYearId.value,
-        semester: semester.value,
+        semester: Number(semester.value) as 1 | 2,
         subjectId,
         score: scoreMap[key] === '' ? undefined : Number(scoreMap[key]),
       }
@@ -292,7 +292,7 @@ watch(() => schoolYearId.value, () => {
 onMounted(async () => {
   await schoolYearStore.fetch()
   schoolYearId.value = schoolYearStore.activeSchoolYear?.id ?? schoolYearStore.schoolYears[0]?.id ?? ''
-  semester.value = 1
+  semester.value = '1'
   await loadStudentsAndScores()
 })
 </script>
