@@ -6,3 +6,4 @@ export { teachersService } from './teachers.service'
 export { usersService } from './users.service'
 export { reportsService } from './reports.service'
 export { settingsService } from './settings.service'
+\nexport { subjectsService } from './subjects.service'\nexport { gradesService } from './grades.service'\n
