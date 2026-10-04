@@ -194,6 +194,22 @@ export const studentsService = {
     return normalizeStudent(student)
   },
 
+  async uploadPhoto(
+    studentId: string,
+    base64: string,
+    mimeType: 'image/jpeg' | 'image/png',
+  ): Promise<Student> {
+    const student = await gasRequest<Student>('students.uploadPhoto', {
+      studentId, base64, mimeType,
+    }, { timeout: 60_000 })
+    return normalizeStudent(student)
+  },
+
+  async deletePhoto(studentId: string): Promise<Student> {
+    const student = await gasRequest<Student>('students.deletePhoto', { studentId })
+    return normalizeStudent(student)
+  },
+
   /**
    * Arsipkan / ubah status siswa menjadi inactive.
    */
