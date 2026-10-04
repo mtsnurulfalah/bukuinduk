@@ -324,35 +324,133 @@ var ScoreHandler = {
     var rows = Array.isArray(payload.rows) ? payload.rows : [];
     if (!rows.length) return errorResponse(400, 'Tidak ada nilai untuk disimpan.');
 
-    // Validasi semua target sebelum menulis apa pun.
+    // Validasi akses sekali per siswa agar teacher tidak memicu pembacaan
+    // kelas/enrollment berulang untuk setiap sel nilai.
     var studentIds = {};
-    rows.forEach(function(row) { studentIds[String(row.studentId || '')] = true; });
-    Object.keys(studentIds).forEach(function(id) { this._canManage(id, user); }, this);
+    rows.forEach(function(row) {
+      if (row.studentId) studentIds[String(row.studentId)] = true;
+    });
+    var studentIdList = Object.keys(studentIds);
+    if (!studentIdList.length) return errorResponse(400, 'ID siswa diperlukan.');
+    studentIdList.forEach(function(id) { this._canManage(id, user); }, this);
 
-    var sheet = getOrCreateSheet(CONFIG.SHEETS.SCORES,
-      ['id','studentId','schoolYearId','semester','subjectId','score','predicate','notes','createdAt','updatedAt','createdBy']);
+    var headersDef = ['id','studentId','schoolYearId','semester','subjectId','score','predicate','notes','createdAt','updatedAt','createdBy'];
+    var sheet = getOrCreateSheet(CONFIG.SHEETS.SCORES, headersDef);
     var headers = getHeaders(sheet);
+    var existingRows = sheetToObjects(sheet);
+    var subjects = sheetToObjects(getOrCreateSheet(CONFIG.SHEETS.SUBJECTS,
+      ['id','schoolYearId','code','name','shortName','groupName','isActive','sortOrder','createdAt','updatedAt','createdBy']));
+
+    var subjectKeys = {};
+    subjects.forEach(function(s) {
+      if (normalizeBoolean(s.isActive, true)) {
+        subjectKeys[String(s.id) + '|' + String(s.schoolYearId)] = true;
+      }
+    });
+
+    // Deduplikasi payload: kombinasi siswa+tahun+semester+mapel terakhir yang menang.
+    var pending = {};
+    rows.forEach(function(row) {
+      var semester = Number(row.semester);
+      var key = String(row.studentId || '') + '|' + String(row.schoolYearId || '') + '|' +
+        semester + '|' + String(row.subjectId || '');
+      pending[key] = row;
+    });
+
+    var existingByKey = {};
+    existingRows.forEach(function(g) {
+      var key = String(g.studentId || '') + '|' + String(g.schoolYearId || '') + '|' +
+        String(g.semester || '') + '|' + String(g.subjectId || '');
+      existingByKey[key] = g;
+    });
+
+    var updates = [];
+    var newRows = [];
+    var deleteRowIndexes = [];
     var success = 0;
     var failed = 0;
     var errors = [];
 
-    rows.forEach(function(row, i) {
+    Object.keys(pending).forEach(function(key) {
+      var row = pending[key];
       try {
-        var response = this._upsert(sheet, headers, row, user);
-        var parsed = JSON.parse(response.getContent());
-        if (parsed.status >= 400) {
-          failed++;
-          errors.push('Baris ' + (i + 1) + ': ' + (parsed.error || 'Gagal menyimpan'));
-        } else {
-          success++;
+        var semester = Number(row.semester);
+        if (!row.schoolYearId) throw new Error('Tahun pelajaran wajib diisi');
+        if (semester !== 1 && semester !== 2) throw new Error('Semester harus 1 atau 2');
+        var subjectKey = String(row.subjectId || '') + '|' + String(row.schoolYearId);
+        if (!row.subjectId || !subjectKeys[subjectKey]) {
+          throw new Error('Mata pelajaran tidak aktif/tidak sesuai tahun pelajaran');
         }
+
+        var score = row.score === '' || row.score == null ? null : Number(row.score);
+        if (score !== null && (!isFinite(score) || score < 0 || score > 100)) {
+          throw new Error('Nilai harus berada antara 0 sampai 100');
+        }
+
+        var existing = existingByKey[key];
+        if (score === null) {
+          if (existing) {
+            var deleteIdx = findRowById(sheet, existing.id);
+            if (deleteIdx > 0) deleteRowIndexes.push(deleteIdx);
+          }
+          success++;
+          return;
+        }
+
+        var updated = Object.assign({}, existing || {}, {
+          studentId: row.studentId,
+          schoolYearId: row.schoolYearId,
+          semester: semester,
+          subjectId: row.subjectId,
+          score: score,
+          predicate: row.predicate || (score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : 'D'),
+          notes: String(row.notes || '').trim(),
+          updatedAt: now(),
+        });
+
+        if (existing) {
+          updates.push({ rowIndex: findRowById(sheet, existing.id), data: updated });
+        } else {
+          newRows.push(Object.assign({
+            id: generateUUID(),
+            createdAt: now(),
+            createdBy: user.id,
+          }, updated));
+        }
+        success++;
       } catch (e) {
         failed++;
-        errors.push('Baris ' + (i + 1) + ': ' + (e.message || String(e)));
+        errors.push('Nilai ' + (key) + ': ' + (e.message || String(e)));
       }
-    }, this);
+    });
 
-    return successResponse({ success: success, failed: failed, errors: errors });
+    // Update existing rows.
+    updates.forEach(function(item) {
+      if (item.rowIndex > 0) updateRow(sheet, item.rowIndex, item.data, headers);
+    });
+
+    // Hapus dari bawah ke atas agar indeks baris tidak bergeser.
+    deleteRowIndexes.sort(function(a, b) { return b - a; });
+    deleteRowIndexes.forEach(function(rowIndex) {
+      if (rowIndex > 0) sheet.deleteRow(rowIndex);
+    });
+
+    // Tambah baris baru dalam satu write operation.
+    if (newRows.length) {
+      var values = newRows.map(function(item) {
+        return headers.map(function(header) { return _valueForHeader(item, header); });
+      });
+      sheet.getRange(sheet.getLastRow() + 1, 1, values.length, headers.length).setValues(values);
+    }
+
+    AuditService.log(user.id, 'UPSERT', 'student_score_batch', null, null,
+      { changed: success, failed: failed }, 'Input nilai siswa secara batch');
+
+    return successResponse({
+      success: success,
+      failed: failed,
+      errors: errors.slice(0, 50),
+    });
   },
 
   remove: function(payload, user) {
