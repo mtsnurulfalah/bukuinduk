@@ -85,6 +85,15 @@ var StudentHandler = {
         .map(function(e) { return String(e.studentId); });
       all = all.filter(function(s) { return ids.indexOf(String(s.id)) !== -1; });
     }
+    if (payload.schoolYearId) {
+      // Filter tahun pelajaran berdasarkan rombel aktif pada tahun tersebut.
+      var yearIds = enrollments
+        .filter(function(e) {
+          return String(e.schoolYearId) === String(payload.schoolYearId) && e.status === 'active';
+        })
+        .map(function(e) { return String(e.studentId); });
+      all = all.filter(function(s) { return yearIds.indexOf(String(s.id)) !== -1; });
+    }
     if (payload.search) {
       var searchFields = ['fullName','nis','nisn','nickname'];
       // NIK hanya boleh menjadi target pencarian bagi role yang memiliki
