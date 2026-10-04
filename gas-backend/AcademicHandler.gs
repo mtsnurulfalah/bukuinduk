@@ -15,7 +15,8 @@ var SubjectHandler = {
 
   list: function(payload, user) {
     checkPermission(user, 'subject:view');
-    var all = sheetToObjects(getSheet(CONFIG.SHEETS.SUBJECTS));
+    var all = sheetToObjects(getOrCreateSheet(CONFIG.SHEETS.SUBJECTS,
+      ['id','schoolYearId','code','name','shortName','groupName','isActive','sortOrder','createdAt','updatedAt','createdBy']));
     if (payload.schoolYearId) {
       all = all.filter(function(s) { return String(s.schoolYearId) === String(payload.schoolYearId); });
     }
