@@ -693,6 +693,7 @@ const form = reactive({
   nationality: 'Indonesia',
   familyStatus: '', childOrder: undefined as number | undefined,
   siblingsCount: undefined as number | undefined,
+  photoUrl: '',
 
   // Alamat & kontak
   address: '', rtRw: '', village: '', district: '', city: '',
