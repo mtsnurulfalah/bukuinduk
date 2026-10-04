@@ -22,6 +22,8 @@ var StudentHandler = {
       case 'importBatch':    return this.importBatch(payload, user);
       case 'exportData':     return this.exportData(payload, user);
       case 'getStats':       return this.getStats(payload, user);
+      case 'uploadPhoto':     return this.uploadPhoto(payload, user);
+      case 'deletePhoto':     return this.deletePhoto(payload, user);
       case 'getVerifications': return this.getVerifications(payload, user);
       case 'updateVerification': return this.updateVerification(payload, user);
       case 'getDocuments':    return this.getDocuments(payload, user);
@@ -465,6 +467,100 @@ var StudentHandler = {
     sheet.deleteRow(rowIdx);
     AuditService.log(user.id, 'DELETE', 'student_document', String(payload.id), existing, null, 'Hapus dokumen siswa');
     return successResponse({ id: String(payload.id), message: 'Dokumen berhasil dihapus.' });
+  },
+
+  uploadPhoto: function(payload, user) {
+    if (!hasPermission(user, 'student:create') && !hasPermission(user, 'student:update')) {
+      throw new Error('FORBIDDEN');
+    }
+    if (!payload.studentId) return errorResponse(400, 'ID siswa diperlukan.');
+    var student = this._getViewableStudent(payload.studentId, user);
+    if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    var mimeType = String(payload.mimeType || '').toLowerCase();
+    var allowed = { 'image/jpeg': true, 'image/png': true };
+    if (!allowed[mimeType]) return errorResponse(400, 'Format foto harus JPG atau PNG.');
+
+    var base64 = String(payload.base64 || '').replace(/^data:[^;]+;base64,/, '');
+    if (!base64) return errorResponse(400, 'Data foto kosong.');
+
+    var bytes = Utilities.base64Decode(base64);
+    if (bytes.length > 2 * 1024 * 1024) {
+      return errorResponse(400, 'Ukuran foto maksimal 2 MB.');
+    }
+
+    var folder;
+    try {
+      folder = CONFIG.PHOTO_FOLDER_ID
+        ? DriveApp.getFolderById(CONFIG.PHOTO_FOLDER_ID)
+        : DriveApp.getRootFolder();
+    } catch (e) {
+      return errorResponse(500, 'Folder penyimpanan foto tidak dapat diakses.');
+    }
+
+    var fileName = 'siswa-' + normalizeIdentifier(student.nis || student.id) + '-' +
+      new Date().getTime() + (mimeType === 'image/png' ? '.png' : '.jpg');
+    var blob = Utilities.newBlob(bytes, mimeType, fileName);
+    var file = folder.createFile(blob);
+
+    // Foto ditampilkan langsung oleh browser dan PDF. Berkas tidak diletakkan
+    // di cache aplikasi; hanya URL Drive yang disimpan pada kolom photoUrl.
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (shareErr) {
+      try { file.setTrashed(true); } catch (trashErr) {}
+      return errorResponse(500, 'Foto tersimpan tetapi akses tampilannya ditolak oleh kebijakan Google Drive. Periksa izin berbagi folder.');
+    }
+
+    var photoUrl = 'https://drive.google.com/uc?export=view&id=' + file.getId();
+
+    // Hapus foto lama jika merupakan file Drive yang dikelola aplikasi.
+    if (student.photoUrl) {
+      try {
+        var match = String(student.photoUrl).match(/[?&]id=([^&]+)/);
+        if (match && match[1] && match[1] !== file.getId()) {
+          DriveApp.getFileById(match[1]).setTrashed(true);
+        }
+      } catch (oldErr) {}
+    }
+
+    var sheet = getSheet(CONFIG.SHEETS.STUDENTS);
+    var headers = getHeaders(sheet);
+    var rowIdx = findRowById(sheet, payload.studentId);
+    if (rowIdx < 0) return errorResponse(404, 'Siswa tidak ditemukan.');
+    var updated = Object.assign({}, student, { photoUrl: photoUrl, updatedAt: now() });
+    updateRow(sheet, rowIdx, updated, headers);
+    this._invalidateCache();
+
+    AuditService.log(user.id, 'UPDATE', 'student_photo', String(payload.studentId),
+      { photoUrl: student.photoUrl || '' }, { photoUrl: photoUrl }, 'Perbarui foto siswa');
+    return successResponse(updated);
+  },
+
+  deletePhoto: function(payload, user) {
+    checkPermission(user, 'student:update');
+    if (!payload.studentId) return errorResponse(400, 'ID siswa diperlukan.');
+    var student = this._getViewableStudent(payload.studentId, user);
+    if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    if (student.photoUrl) {
+      try {
+        var match = String(student.photoUrl).match(/[?&]id=([^&]+)/);
+        if (match && match[1]) DriveApp.getFileById(match[1]).setTrashed(true);
+      } catch (e) {}
+    }
+
+    var sheet = getSheet(CONFIG.SHEETS.STUDENTS);
+    var headers = getHeaders(sheet);
+    var rowIdx = findRowById(sheet, payload.studentId);
+    if (rowIdx < 0) return errorResponse(404, 'Siswa tidak ditemukan.');
+    var updated = Object.assign({}, student, { photoUrl: '', updatedAt: now() });
+    updateRow(sheet, rowIdx, updated, headers);
+    this._invalidateCache();
+
+    AuditService.log(user.id, 'UPDATE', 'student_photo', String(payload.studentId),
+      { photoUrl: student.photoUrl || '' }, { photoUrl: '' }, 'Hapus foto siswa');
+    return successResponse(updated);
   },
 
   create: function(payload, user) {
