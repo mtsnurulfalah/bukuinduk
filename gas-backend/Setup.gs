@@ -69,6 +69,16 @@ function setupSpreadsheet() {
       headers: ['id','userId','userName','action','resourceType','resourceId',
                 'description','oldValues','newValues','createdAt'],
     },
+    {
+      name: CONFIG.SHEETS.SUBJECTS,
+      headers: ['id','schoolYearId','code','name','shortName','groupName','isActive','sortOrder',
+                'createdAt','updatedAt','createdBy'],
+    },
+    {
+      name: CONFIG.SHEETS.SCORES,
+      headers: ['id','studentId','schoolYearId','semester','subjectId','score','predicate','notes',
+                'createdAt','updatedAt','createdBy'],
+    },
   ];
 
   sheetDefs.forEach(function(def) {
