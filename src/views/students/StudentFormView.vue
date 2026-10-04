@@ -581,6 +581,7 @@ const photoPreview = ref('')
 const photoUploadData = ref('')
 const photoMimeType = ref<'image/jpeg' | 'image/png'>('image/jpeg')
 const photoError = ref('')
+const photoDeleteRequested = ref(false)
 
 // BUG-3 FIX: errors menggunakan Record<string,string> — path Yup yang nested
 // seperti 'educationHistory.schoolName' disimpan dengan key yang sama.
@@ -650,6 +651,7 @@ async function handlePhotoChange(event: Event) {
 function clearPhoto() {
   photoUploadData.value = ''
   photoError.value = ''
+  photoDeleteRequested.value = Boolean(isEdit.value && form.photoUrl)
   photoPreview.value = ''
 }
 
@@ -905,8 +907,19 @@ async function handleSubmit() {
             : 'Data siswa tersimpan, tetapi foto gagal diunggah.',
         )
       }
+    } else if (photoDeleteRequested.value && savedStudent?.id) {
+      try {
+        savedStudent = await studentsService.deletePhoto(savedStudent.id)
+      } catch (photoErr: unknown) {
+        toast.warning(
+          photoErr instanceof Error
+            ? `Data siswa tersimpan, tetapi foto lama gagal dihapus: ${photoErr.message}`
+            : 'Data siswa tersimpan, tetapi foto lama gagal dihapus.',
+        )
+      }
     }
 
+    photoDeleteRequested.value = false
     studentsStore.updateInList(savedStudent)
     toast.success(isEdit.value ? 'Data siswa berhasil diperbarui.' : 'Siswa baru berhasil ditambahkan.')
     router.push('/students')
@@ -995,6 +1008,7 @@ onMounted(async () => {
       })
 
       photoPreview.value = student.photoUrl ?? ''
+      photoDeleteRequested.value = false
 
       if (student.parents) {
         for (const p of student.parents) {
