@@ -491,9 +491,12 @@ var StudentHandler = {
 
     var folder;
     try {
-      folder = CONFIG.PHOTO_FOLDER_ID
-        ? DriveApp.getFolderById(CONFIG.PHOTO_FOLDER_ID)
-        : DriveApp.getRootFolder();
+      if (CONFIG.PHOTO_FOLDER_ID) {
+        folder = DriveApp.getFolderById(CONFIG.PHOTO_FOLDER_ID);
+      } else {
+        var folders = DriveApp.getFoldersByName('Buku Induk Digital - Foto Siswa');
+        folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Buku Induk Digital - Foto Siswa');
+      }
     } catch (e) {
       return errorResponse(500, 'Folder penyimpanan foto tidak dapat diakses.');
     }
