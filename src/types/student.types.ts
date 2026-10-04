@@ -146,6 +146,7 @@ export interface StudentFormData {
   schoolYearId?: string
 
   notes?: string
+  photoUrl?: string
 
   // Parents
   father?: Partial<StudentParent>
