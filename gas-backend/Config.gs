@@ -22,6 +22,7 @@ var CONFIG = (function () {
     SPREADSHEET_ID: props.getProperty('SPREADSHEET_ID') || '',
     ALLOWED_ORIGIN: props.getProperty('ALLOWED_ORIGIN') || '*',
     APP_VERSION:    '1.0.0',
+    PHOTO_FOLDER_ID: props.getProperty('PHOTO_FOLDER_ID') || '',
 
     // Nama sheet
     SHEETS: {
@@ -39,6 +40,8 @@ var CONFIG = (function () {
       AUDIT_LOGS:    'audit_logs',
       VERIFICATIONS: 'student_verifications',
       DOCUMENTS:     'student_documents',
+      SUBJECTS:       'subjects',
+      SCORES:         'student_scores',
     }
   };
 })();
