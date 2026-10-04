@@ -46,6 +46,7 @@ export interface Student {
   health?: StudentHealth
   educationHistory?: StudentEducationHistory[]
   currentEnrollment?: StudentEnrollment
+  classroomName?: string
 }
 
 export interface StudentParent {
