@@ -33,11 +33,16 @@ export function setupGuards(router: Router): void {
       }
     }
 
-    // ── Permission check (dari meta.permission) ───────────
-    const requiredPermission = getMostSpecificPermission(to)
-    if (requiredPermission && authStore.user) {
+    // ── Permission check ─────────────────────────────────
+    if (authStore.user) {
       const userPerms = ROLE_PERMISSIONS[authStore.user.role] ?? []
-      if (!userPerms.includes(requiredPermission as Permission)) {
+      const requiredAny = getMostSpecificPermissionsAny(to)
+      if (requiredAny?.length && !requiredAny.some(permission => userPerms.includes(permission as Permission))) {
+        return { name: 'forbidden' }
+      }
+
+      const requiredPermission = getMostSpecificPermission(to)
+      if (requiredPermission && !userPerms.includes(requiredPermission as Permission)) {
         return { name: 'forbidden' }
       }
     }
@@ -89,6 +94,14 @@ function getMostSpecificRoles(to: RouteLocationNormalized): string[] | undefined
   const matched = [...to.matched].reverse()
   for (const r of matched) {
     if (r.meta.roles) return r.meta.roles as string[]
+  }
+  return undefined
+}
+
+function getMostSpecificPermissionsAny(to: RouteLocationNormalized): string[] | undefined {
+  const matched = [...to.matched].reverse()
+  for (const r of matched) {
+    if (r.meta.permissionsAny) return r.meta.permissionsAny as string[]
   }
   return undefined
 }
