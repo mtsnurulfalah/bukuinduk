@@ -121,6 +121,23 @@ const routes: RouteRecordRaw[] = [
         ],
       },
 
+      // ── Akademik ─────────────────────────────────────────
+      {
+        path: 'subjects',
+        name: 'subjects',
+        component: () => import('@/views/academic/SubjectsView.vue'),
+        meta: { title: 'Mata Pelajaran', permission: PERMISSIONS.SUBJECT_VIEW },
+      },
+      {
+        path: 'grades',
+        name: 'student-grades',
+        component: () => import('@/views/academic/ScoresView.vue'),
+        meta: {
+          title: 'Nilai Siswa',
+          permissionsAny: [PERMISSIONS.SCORE_VIEW_ALL, PERMISSIONS.SCORE_VIEW_OWN_CLASS],
+        },
+      },
+
       // ── Guru ──────────────────────────────────────────────
       {
         path: 'teachers',
