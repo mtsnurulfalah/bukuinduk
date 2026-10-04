@@ -117,6 +117,37 @@
           <template #header>
             <span class="text-xs text-slate-400 font-normal">* wajib diisi</span>
           </template>
+          <div class="mb-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div class="h-28 w-24 rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                <img v-if="photoPreview" :src="photoPreview" alt="Pratinjau foto siswa" class="h-full w-full object-cover" />
+                <ImagePlus v-else class="h-8 w-8 text-slate-300" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold text-slate-700">Foto Profil Siswa</p>
+                <p class="text-xs text-slate-500 mt-0.5">JPG/PNG, maksimal 2 MB. Foto akan digunakan pada detail siswa dan Buku Induk PDF.</p>
+                <div class="flex flex-wrap items-center gap-2 mt-3">
+                  <label class="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">
+                    <ImagePlus class="h-4 w-4" />
+                    Pilih Foto
+                    <input type="file" class="sr-only" accept="image/jpeg,image/png" @change="handlePhotoChange" />
+                  </label>
+                  <BaseButton
+                    v-if="photoPreview"
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    @click="clearPhoto"
+                  >
+                    <Trash2 class="h-4 w-4 text-red-500" />
+                    Hapus
+                  </BaseButton>
+                  <span v-if="photoError" class="text-xs text-red-600">{{ photoError }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <BaseInput
               v-model="form.fullName"
@@ -507,7 +538,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { CheckCircle, ChevronRight, ChevronLeft, Save } from 'lucide-vue-next'
+import { CheckCircle, ChevronRight, ChevronLeft, Save, ImagePlus, Trash2 } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import {
   BaseCard, BaseInput, BaseSelect, BaseTextarea,
@@ -546,12 +577,81 @@ const initError    = ref('')       // BUG-18 FIX: error load dropdown data
 const currentStep  = ref(0)
 const maxVisitedStep = ref(0)      // BUG-11 FIX: batasi navigasi step indicator
 
+const photoPreview = ref('')
+const photoUploadData = ref('')
+const photoMimeType = ref<'image/jpeg' | 'image/png'>('image/jpeg')
+const photoError = ref('')
+
 // BUG-3 FIX: errors menggunakan Record<string,string> — path Yup yang nested
 // seperti 'educationHistory.schoolName' disimpan dengan key yang sama.
 const errors = reactive<Record<string, string>>({})
 
 // Tahun sekarang untuk batas max input tahun lulus (BUG-16 FIX)
 const currentYear = new Date().getFullYear()
+
+function compressImage(file: File): Promise<{ base64: string; mimeType: 'image/jpeg' | 'image/png' }> {
+  return new Promise((resolve, reject) => {
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      reject(new Error('Foto harus berformat JPG atau PNG.'))
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      reject(new Error('Ukuran foto maksimal 2 MB.'))
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Foto tidak dapat dibaca.'))
+    reader.onload = () => {
+      const img = new Image()
+      img.onerror = () => reject(new Error('File foto tidak valid.'))
+      img.onload = () => {
+        const maxW = 600
+        const maxH = 800
+        const scale = Math.min(1, maxW / img.width, maxH / img.height)
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.max(1, Math.round(img.width * scale))
+        canvas.height = Math.max(1, Math.round(img.height * scale))
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          reject(new Error('Browser tidak mendukung pemrosesan foto.'))
+          return
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82)
+        resolve({ base64: dataUrl.split(',')[1] ?? '', mimeType: 'image/jpeg' })
+      }
+      img.src = String(reader.result)
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+async function handlePhotoChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  photoError.value = ''
+  try {
+    const result = await compressImage(file)
+    photoUploadData.value = result.base64
+    photoMimeType.value = result.mimeType
+    const reader = new FileReader()
+    reader.onload = () => { photoPreview.value = String(reader.result || '') }
+    reader.readAsDataURL(file)
+  } catch (e: unknown) {
+    photoUploadData.value = ''
+    photoError.value = e instanceof Error ? e.message : 'Gagal memproses foto.'
+  } finally {
+    input.value = ''
+  }
+}
+
+function clearPhoto() {
+  photoUploadData.value = ''
+  photoError.value = ''
+  photoPreview.value = ''
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Steps definition
@@ -781,17 +881,34 @@ async function handleSubmit() {
 
   isSaving.value = true
   try {
+    let savedStudent
     if (isEdit.value) {
-      const updated = await studentsService.update(
+      savedStudent = await studentsService.update(
         route.params.id as string,
         form as unknown as StudentFormData,
       )
-      studentsStore.updateInList(updated)
-      toast.success('Data siswa berhasil diperbarui.')
     } else {
-      await studentsService.create(form as unknown as StudentFormData)
-      toast.success('Siswa baru berhasil ditambahkan.')
+      savedStudent = await studentsService.create(form as unknown as StudentFormData)
     }
+
+    if (photoUploadData.value && savedStudent?.id) {
+      try {
+        savedStudent = await studentsService.uploadPhoto(
+          savedStudent.id,
+          photoUploadData.value,
+          photoMimeType.value,
+        )
+      } catch (photoErr: unknown) {
+        toast.warning(
+          photoErr instanceof Error
+            ? `Data siswa tersimpan, tetapi foto gagal diunggah: ${photoErr.message}`
+            : 'Data siswa tersimpan, tetapi foto gagal diunggah.',
+        )
+      }
+    }
+
+    studentsStore.updateInList(savedStudent)
+    toast.success(isEdit.value ? 'Data siswa berhasil diperbarui.' : 'Siswa baru berhasil ditambahkan.')
     router.push('/students')
   } catch (e: unknown) {
     errorMsg.value = e instanceof Error ? e.message : 'Gagal menyimpan data.'
@@ -872,9 +989,12 @@ onMounted(async () => {
         email:        student.email        ?? '',
         entryDate:    student.entryDate    ?? '',
         notes:        student.notes        ?? '',
+        photoUrl:      student.photoUrl      ?? '',
         classroomId:  student.currentEnrollment?.classroomId  ?? '',
         schoolYearId: student.currentEnrollment?.schoolYearId ?? '',
       })
+
+      photoPreview.value = student.photoUrl ?? ''
 
       if (student.parents) {
         for (const p of student.parents) {
