@@ -167,3 +167,56 @@ export interface IntelligenceReport {
   attentionStudents: IntelligenceAttentionStudent[]
   generatedAt: string
 }
+
+
+export interface Subject {
+  id: string
+  schoolYearId: string
+  code?: string
+  name: string
+  shortName?: string
+  groupName?: string
+  isActive: boolean
+  sortOrder: number
+  createdAt: string
+  updatedAt?: string
+  createdBy?: string
+}
+
+export interface SubjectFormData {
+  schoolYearId: string
+  code?: string
+  name: string
+  shortName?: string
+  groupName?: string
+  isActive?: boolean
+  sortOrder?: number
+}
+
+export interface StudentGrade {
+  id: string
+  studentId: string
+  schoolYearId: string
+  semester: 1 | 2
+  subjectId: string
+  subjectName: string
+  subjectCode?: string
+  classroomName?: string
+  score?: number
+  predicate?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+  createdBy?: string
+}
+
+export interface GradeFormData {
+  id?: string
+  studentId: string
+  schoolYearId: string
+  semester: 1 | 2
+  subjectId: string
+  score?: number
+  predicate?: string
+  notes?: string
+}
