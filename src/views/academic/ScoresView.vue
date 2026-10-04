@@ -116,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { BookOpen, RefreshCw, Save } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { PageHeader } from '@/components/shared'
@@ -124,14 +124,11 @@ import { BaseButton, BaseCard, BaseRetry, BaseSelect, BaseSkeleton } from '@/com
 import { useSchoolYearStore } from '@/stores/schoolYear'
 import { useAuthStore } from '@/stores/auth'
 import { classroomsService, gradesService, studentsService, subjectsService } from '@/services'
-import { usePermission } from '@/composables'
-import { PERMISSIONS } from '@/constants'
 import { toast } from 'vue-sonner'
 import type { Classroom, Student, StudentGrade, Subject } from '@/types'
 
 const schoolYearStore = useSchoolYearStore()
 const authStore = useAuthStore()
-const { can } = usePermission()
 
 const schoolYearId = ref('')
 const semester = ref<'1' | '2'>('1')
@@ -147,8 +144,8 @@ const isSaving = ref(false)
 const error = ref('')
 
 const semesterOptions = [
-  { value: 1, label: 'Semester 1 (Ganjil)' },
-  { value: 2, label: 'Semester 2 (Genap)' },
+  { value: '1', label: 'Semester 1 (Ganjil)' },
+  { value: '2', label: 'Semester 2 (Genap)' },
 ]
 
 const classroomOptions = computed(() => [
@@ -284,10 +281,6 @@ async function saveAll() {
     isSaving.value = false
   }
 }
-
-watch(() => schoolYearId.value, () => {
-  if (schoolYearId.value) loadStudentsAndScores()
-})
 
 onMounted(async () => {
   await schoolYearStore.fetch()
