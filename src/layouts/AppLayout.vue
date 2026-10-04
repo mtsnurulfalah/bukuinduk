@@ -271,7 +271,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import {
   LayoutDashboard, Users, GraduationCap, School,
   BookOpen, BarChart3, Settings, UserCog, Lightbulb,
-  LogOut, Menu, X, PanelLeft, CalendarDays, Layers, MoreHorizontal, Home, Search,
+  LogOut, Menu, X, PanelLeft, CalendarDays, Layers, MoreHorizontal, Home, Search, BookOpenCheck,
 } from 'lucide-vue-next'
 import BaseAvatar from '@/components/ui/BaseAvatar.vue'
 import ConnectionStatus from '@/components/shared/ConnectionStatus.vue'
@@ -322,6 +322,7 @@ interface NavItem {
   section?: string
   roles?: string[]
   permission?: string
+  permissionsAny?: string[]
 }
 
 const navItems: NavItem[] = [
@@ -367,6 +368,24 @@ const navItems: NavItem[] = [
     to: '/classrooms/grades',
     icon: Layers,
     permission: PERMISSIONS.CLASSROOM_MANAGE,
+  },
+  // Akademik
+  {
+    name: 'subjects',
+    label: 'Mata Pelajaran',
+    mobileLabel: 'Mapel',
+    to: '/subjects',
+    icon: BookOpen,
+    section: 'Akademik',
+    permission: PERMISSIONS.SUBJECT_VIEW,
+  },
+  {
+    name: 'student-grades',
+    label: 'Nilai Siswa',
+    mobileLabel: 'Nilai',
+    to: '/grades',
+    icon: BookOpenCheck,
+    permissionsAny: [PERMISSIONS.SCORE_VIEW_ALL, PERMISSIONS.SCORE_VIEW_OWN_CLASS],
   },
   // Guru
   {
@@ -414,9 +433,8 @@ const navItems: NavItem[] = [
 function hasPermission(item: NavItem): boolean {
   if (!authStore.user) return false
   if (item.roles && !item.roles.includes(authStore.user.role)) return false
-  if (item.permission) {
-    return authStore.hasPermission(item.permission as never)
-  }
+  if (item.permission && !authStore.hasPermission(item.permission as never)) return false
+  if (item.permissionsAny?.length && !item.permissionsAny.some(permission => authStore.hasPermission(permission as never))) return false
   return true
 }
 
