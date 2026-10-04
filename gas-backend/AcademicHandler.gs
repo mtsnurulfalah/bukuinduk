@@ -117,7 +117,8 @@ var SubjectHandler = {
     var rowIdx = findRowById(sheet, payload.id);
     if (rowIdx < 0) return errorResponse(404, 'Mata pelajaran tidak ditemukan.');
 
-    var scores = getSheet(CONFIG.SHEETS.SCORES);
+    var scores = getOrCreateSheet(CONFIG.SHEETS.SCORES,
+      ['id','studentId','schoolYearId','semester','subjectId','score','predicate','notes','createdAt','updatedAt','createdBy']);
     var linked = sheetToObjects(scores).filter(function(g) { return String(g.subjectId) === String(payload.id); });
     if (linked.length) {
       return errorResponse(409, 'Mata pelajaran tidak dapat dihapus karena sudah memiliki data nilai. Nonaktifkan saja agar riwayat nilai tetap aman.');
