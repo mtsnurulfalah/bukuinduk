@@ -90,7 +90,7 @@
       <div class="p-3 sm:p-4 space-y-3">
 
         <!-- Row 1: Search + Export -->
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <!-- Search -->
           <div class="relative flex-1 min-w-0">
             <Search
@@ -239,7 +239,7 @@
         empty-title="Tidak ada data siswa"
         :empty-description="emptyDescription"
         empty-type="students"
-        @row-click="(row) => $router.push(`/students/${row.id}`)"
+        @row-click="openStudent"
         @sort="onSort"
       >
         <!-- Empty action kontekstual -->
@@ -261,15 +261,15 @@
         <template #cell-fullName="{ row }">
           <div class="flex items-center gap-3 min-w-0">
             <BaseAvatar
-              :name="String(row.fullName)"
+              :name="String(row.fullName ?? 'Siswa')"
               :src="row.photoUrl ? String(row.photoUrl) : undefined"
               size="sm"
             />
             <div class="min-w-0 flex-1">
               <p class="font-medium text-slate-800 truncate leading-snug text-sm">
-                {{ row.fullName }}
+                {{ row.fullName ?? 'Siswa' }}
               </p>
-              <p class="text-xs text-slate-400 truncate font-mono">{{ row.nis }}</p>
+              <p class="text-xs text-slate-400 truncate font-mono">{{ row.nis ?? '–' }}</p>
             </div>
           </div>
         </template>
@@ -284,12 +284,10 @@
           <span
             :class="[
               'inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold select-none',
-              row.gender === 'L'
-                ? 'bg-sky-50 text-sky-700 ring-1 ring-sky-200'
-                : 'bg-pink-50 text-pink-700 ring-1 ring-pink-200',
+              genderTone(row.gender),
             ]"
           >
-            {{ row.gender === 'L' ? 'L' : 'P' }}
+            {{ genderLabel(row.gender) }}
           </span>
         </template>
 
@@ -303,7 +301,7 @@
 
         <!-- ── Status ────────────────────────────────────────── -->
         <template #cell-status="{ row }">
-          <StudentStatusBadge :status="String(row.status)" dot />
+          <StudentStatusBadge :status="row.status ? String(row.status) : null" dot />
         </template>
 
         <!-- ── Aksi ──────────────────────────────────────────── -->
@@ -318,7 +316,7 @@
               type="button"
               class="action-btn hover:text-primary-600 hover:bg-primary-50 focus:ring-primary-200"
               title="Lihat detail"
-              @click="$router.push(`/students/${row.id}`)"
+              @click="openStudent(row)"
             >
               <Eye class="h-4 w-4" />
             </button>
@@ -329,7 +327,7 @@
               type="button"
               class="action-btn hover:text-amber-600 hover:bg-amber-50 focus:ring-amber-200"
               title="Edit data"
-              @click="$router.push(`/students/${row.id}/edit`)"
+              @click="openStudentEdit(row)"
             >
               <Pencil class="h-4 w-4" />
             </button>
@@ -396,6 +394,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   UserPlus, Upload, Download, Eye, Pencil, Archive,
   X, Search, SlidersHorizontal, AlertCircle, RefreshCw,
@@ -409,22 +408,37 @@ import { useStudentsStore } from '@/stores/students'
 import { useClassroomsStore } from '@/stores/classrooms'
 import { usePermission, usePagination, useSearch, useExport, useConfirm } from '@/composables'
 import { studentsService } from '@/services'
-import { PERMISSIONS, STUDENT_STATUS_OPTIONS, GENDER_OPTIONS } from '@/constants'
+import { DEFAULT_PAGE_SIZE, PERMISSIONS, STUDENT_STATUS_OPTIONS, GENDER_OPTIONS } from '@/constants'
 import { toast } from 'vue-sonner'
 
 // ── Stores & composables ──────────────────────────────────────
 const studentsStore  = useStudentsStore()
 const classroomsStore = useClassroomsStore()
 const { can }        = usePermission()
-const pagination     = usePagination()
 const { exportToExcel, isExporting } = useExport()
 const confirmDialog  = useConfirm()
+const router         = useRouter()
 
-// ── Filter state ──────────────────────────────────────────────
-const filters = ref({ status: '', gender: '', classroomId: '' })
+// ── View state — hydrated from the persisted store ───────────
+const filters = ref({
+  status: studentsStore.filters.status ?? '',
+  gender: studentsStore.filters.gender ?? '',
+  classroomId: studentsStore.filters.classroomId ?? '',
+})
+
+const pagination = usePagination({
+  initialPage: studentsStore.filters.page ?? 1,
+  initialLimit: studentsStore.filters.limit ?? DEFAULT_PAGE_SIZE,
+})
+
+const { query: searchQuery, clear: clearSearch } = useSearch((q) => {
+  pagination.reset()
+  studentsStore.setFilters({ search: q, page: 1 })
+  void void void studentsStore.fetchList()
+}, undefined, studentsStore.filters.search ?? '')
 
 const hasActiveFilters = computed(() =>
-  Object.values(filters.value).some(v => v !== '') || searchQuery.value !== ''
+  Object.values(filters.value).some(v => v !== '') || searchQuery.value.trim() !== ''
 )
 
 // ── Sort state (controlled — diteruskan ke DataTable sebagai prop) ────────
@@ -460,14 +474,6 @@ const emptyDescription = computed(() =>
     : 'Belum ada siswa yang terdaftar di sistem.'
 )
 
-// ── Search ────────────────────────────────────────────────────
-// BUG-53/54 FIX (di useSearch): cleanup timer onUnmounted, clear() tidak double-call
-const { query: searchQuery, clear: clearSearch } = useSearch((q) => {
-  pagination.reset()
-  studentsStore.setFilters({ search: q, page: 1 })
-  studentsStore.fetchList()
-})
-
 // ── Filter handlers ───────────────────────────────────────────
 function onFilterChange() {
   pagination.reset()
@@ -477,18 +483,18 @@ function onFilterChange() {
 
 function resetFilters() {
   filters.value = { status: '', gender: '', classroomId: '' }
-  clearSearch()
   activeSortKey.value = 'fullName'
   activeSortDir.value = 'asc'
   pagination.reset()
   studentsStore.resetFilters()
-  studentsStore.fetchList()
+  clearSearch()
 }
 
 function onPageChange(page: number) {
   pagination.setPage(page)
-  studentsStore.setFilters({ page })
-  studentsStore.fetchList()
+  const nextPage = pagination.page.value
+  studentsStore.setFilters({ page: nextPage })
+  void void studentsStore.fetchList()
 }
 
 // ── Sort ──────────────────────────────────────────────────────
@@ -499,6 +505,40 @@ function onSort(key: string, dir: 'asc' | 'desc') {
   studentsStore.setFilters({ sortBy: key, sortDir: dir, page: 1 })
   pagination.reset()
   studentsStore.fetchList()
+}
+
+function getStudentId(row: Record<string, unknown>): string {
+  return String(row.id ?? '').trim()
+}
+
+function openStudent(row: Record<string, unknown>) {
+  const id = getStudentId(row)
+  if (!id) {
+    toast.error('ID siswa tidak tersedia.')
+    return
+  }
+  void router.push(`/students/${encodeURIComponent(id)}`)
+}
+
+function openStudentEdit(row: Record<string, unknown>) {
+  const id = getStudentId(row)
+  if (!id) {
+    toast.error('ID siswa tidak tersedia.')
+    return
+  }
+  void router.push(`/students/${encodeURIComponent(id)}/edit`)
+}
+
+function genderLabel(value: unknown): string {
+  if (value === 'L') return 'L'
+  if (value === 'P') return 'P'
+  return '–'
+}
+
+function genderTone(value: unknown): string {
+  if (value === 'L') return 'bg-sky-50 text-sky-700 ring-1 ring-sky-200'
+  if (value === 'P') return 'bg-pink-50 text-pink-700 ring-1 ring-pink-200'
+  return 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
 }
 
 // ── Archive ───────────────────────────────────────────────────
@@ -526,9 +566,20 @@ async function doArchive() {
   if (!archiveTargetId.value) return
   confirmDialog.isLoading.value = true
   try {
-    await studentsService.archive(archiveTargetId.value)
-    studentsStore.removeFromList(archiveTargetId.value)
-    toast.success(`Siswa '${archiveName.value}' berhasil diarsipkan.`)
+    const removedId = archiveTargetId.value
+    const removedName = archiveName.value || 'Siswa'
+    const currentPage = pagination.page.value
+
+    await studentsService.archive(removedId)
+    studentsStore.removeFromList(removedId)
+
+    if (currentPage > 1 && studentsStore.list.length === 0) {
+      pagination.setPage(currentPage - 1)
+      studentsStore.setFilters({ page: pagination.page.value })
+      await studentsStore.fetchList()
+    }
+
+    toast.success(`Siswa '${removedName}' berhasil diarsipkan.`)
   } catch (e: unknown) {
     toast.error(e instanceof Error ? e.message : 'Gagal mengarsipkan siswa.')
   } finally {
@@ -541,7 +592,7 @@ async function doArchive() {
 // ── Export ────────────────────────────────────────────────────
 async function handleExport() {
   try {
-    const data = await studentsService.exportData(studentsStore.filters)
+    const data = await studentsService.exportData({ ...studentsStore.filters })
     await exportToExcel(
       data as unknown as Record<string, unknown>[],
       {
@@ -565,11 +616,11 @@ async function handleExport() {
 
 // ── Retry ─────────────────────────────────────────────────────
 function retryFetch() {
-  studentsStore.fetchList()
+  void studentsStore.fetchList()
 }
 
 // ── Sync pagination total dari store ─────────────────────────
-watch(() => studentsStore.total, (v) => pagination.setTotal(v))
+watch(() => studentsStore.total, (v) => pagination.setTotal(v), { immediate: true })
 
 // ── Init ──────────────────────────────────────────────────────
 // BUG-1 FIX: sequential await — classrooms dulu agar classroomOptions tersedia
@@ -582,7 +633,6 @@ onMounted(async () => {
 
   await fetchClassrooms
   await studentsStore.fetchList()
-  pagination.setTotal(studentsStore.total)
 })
 </script>
 
