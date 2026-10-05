@@ -22,17 +22,9 @@ export function usePermission() {
   /**
    * Cek apakah user memiliki salah satu dari beberapa permission.
    */
-  function canAny(...permissions: Permission[]): boolean {
-    return permissions.some(p => can(p))
-  }
-
   /**
    * Cek apakah user memiliki semua permission yang diberikan.
    */
-  function canAll(...permissions: Permission[]): boolean {
-    return permissions.every(p => can(p))
-  }
-
   /**
    * Cek apakah user memiliki role tertentu.
    */
@@ -45,7 +37,6 @@ export function usePermission() {
   const isAdmin = computed(() => hasRole('admin'))
   const isPrincipal = computed(() => hasRole('principal'))
   const isTeacher = computed(() => hasRole('teacher'))
-  const isAdminOrPrincipal = computed(() => hasRole(['admin', 'principal']))
 
-  return { can, canAny, canAll, hasRole, isAdmin, isPrincipal, isTeacher, isAdminOrPrincipal }
+  return { can, hasRole, isAdmin, isPrincipal, isTeacher }
 }
