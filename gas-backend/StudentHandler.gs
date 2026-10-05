@@ -584,6 +584,11 @@ var StudentHandler = {
     var normalizedNis = normalizeIdentifier(payload.nis);
     var normalizedNisn = normalizeIdentifier(payload.nisn);
 
+    if (payload.classroomId || payload.schoolYearId) {
+      if (!payload.classroomId || !payload.schoolYearId) return errorResponse(400, 'Kelas dan tahun pelajaran harus diisi bersama.');
+      this._validateEnrollmentTarget('', payload.classroomId, payload.schoolYearId);
+    }
+
     if (!payload.fullName) return errorResponse(400, 'Nama lengkap wajib diisi.');
     if (!normalizedNis)    return errorResponse(400, 'NIS wajib diisi.');
     if (!normalizedNisn)   return errorResponse(400, 'NISN wajib diisi.');
@@ -632,6 +637,11 @@ var StudentHandler = {
     checkPermission(user, 'student:update');
     var id = payload.id;
     if (!id) return errorResponse(400, 'ID siswa diperlukan.');
+
+    if (payload.classroomId || payload.schoolYearId) {
+      if (!payload.classroomId || !payload.schoolYearId) return errorResponse(400, 'Kelas dan tahun pelajaran harus diisi bersama.');
+      this._validateEnrollmentTarget(id, payload.classroomId, payload.schoolYearId);
+    }
 
     var sheet   = getSheet(CONFIG.SHEETS.STUDENTS);
     var headers = getHeaders(sheet);
@@ -849,6 +859,37 @@ var StudentHandler = {
     return successResponse(enr);
   },
 
+  _validateEnrollmentTarget: function(studentId, classroomId, schoolYearId) {
+    if (!classroomId || !schoolYearId) throw new Error('Data enrollment tidak lengkap.');
+    var classrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
+    var classroom = classrooms.find(function(c) { return String(c.id) === String(classroomId); });
+    if (!classroom) throw new Error('Kelas tidak ditemukan.');
+    if (String(classroom.schoolYearId) !== String(schoolYearId)) throw new Error('Kelas tidak sesuai dengan tahun pelajaran.');
+
+    var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
+    if (!schoolYears.some(function(s) { return String(s.id) === String(schoolYearId); })) throw new Error('Tahun pelajaran tidak ditemukan.');
+
+    var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
+    var existingActive = studentId && enrollments.find(function(e) {
+      return String(e.studentId) === String(studentId) &&
+        String(e.schoolYearId) === String(schoolYearId) &&
+        String(e.classroomId) === String(classroomId) &&
+        e.status === 'active';
+    });
+    if (existingActive) return existingActive;
+
+    var capacity = Number(classroom.capacity);
+    if (Number.isFinite(capacity) && capacity > 0) {
+      var activeCount = enrollments.filter(function(e) {
+        return String(e.classroomId) === String(classroomId) &&
+          String(e.schoolYearId) === String(schoolYearId) &&
+          e.status === 'active';
+      }).length;
+      if (activeCount >= capacity) throw new Error('Kelas sudah mencapai kapasitas ' + capacity + ' siswa.');
+    }
+    return { classroom: classroom };
+  },
+
   _doEnroll: function(studentId, classroomId, schoolYearId) {
     if (!studentId || !classroomId || !schoolYearId) throw new Error('Data enrollment tidak lengkap.');
 
@@ -882,14 +923,7 @@ var StudentHandler = {
     });
     if (existingActive) return existingActive;
 
-    var capacity = Number(classroom.capacity);
-    if (Number.isFinite(capacity) && capacity > 0) {
-      var activeCount = all.filter(function(e) {
-        return String(e.classroomId) === String(classroomId) &&
-          String(e.schoolYearId) === String(schoolYearId) && e.status === 'active';
-      }).length;
-      if (activeCount >= capacity) throw new Error('Kelas sudah mencapai kapasitas ' + capacity + ' siswa.');
-    }
+    this._validateEnrollmentTarget(studentId, classroomId, schoolYearId);
 
     all.forEach(function(e) {
       if (String(e.studentId) === String(studentId) &&
@@ -897,8 +931,11 @@ var StudentHandler = {
           e.status === 'active') {
         var rowIdx = findRowById(sheet, e.id);
         var colStatus = headers.indexOf('status') + 1;
-        if (rowIdx > 0 && colStatus > 0) {
-          sheet.getRange(rowIdx, colStatus).setValue('transferred');
+        if (rowIdx > 0) {
+          var colStatus = headers.indexOf('status') + 1;
+          var colExitDate = headers.indexOf('exitDate') + 1;
+          if (colStatus > 0) sheet.getRange(rowIdx, colStatus).setValue('transferred');
+          if (colExitDate > 0) sheet.getRange(rowIdx, colExitDate).setValue(now().slice(0, 10));
         }
       }
     });
