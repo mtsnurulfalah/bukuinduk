@@ -337,7 +337,33 @@ export const studentsService = {
    * Import siswa dari array data (hasil parse Excel di frontend).
    */
   async importBatch(rows: Partial<StudentFormData>[]): Promise<{ success: number; failed: number; errors: string[] }> {
-    return gasRequest('students.importBatch', { rows }, { timeout: 60_000 })
+    if (!Array.isArray(rows) || rows.length === 0) {
+      throw new Error('Tidak ada data siswa yang siap diimpor.')
+    }
+
+    const result = await gasRequest<unknown>(
+      'students.importBatch',
+      { rows },
+      { timeout: 120_000 },
+    )
+
+    if (!result || typeof result !== 'object') {
+      throw new Error('Response import dari server tidak valid.')
+    }
+
+    const payload = result as {
+      success?: unknown
+      failed?: unknown
+      errors?: unknown
+    }
+
+    return {
+      success: Number.isFinite(Number(payload.success)) ? Math.max(0, Number(payload.success)) : 0,
+      failed: Number.isFinite(Number(payload.failed)) ? Math.max(0, Number(payload.failed)) : 0,
+      errors: Array.isArray(payload.errors)
+        ? payload.errors.map(message => String(message))
+        : [],
+    }
   },
 
   /**
