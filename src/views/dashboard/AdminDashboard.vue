@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="w-full min-w-0 space-y-6">
 
     <!-- ── Header ────────────────────────────────────────────── -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -19,14 +19,15 @@
       </div>
 
       <div class="flex items-center gap-2 flex-wrap">
-        <!-- Tombol retry muncul jika ada error -->
         <button
-          v-if="errorStats || errorClass"
-          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+          type="button"
+          class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          :disabled="isLoadingStats || isLoadingClass"
+          aria-label="Segarkan data dashboard"
           @click="loadData"
         >
-          <RefreshCw class="h-3.5 w-3.5" />
-          Coba Lagi
+          <RefreshCw :class="['h-3.5 w-3.5', (isLoadingStats || isLoadingClass) ? 'animate-spin' : '']" />
+          <span class="hidden sm:inline">Segarkan</span>
         </button>
 
         <RouterLink
@@ -150,9 +151,14 @@
             </div>
           </div>
 
-          <p class="text-xs text-slate-400 pt-1 border-t border-slate-50">
-            Total keseluruhan: <span class="font-semibold text-slate-600">{{ formatNumber(stats.totalStudents) }}</span> siswa
-          </p>
+          <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-slate-400 pt-1 border-t border-slate-50">
+            <p>
+              Total: <span class="font-semibold text-slate-600">{{ formatNumber(stats.totalStudents) }}</span> siswa
+            </p>
+            <p v-if="unknownGenderCount > 0">
+              {{ formatNumber(unknownGenderCount) }} belum mengisi jenis kelamin
+            </p>
+          </div>
         </div>
       </div>
 
@@ -281,13 +287,13 @@
             <tr class="bg-slate-50 border-t-2 border-slate-200 font-semibold text-slate-700">
               <td class="px-5 py-3 text-slate-800">Total</td>
               <td class="px-4 py-3 text-center text-blue-700">
-                {{ formatNumber(classStats.reduce((a, c) => a + c.maleStudents, 0)) }}
+                {{ formatNumber(classTotals.male) }}
               </td>
               <td class="px-4 py-3 text-center text-pink-700">
-                {{ formatNumber(classStats.reduce((a, c) => a + c.femaleStudents, 0)) }}
+                {{ formatNumber(classTotals.female) }}
               </td>
               <td class="px-4 py-3 text-center text-slate-900 font-bold">
-                {{ formatNumber(classStats.reduce((a, c) => a + c.totalStudents, 0)) }}
+                {{ formatNumber(classTotals.total) }}
               </td>
               <td class="hidden sm:table-cell" />
             </tr>
@@ -323,7 +329,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   Users, UserPlus, GraduationCap, School,
@@ -335,20 +341,22 @@ import { DataQualityCard, StatCard } from '@/components/shared'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolYearStore } from '@/stores/schoolYear'
-import { reportsService } from '@/services'
 import { formatNumber } from '@/utils'
-import type { DashboardStats, ClassroomStats } from '@/types'
+import { useDashboardData } from '@/composables'
 
 const authStore       = useAuthStore()
 const schoolYearStore = useSchoolYearStore()
 
-// ── State ────────────────────────────────────────────────────────
-const stats         = ref<DashboardStats | null>(null)
-const classStats    = ref<ClassroomStats[]>([])
-const isLoadingStats = ref(true)
-const isLoadingClass = ref(true)  // BUG FIX: pisahkan loading state
-const errorStats    = ref('')
-const errorClass    = ref('')
+// ── Data ──────────────────────────────────────────────────────────
+const {
+  stats,
+  classStats,
+  isLoadingStats,
+  isLoadingClass,
+  errorStats,
+  errorClass,
+  load: loadDashboardData,
+} = useDashboardData()
 
 // ── Computed ─────────────────────────────────────────────────────
 const firstName = computed(() =>
@@ -359,7 +367,16 @@ const malePercent = computed(() => {
   if (!stats.value?.totalStudents) return 0
   return Math.round((stats.value.maleStudents / stats.value.totalStudents) * 100)
 })
-const femalePercent = computed(() => 100 - malePercent.value)
+const femalePercent = computed(() => {
+  if (!stats.value?.totalStudents) return 0
+  return Math.round((stats.value.femaleStudents / stats.value.totalStudents) * 100)
+})
+const unknownGenderCount = computed(() => {
+  const s = stats.value
+  if (!s) return 0
+  return Math.max(0, (s.totalStudents ?? 0) - (s.maleStudents ?? 0) - (s.femaleStudents ?? 0))
+})
+
 
 const statusItems = computed(() => {
   const s = stats.value
@@ -403,6 +420,15 @@ const statusItems = computed(() => {
     },
   ]
 })
+
+const classTotals = computed(() => classStats.value.reduce(
+  (totals, item) => ({
+    male: totals.male + (Number(item.maleStudents) || 0),
+    female: totals.female + (Number(item.femaleStudents) || 0),
+    total: totals.total + (Number(item.totalStudents) || 0),
+  }),
+  { male: 0, female: 0, total: 0 },
+))
 
 const shortcuts = [
   {
