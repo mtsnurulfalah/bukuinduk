@@ -35,7 +35,7 @@ const routes: RouteRecordRaw[] = [
       // ── Siswa ─────────────────────────────────────────────
       {
         path: 'students',
-        meta: { title: 'Data Siswa', permission: PERMISSIONS.STUDENT_VIEW_ALL },
+        meta: { title: 'Data Siswa', permissionsAny: [PERMISSIONS.STUDENT_VIEW_ALL, PERMISSIONS.STUDENT_VIEW_OWN_CLASS] },
         children: [
           {
             path: '',
@@ -86,7 +86,7 @@ const routes: RouteRecordRaw[] = [
       // ── Kelas & Rombel ────────────────────────────────────
       {
         path: 'classrooms',
-        meta: { title: 'Kelas & Rombel', permission: PERMISSIONS.CLASSROOM_VIEW_ALL },
+        meta: { title: 'Kelas & Rombel', permissionsAny: [PERMISSIONS.CLASSROOM_VIEW_ALL, PERMISSIONS.CLASSROOM_VIEW_OWN] },
         children: [
           {
             path: '',
