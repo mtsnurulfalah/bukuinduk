@@ -30,6 +30,7 @@
             </div>
             <slot name="header" />
             <button
+              type="button"
               v-if="showClose"
               class="ml-3 rounded-lg p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
               @click="$emit('update:modelValue', false)"
