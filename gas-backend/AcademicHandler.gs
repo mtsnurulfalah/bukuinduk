@@ -36,6 +36,13 @@ var SubjectHandler = {
   },
 
   create: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'subject:manage');
     if (!payload.schoolYearId) return errorResponse(400, 'Tahun pelajaran wajib dipilih.');
     if (!sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS)).some(function(y){ return String(y.id) === String(payload.schoolYearId); })) return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
@@ -72,9 +79,19 @@ var SubjectHandler = {
     appendRow(sheet, subject, headers);
     AuditService.log(user.id, 'CREATE', 'subject', subject.id, null, subject, 'Tambah mata pelajaran: ' + subject.name);
     return successResponse(subject);
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   update: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'subject:manage');
     if (!payload.id) return errorResponse(400, 'ID mata pelajaran diperlukan.');
     var sheet = getOrCreateSheet(CONFIG.SHEETS.SUBJECTS,
@@ -121,9 +138,19 @@ var SubjectHandler = {
     updateRow(sheet, rowIdx, updated, headers);
     AuditService.log(user.id, 'UPDATE', 'subject', payload.id, old, updated, 'Edit mata pelajaran');
     return successResponse(updated);
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   remove: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'subject:manage');
     var sheet = getOrCreateSheet(CONFIG.SHEETS.SUBJECTS,
       ['id','schoolYearId','code','name','shortName','groupName','isActive','sortOrder','createdAt','updatedAt','createdBy']);
@@ -142,7 +169,10 @@ var SubjectHandler = {
     sheet.deleteRow(rowIdx);
     AuditService.log(user.id, 'DELETE', 'subject', String(payload.id), existing, null, 'Hapus mata pelajaran');
     return successResponse({ message: 'Mata pelajaran berhasil dihapus.' });
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 };
 
 var ScoreHandler = {
@@ -347,13 +377,30 @@ var ScoreHandler = {
   },
 
   save: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     var sheet = getOrCreateSheet(CONFIG.SHEETS.SCORES,
       ['id','studentId','schoolYearId','semester','subjectId','score','predicate','notes','createdAt','updatedAt','createdBy']);
     var headers = getHeaders(sheet);
     return this._upsert(sheet, headers, payload, user);
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   saveBatch: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     var rows = Array.isArray(payload.rows) ? payload.rows : [];
     if (!rows.length) return errorResponse(400, 'Tidak ada nilai untuk disimpan.');
 
@@ -494,7 +541,10 @@ var ScoreHandler = {
       failed: failed,
       errors: errors.slice(0, 50),
     });
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   remove: function(payload, user) {
     var sheet = getOrCreateSheet(CONFIG.SHEETS.SCORES,
