@@ -498,16 +498,37 @@ var ReportHandler = {
 
   statusDistribution: function(payload, user) {
     checkPermission(user, 'student:view:all');
-    var all = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
+    var students = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
+    var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
+    var effectiveSchoolYearId = payload.schoolYearId ? String(payload.schoolYearId) : '';
+    var studentIds = null;
+
+    if (effectiveSchoolYearId || payload.classroomId) {
+      studentIds = {};
+      enrollments.forEach(function(e) {
+        if (e.status !== 'active') return;
+        if (effectiveSchoolYearId && String(e.schoolYearId) !== effectiveSchoolYearId) return;
+        if (payload.classroomId && String(e.classroomId) !== String(payload.classroomId)) return;
+        studentIds[String(e.studentId)] = true;
+      });
+      students = students.filter(function(s) { return studentIds[String(s.id)]; });
+    }
+    if (payload.gender) students = students.filter(function(s) { return s.gender === payload.gender; });
+    if (payload.status) students = students.filter(function(s) { return s.status === payload.status; });
+
     var statuses = ['active','inactive','graduated','transferred','dropped_out'];
-    var labels   = { active:'Aktif', inactive:'Tidak Aktif', graduated:'Lulus', transferred:'Pindah', dropped_out:'Keluar' };
-
-    var result = statuses.map(function(s){
-      return { status: s, label: labels[s]||s, count: all.filter(function(x){ return x.status === s; }).length };
-    });
-    return successResponse(result);
+    var labels = {
+      active:'Aktif', inactive:'Tidak Aktif', graduated:'Lulus',
+      transferred:'Pindah', dropped_out:'Keluar'
+    };
+    return successResponse(statuses.map(function(status) {
+      return {
+        status: status,
+        label: labels[status] || status,
+        count: students.filter(function(s){ return s.status === status; }).length,
+      };
+    }));
   },
-
   genderDistribution: function(payload, user) {
     checkPermission(user, 'student:view:all');
     // BUG-50 FIX: Sebelumnya mendelegasikan ke ClassroomHandler.getStats() yang
@@ -529,11 +550,26 @@ var ReportHandler = {
 
   ageDistribution: function(payload, user) {
     checkPermission(user, 'student:view:all');
-    var all = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS))
+    var students = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS))
       .filter(function(s){ return s.status === 'active' && s.birthDate; });
+    var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
+    var effectiveSchoolYearId = payload.schoolYearId ? String(payload.schoolYearId) : '';
+
+    if (effectiveSchoolYearId || payload.classroomId) {
+      var ids = {};
+      enrollments.forEach(function(e) {
+        if (e.status !== 'active') return;
+        if (effectiveSchoolYearId && String(e.schoolYearId) !== effectiveSchoolYearId) return;
+        if (payload.classroomId && String(e.classroomId) !== String(payload.classroomId)) return;
+        ids[String(e.studentId)] = true;
+      });
+      students = students.filter(function(s) { return ids[String(s.id)]; });
+    }
+    if (payload.gender) students = students.filter(function(s){ return s.gender === payload.gender; });
+
     var groups = { '< 10': 0, '10-12': 0, '13-15': 0, '16-18': 0, '> 18': 0 };
     var today = new Date();
-    all.forEach(function(s){
+    students.forEach(function(s){
       var birth = new Date(String(s.birthDate));
       if (isNaN(birth.getTime())) return;
       var age = today.getFullYear() - birth.getFullYear();
@@ -578,6 +614,17 @@ var ReportHandler = {
       all = teacherResult.data.items || [];
     } else {
       all = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
+      if (payload.schoolYearId || payload.classroomId) {
+        var filteredEnrollmentRows = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS))
+          .filter(function(e) {
+            return e.status === 'active' &&
+              (!payload.schoolYearId || String(e.schoolYearId) === String(payload.schoolYearId)) &&
+              (!payload.classroomId || String(e.classroomId) === String(payload.classroomId));
+          });
+        var filteredStudentIds = {};
+        filteredEnrollmentRows.forEach(function(e) { filteredStudentIds[String(e.studentId)] = true; });
+        all = all.filter(function(s) { return filteredStudentIds[String(s.id)]; });
+      }
       if (payload.status) all = all.filter(function(s){ return s.status === payload.status; });
       if (payload.gender) all = all.filter(function(s){ return s.gender === payload.gender; });
     }
