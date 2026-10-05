@@ -8,7 +8,7 @@
           Selamat datang, {{ firstName }} 👋
         </h1>
         <p class="text-sm text-slate-500 mt-0.5">
-          Kelas yang Anda ampu hari ini
+          Kelas yang Anda ampu pada tahun pelajaran aktif
         </p>
       </div>
 
@@ -173,6 +173,7 @@ const authStore  = useAuthStore()
 const classrooms = ref<Classroom[]>([])
 const isLoading  = ref(true)
 const error      = ref('')
+let latestRequestId = 0
 
 const firstName = computed(() =>
   authStore.user?.fullName?.split(' ')[0] ?? 'Guru'
@@ -196,15 +197,20 @@ async function loadData() {
     return
   }
 
+  const requestId = ++latestRequestId
   try {
-    classrooms.value = await classroomsService.getByTeacher(teacherId)
+    const data = await classroomsService.getByTeacher(teacherId)
+    if (requestId === latestRequestId) {
+      classrooms.value = data.filter(classroom => classroom.isActive !== false)
+    }
   } catch (err: unknown) {
-    // BUG FIX: Tampilkan error yang informatif, bukan silent catch
-    error.value = err instanceof Error
-      ? err.message
-      : 'Gagal memuat data kelas. Coba lagi.'
+    if (requestId === latestRequestId) {
+      error.value = err instanceof Error
+        ? err.message
+        : 'Gagal memuat data kelas. Coba lagi.'
+    }
   } finally {
-    isLoading.value = false
+    if (requestId === latestRequestId) isLoading.value = false
   }
 }
 
