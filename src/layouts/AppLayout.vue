@@ -221,8 +221,8 @@
       </header>
 
       <!-- Page content -->
-      <main class="flex-1 overflow-y-auto scrollbar-thin">
-        <div class="p-4 sm:p-6 pb-24 lg:pb-6 max-w-7xl mx-auto">
+      <main class="flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-thin">
+        <div class="w-full min-w-0 p-4 sm:p-6 pb-24 lg:pb-6 max-w-7xl mx-auto">
           <RouterView v-slot="{ Component, route }">
             <Transition name="page" mode="out-in">
               <component :is="Component" :key="route.path" />
