@@ -262,6 +262,15 @@ function getHeaders(sheet) {
   return data.length > 0 ? data[0] : [];
 }
 
+function ensureHeader(sheet, header) {
+  var headers = getHeaders(sheet);
+  var index = headers.indexOf(header);
+  if (index >= 0) return index + 1;
+  var column = headers.length + 1;
+  sheet.getRange(1, column).setValue(header);
+  return column;
+}
+
 function findRowById(sheet, id) {
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
