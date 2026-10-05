@@ -1190,21 +1190,40 @@ var StudentHandler = {
 
   // ── Private helpers ──────────────────────────────────────────
   _saveParents: function(studentId, payload) {
+    var sheet   = getSheet(CONFIG.SHEETS.PARENTS);
+    var headers = getHeaders(sheet);
+    var all     = sheetToObjects(sheet);
+
     ['father','mother','guardian'].forEach(function(rel) {
-      if (!payload[rel] || !payload[rel].fullName) return;
-      var sheet   = getSheet(CONFIG.SHEETS.PARENTS);
-      var headers = getHeaders(sheet);
-      var all     = sheetToObjects(sheet);
+      if (!payload[rel]) return;
       var existing = all.find(function(p) {
-        return String(p.studentId != null ? p.studentId : p.studentID) === String(studentId) && p.relationship === rel;
+        return String(p.studentId != null ? p.studentId : p.studentID) === String(studentId) &&
+          String(p.relationship || '') === rel;
       });
 
-      var data = Object.assign({ id: generateUUID(), createdAt: now(), isAlive: true },
-        payload[rel], { studentId: studentId, relationship: rel, updatedAt: now() });
+      var parent = payload[rel];
+      var fullName = String(parent.fullName || '').trim();
 
+      // Pada edit, mengosongkan nama berarti menghapus data relasi lama.
+      if (!fullName) {
+        if (existing) {
+          var existingRow = findRowById(sheet, existing.id);
+          if (existingRow > 0) {
+            sheet.deleteRow(existingRow);
+            AuditService.log('', 'DELETE', 'student_parent', String(existing.id), existing, null, 'Hapus data orang tua/wali yang dikosongkan');
+          }
+        }
+        return;
+      }
+
+      var data = Object.assign({}, existing || {}, parent, {
+        id: existing ? existing.id : generateUUID(),
+        studentId: String(studentId),
+        relationship: rel,
+        createdAt: existing ? existing.createdAt : now(),
+        updatedAt: now(),
+      });
       if (existing) {
-        data.id = existing.id;
-        data.createdAt = existing.createdAt;
         updateRow(sheet, findRowById(sheet, existing.id), data, headers);
       } else {
         appendRow(sheet, data, headers);
@@ -1229,35 +1248,54 @@ var StudentHandler = {
   },
 
   _saveEducationHistory: function(studentId, ed) {
-    // BUG-42/BUG-24 FIX: Selalu append menyebabkan duplikasi setiap kali siswa diedit.
-    // Sekarang: cek berdasarkan schoolName + level. Jika sudah ada, update; jika belum, append.
-    if (!ed || !ed.schoolName) return;
+    if (!ed) return;
     var sheet   = getSheet(CONFIG.SHEETS.EDUCATION);
     var headers = getHeaders(sheet);
     var all     = sheetToObjects(sheet);
-    var existing = all.find(function(e) {
-      return String(e.studentId != null ? e.studentId : e.studentID) === String(studentId) &&
-             e.schoolName === ed.schoolName &&
-             e.level === ed.level;
-    });
+
+    var existing = ed.id
+      ? all.find(function(item) {
+          return String(item.id) === String(ed.id) &&
+            String(item.studentId != null ? item.studentId : item.studentID) === String(studentId);
+        })
+      : null;
+
+    // Saat edit, record yang sengaja dikosongkan benar-benar dihapus.
+    if (!String(ed.schoolName || '').trim()) {
+      if (existing) {
+        var existingRow = findRowById(sheet, existing.id);
+        if (existingRow > 0) {
+          sheet.deleteRow(existingRow);
+          AuditService.log('', 'DELETE', 'student_education', String(existing.id), existing, null, 'Hapus riwayat pendidikan yang dikosongkan');
+        }
+      }
+      return;
+    }
+
+    // Tanpa ID (misalnya data baru), cari kecocokan lama sebagai fallback.
+    if (!existing) {
+      existing = all.find(function(item) {
+        return String(item.studentId != null ? item.studentId : item.studentID) === String(studentId) &&
+          String(item.schoolName || '').trim().toLowerCase() === String(ed.schoolName).trim().toLowerCase() &&
+          String(item.level || '') === String(ed.level || '');
+      }) || null;
+    }
 
     var data = Object.assign({}, existing || {}, ed, {
       id: existing ? existing.id : generateUUID(),
-      studentId: studentId,
+      studentId: String(studentId),
       createdAt: existing ? existing.createdAt : now(),
-      updatedAt: now(),
     });
+    // Kolom ID adalah identitas immutable; createdAt dipertahankan saat update.
+    delete data.id;
+    data.id = existing ? existing.id : generateUUID();
+    data.createdAt = existing ? existing.createdAt : now();
+    data.updatedAt = now();
 
     if (existing) {
-      // Update hanya field pendidikan yang dikirim, tanpa mengosongkan kolom lain.
-      headers.forEach(function(h) {
-        if (['id','studentId','studentID','createdAt'].indexOf(h) !== -1) return;
-        if (ed[h] !== undefined) data[h] = ed[h];
-      });
-      var rowIdx = findRowById(sheet, existing.id);
-      if (rowIdx > 0) updateRow(sheet, rowIdx, data, headers);
+      updateRow(sheet, findRowById(sheet, existing.id), data, headers);
     } else {
       appendRow(sheet, data, headers);
     }
-  },
+  }
 };
