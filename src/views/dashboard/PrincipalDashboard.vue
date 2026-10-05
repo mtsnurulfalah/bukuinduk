@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="w-full min-w-0 space-y-6">
 
     <!-- ── Header ────────────────────────────────────────────── -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -18,14 +18,15 @@
         </p>
       </div>
 
-      <!-- Retry button -->
       <button
-        v-if="errorStats || errorClass"
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors self-start sm:self-auto"
+        type="button"
+        class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-start sm:self-auto"
+        :disabled="isLoadingStats || isLoadingClass"
+        aria-label="Segarkan data dashboard"
         @click="loadData"
       >
-        <RefreshCw class="h-3.5 w-3.5" />
-        Coba Lagi
+        <RefreshCw :class="['h-3.5 w-3.5', (isLoadingStats || isLoadingClass) ? 'animate-spin' : '']" />
+        <span>Segarkan</span>
       </button>
     </div>
 
@@ -202,7 +203,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   Users, User, CheckCircle, GraduationCap, ArrowRightLeft,
@@ -212,19 +213,21 @@ import { DataQualityCard, StatCard } from '@/components/shared'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolYearStore } from '@/stores/schoolYear'
-import { reportsService } from '@/services'
 import { formatNumber } from '@/utils'
-import type { DashboardStats, ClassroomStats } from '@/types'
+import { useDashboardData } from '@/composables'
 
 const authStore       = useAuthStore()
 const schoolYearStore = useSchoolYearStore()
 
-const stats          = ref<DashboardStats | null>(null)
-const classStats     = ref<ClassroomStats[]>([])
-const isLoadingStats = ref(true)
-const isLoadingClass = ref(true)
-const errorStats     = ref('')
-const errorClass     = ref('')
+const {
+  stats,
+  classStats,
+  isLoadingStats,
+  isLoadingClass,
+  errorStats,
+  errorClass,
+  load: loadDashboardData,
+} = useDashboardData()
 
 const firstName = computed(() =>
   authStore.user?.fullName?.split(' ')[0] ?? 'Kepala Sekolah'
@@ -282,5 +285,24 @@ async function loadData() {
   ])
 }
 
-onMounted(loadData)
+const dashboardMounted = ref(false)
+const activeSchoolYearId = computed(() => schoolYearStore.activeSchoolYear?.id ?? '')
+
+async function loadData() {
+  if (!schoolYearStore.initialized) {
+    await schoolYearStore.fetch().catch(() => {})
+  }
+  await loadDashboardData(activeSchoolYearId.value || undefined)
+}
+
+watch(activeSchoolYearId, (nextId, previousId) => {
+  if (!dashboardMounted.value || nextId === previousId) return
+  void loadData()
+})
+
+onMounted(async () => {
+  await loadData()
+  dashboardMounted.value = true
+})
+
 </script>
