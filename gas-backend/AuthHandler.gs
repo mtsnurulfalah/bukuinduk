@@ -72,8 +72,11 @@ var AuthHandler = {
     var users = sheetToObjects(sheet);
     var found = users.find(function(u) { return String(u.id) === String(user.id); });
     if (!found) return errorResponse(404, 'Pengguna tidak ditemukan.');
-    delete found.passwordHash;
-    return successResponse(found);
+    if (!normalizeBoolean(found.isActive, false)) return errorResponse(403, 'Akun Anda tidak aktif.');
+    var sanitized = Object.assign({}, found);
+    delete sanitized.passwordHash;
+    return successResponse(sanitized);
+    return successResponse(sanitized);
   },
 
   changePassword: function(payload, user) {
