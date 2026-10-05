@@ -642,9 +642,9 @@ var StudentHandler = {
     appendRow(sheet, student, headers);
 
     // Simpan data terkait
-    this._saveParents(id, payload);
+    this._saveParents(id, payload, user);
     this._saveHealth(id, payload.health);
-    this._saveEducationHistory(id, payload.educationHistory);
+    this._saveEducationHistory(id, payload.educationHistory, user);
 
     // Enroll ke kelas
     if (payload.classroomId && payload.schoolYearId) {
@@ -728,7 +728,7 @@ var StudentHandler = {
     updateRow(sheet, rowIdx, updated, headers);
 
     if (payload.father || payload.mother || payload.guardian) {
-      this._saveParents(id, payload);
+      this._saveParents(id, payload, user);
     }
     if (payload.health) this._saveHealth(id, payload.health);
     if (payload.educationHistory) this._saveEducationHistory(id, payload.educationHistory);
@@ -1189,7 +1189,7 @@ var StudentHandler = {
   },
 
   // ── Private helpers ──────────────────────────────────────────
-  _saveParents: function(studentId, payload) {
+  _saveParents: function(studentId, payload, user) {
     var sheet   = getSheet(CONFIG.SHEETS.PARENTS);
     var headers = getHeaders(sheet);
     var all     = sheetToObjects(sheet);
@@ -1210,7 +1210,7 @@ var StudentHandler = {
           var existingRow = findRowById(sheet, existing.id);
           if (existingRow > 0) {
             sheet.deleteRow(existingRow);
-            AuditService.log('', 'DELETE', 'student_parent', String(existing.id), existing, null, 'Hapus data orang tua/wali yang dikosongkan');
+            AuditService.log(user.id, 'DELETE', 'student_parent', String(existing.id), existing, null, 'Hapus data orang tua/wali yang dikosongkan');
           }
         }
         return;
@@ -1236,18 +1236,21 @@ var StudentHandler = {
     var sheet    = getSheet(CONFIG.SHEETS.HEALTH);
     var headers  = getHeaders(sheet);
     var existing = sheetToObjects(sheet).find(function(h) { return String(h.studentId != null ? h.studentId : h.studentID) === String(studentId); });
-    var data     = Object.assign({ id: generateUUID(), createdAt: now() }, health, { studentId: studentId, updatedAt: now() });
+    var data = Object.assign({}, existing || {}, health, {
+      studentId: String(studentId),
+      createdAt: existing ? existing.createdAt : now(),
+      updatedAt: now(),
+    });
+    data.id = existing ? existing.id : generateUUID();
 
     if (existing) {
-      data.id = existing.id;
-      data.createdAt = existing.createdAt;
       updateRow(sheet, findRowById(sheet, existing.id), data, headers);
     } else {
       appendRow(sheet, data, headers);
     }
   },
 
-  _saveEducationHistory: function(studentId, ed) {
+  _saveEducationHistory: function(studentId, ed, user) {
     if (!ed) return;
     var sheet   = getSheet(CONFIG.SHEETS.EDUCATION);
     var headers = getHeaders(sheet);
@@ -1266,7 +1269,7 @@ var StudentHandler = {
         var existingRow = findRowById(sheet, existing.id);
         if (existingRow > 0) {
           sheet.deleteRow(existingRow);
-          AuditService.log('', 'DELETE', 'student_education', String(existing.id), existing, null, 'Hapus riwayat pendidikan yang dikosongkan');
+          AuditService.log(user.id, 'DELETE', 'student_education', String(existing.id), existing, null, 'Hapus riwayat pendidikan yang dikosongkan');
         }
       }
       return;
@@ -1282,15 +1285,12 @@ var StudentHandler = {
     }
 
     var data = Object.assign({}, existing || {}, ed, {
-      id: existing ? existing.id : generateUUID(),
       studentId: String(studentId),
       createdAt: existing ? existing.createdAt : now(),
+      updatedAt: now(),
     });
-    // Kolom ID adalah identitas immutable; createdAt dipertahankan saat update.
-    delete data.id;
+    // Kolom ID adalah identitas immutable.
     data.id = existing ? existing.id : generateUUID();
-    data.createdAt = existing ? existing.createdAt : now();
-    data.updatedAt = now();
 
     if (existing) {
       updateRow(sheet, findRowById(sheet, existing.id), data, headers);
