@@ -31,9 +31,13 @@ var UserHandler = {
       var previous = all.find(function(t) { return String(t.id) === String(previousTeacherId); });
       if (previous) {
         var previousRow = findRowById(sheet, previous.id);
-        if (previousRow > 0) {
-          var colUserId = headers.indexOf('userId') + 1;
-          if (colUserId > 0 && String(previous.userId || '') === String(userId)) {
+        var colUserId = headers.indexOf('userId') + 1;
+        if (previousRow > 0 && colUserId > 0) {
+          var stillLinked = sheetToObjects(getSheet(CONFIG.SHEETS.USERS)).some(function(u) {
+            return String(u.id) !== String(userId) &&
+              String(u.teacherId || '') === String(previousTeacherId);
+          });
+          if (!stillLinked && (!previous.userId || String(previous.userId) === String(userId))) {
             sheet.getRange(previousRow, colUserId).setValue('');
           }
         }
