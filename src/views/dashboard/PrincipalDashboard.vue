@@ -257,34 +257,6 @@ const statusSummary = computed(() => [
   },
 ])
 
-async function loadData() {
-  errorStats.value = ''
-  errorClass.value = ''
-  isLoadingStats.value = true
-  isLoadingClass.value = true
-
-  if (!schoolYearStore.initialized) {
-    await schoolYearStore.fetch().catch(() => {})
-  }
-  const syId = schoolYearStore.activeSchoolYear?.id
-
-  await Promise.allSettled([
-    reportsService.getDashboardStats(syId)
-      .then(s => { stats.value = s })
-      .catch(err => {
-        errorStats.value = err instanceof Error ? err.message : 'Gagal memuat statistik.'
-      })
-      .finally(() => { isLoadingStats.value = false }),
-
-    reportsService.getClassroomStats(syId)
-      .then(cs => { classStats.value = cs })
-      .catch(err => {
-        errorClass.value = err instanceof Error ? err.message : 'Gagal memuat data kelas.'
-      })
-      .finally(() => { isLoadingClass.value = false }),
-  ])
-}
-
 const dashboardMounted = ref(false)
 const activeSchoolYearId = computed(() => schoolYearStore.activeSchoolYear?.id ?? '')
 
