@@ -532,9 +532,14 @@ var ReportHandler = {
     var all = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS))
       .filter(function(s){ return s.status === 'active' && s.birthDate; });
     var groups = { '< 10': 0, '10-12': 0, '13-15': 0, '16-18': 0, '> 18': 0 };
-    var now_year = new Date().getFullYear();
+    var today = new Date();
     all.forEach(function(s){
-      var age = now_year - new Date(s.birthDate).getFullYear();
+      var birth = new Date(String(s.birthDate));
+      if (isNaN(birth.getTime())) return;
+      var age = today.getFullYear() - birth.getFullYear();
+      var beforeBirthday = today.getMonth() < birth.getMonth() ||
+        (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate());
+      if (beforeBirthday) age--;
       if (age < 10)       groups['< 10']++;
       else if (age <= 12) groups['10-12']++;
       else if (age <= 15) groups['13-15']++;
@@ -543,7 +548,6 @@ var ReportHandler = {
     });
     return successResponse(Object.keys(groups).map(function(k){ return { ageGroup: k, count: groups[k] }; }));
   },
-
   enrollmentTrend: function(payload, user) {
     checkPermission(user, 'student:view:all');
     var all = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
@@ -673,6 +677,14 @@ var SettingsHandler = {
     sheetNames.forEach(function(name) {
       try {
         backup[name] = sheetToObjects(getSheet(name));
+        // Password hash tidak perlu ikut keluar ke browser/file backup.
+        if (name === CONFIG.SHEETS.USERS) {
+          backup[name] = backup[name].map(function(userRow) {
+            var safe = Object.assign({}, userRow);
+            delete safe.passwordHash;
+            return safe;
+          });
+        }
         counts[name] = backup[name].length;
       } catch(e) {
         backup[name] = [];
