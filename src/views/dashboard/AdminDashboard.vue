@@ -327,8 +327,8 @@ import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   Users, UserPlus, GraduationCap, School,
-  CheckCircle, UserX, ArrowRightLeft, LogOut,
-  FileText, Settings, UserCog, RefreshCw,
+  CheckCircle, ArrowRightLeft, LogOut,
+  FileText, UserCog, RefreshCw,
   AlertCircle, ChevronRight,
 } from 'lucide-vue-next'
 import { DataQualityCard, StatCard } from '@/components/shared'
