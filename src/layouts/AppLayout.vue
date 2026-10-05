@@ -360,7 +360,7 @@ const navItems: NavItem[] = [
     mobileLabel: 'Kelas',
     to: '/classrooms',
     icon: School,
-    permission: PERMISSIONS.CLASSROOM_VIEW_ALL,
+    permissionsAny: [PERMISSIONS.CLASSROOM_VIEW_ALL, PERMISSIONS.CLASSROOM_VIEW_OWN],
   },
   {
     name: 'classrooms.grades',
