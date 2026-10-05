@@ -172,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { Plus, Pencil, Trash2, Save, School } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import {
