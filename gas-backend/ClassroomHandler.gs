@@ -141,8 +141,22 @@ var ClassroomHandler = {
     var old = all.find(function(c){ return String(c.id) === String(payload.id); });
     if (!old) return errorResponse(404, 'Kelas tidak ditemukan.');
     var updated = Object.assign({}, old);
-    if (payload.gradeId && !sheetToObjects(getSheet(CONFIG.SHEETS.GRADES)).some(function(g){ return String(g.id) === String(payload.gradeId); })) return errorResponse(400, 'Tingkat kelas tidak ditemukan.');
-    if (payload.schoolYearId && !sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS)).some(function(s){ return String(s.id) === String(payload.schoolYearId); })) return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
+
+    if (payload.name !== undefined && !String(payload.name).trim()) {
+      return errorResponse(400, 'Nama kelas wajib diisi.');
+    }
+    if (payload.gradeId !== undefined) {
+      if (!String(payload.gradeId).trim()) return errorResponse(400, 'Tingkat kelas wajib diisi.');
+      if (!sheetToObjects(getSheet(CONFIG.SHEETS.GRADES)).some(function(g){ return String(g.id) === String(payload.gradeId); })) {
+        return errorResponse(400, 'Tingkat kelas tidak ditemukan.');
+      }
+    }
+    if (payload.schoolYearId !== undefined) {
+      if (!String(payload.schoolYearId).trim()) return errorResponse(400, 'Tahun pelajaran wajib diisi.');
+      if (!sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS)).some(function(s){ return String(s.id) === String(payload.schoolYearId); })) {
+        return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
+      }
+    }
     if (payload.homeroomTeacherId) {
       if (!sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS)).some(function(t){ return String(t.id) === String(payload.homeroomTeacherId); })) return errorResponse(400, 'Wali kelas tidak ditemukan.');
     }
@@ -158,7 +172,7 @@ var ClassroomHandler = {
       if (nextCapacity < activeEnrollmentCount) return errorResponse(409, 'Kapasitas baru tidak boleh lebih kecil dari jumlah siswa aktif saat ini (' + activeEnrollmentCount + ').');
       updated.capacity = nextCapacity;
     }
-    if (payload.schoolYearId && String(payload.schoolYearId) !== String(old.schoolYearId)) {
+    if (payload.schoolYearId !== undefined && String(payload.schoolYearId) !== String(old.schoolYearId)) {
       var linkedEnrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS)).filter(function(e){ return String(e.classroomId) === String(payload.id); });
       if (linkedEnrollments.length) return errorResponse(409, 'Tahun pelajaran kelas tidak dapat diubah karena sudah memiliki riwayat enrollment. Buat kelas baru untuk tahun pelajaran lain.');
     }
