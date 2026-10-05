@@ -244,7 +244,14 @@ var GradeHandler = {
     checkPermission(user, 'classroom:manage');
     var sheet = getSheet(CONFIG.SHEETS.GRADES);
     var headers = getHeaders(sheet);
-    var grade = { id: generateUUID(), name: payload.name, level: payload.level, description: payload.description||'', createdAt: now() };
+    var name = String(payload.name || '').trim();
+    var level = Number(payload.level);
+    if (!name) return errorResponse(400, 'Nama tingkat wajib diisi.');
+    if (!Number.isFinite(level) || level < 1) return errorResponse(400, 'Level tingkat tidak valid.');
+    var all = sheetToObjects(sheet);
+    if (all.some(function(g){ return String(g.name || '').trim().toLowerCase() === name.toLowerCase(); })) return errorResponse(409, 'Nama tingkat sudah digunakan.');
+    if (all.some(function(g){ return Number(g.level) === level; })) return errorResponse(409, 'Level tingkat sudah digunakan.');
+    var grade = { id: generateUUID(), name: name, level: level, description: String(payload.description || '').trim(), createdAt: now(), updatedAt: now() };
     appendRow(sheet, grade, headers);
     return successResponse(grade);
   },
@@ -256,7 +263,22 @@ var GradeHandler = {
     if (rowIdx < 0) return errorResponse(404, 'Tingkat tidak ditemukan.');
     var all = sheetToObjects(sheet);
     var old = all.find(function(g){ return String(g.id) === String(payload.id); });
-    var updated = Object.assign({}, old, payload);
+    if (!old) return errorResponse(404, 'Tingkat tidak ditemukan.');
+    var name = payload.name !== undefined ? String(payload.name).trim() : String(old.name || '').trim();
+    var level = payload.level !== undefined ? Number(payload.level) : Number(old.level);
+    if (!name) return errorResponse(400, 'Nama tingkat wajib diisi.');
+    if (!Number.isFinite(level) || level < 1) return errorResponse(400, 'Level tingkat tidak valid.');
+    if (all.some(function(g){ return String(g.id) !== String(payload.id) && String(g.name || '').trim().toLowerCase() === name.toLowerCase(); })) {
+      return errorResponse(409, 'Nama tingkat sudah digunakan.');
+    }
+    if (all.some(function(g){ return String(g.id) !== String(payload.id) && Number(g.level) === level; })) {
+      return errorResponse(409, 'Level tingkat sudah digunakan.');
+    }
+    var updated = Object.assign({}, old);
+    updated.name = name;
+    updated.level = level;
+    if (payload.description !== undefined) updated.description = String(payload.description || '').trim();
+    updated.updatedAt = now();
     updateRow(sheet, rowIdx, updated, headers);
     return successResponse(updated);
   },
@@ -309,8 +331,15 @@ var SchoolYearHandler = {
     if (rowIdx < 0) return errorResponse(404, 'Tahun pelajaran tidak ditemukan.');
     var all = sheetToObjects(sheet);
     var old = all.find(function(s){ return String(s.id) === String(payload.id); });
-    var updated = Object.assign({}, old, payload);
-    updated.isActive = normalizeBoolean(updated.isActive, false);
+    if (!old) return errorResponse(404, 'Tahun pelajaran tidak ditemukan.');
+    var updated = Object.assign({}, old);
+    updated.name = payload.name !== undefined ? String(payload.name).trim() : String(old.name || '').trim();
+    updated.startDate = payload.startDate !== undefined ? String(payload.startDate || '').trim() : String(old.startDate || '').trim();
+    updated.endDate = payload.endDate !== undefined ? String(payload.endDate || '').trim() : String(old.endDate || '').trim();
+    updated.isActive = normalizeBoolean(payload.isActive !== undefined ? payload.isActive : old.isActive, false);
+    if (!/^\d{4}\/\d{4}$/.test(updated.name)) return errorResponse(400, 'Format nama harus YYYY/YYYY.');
+    if (updated.startDate && updated.endDate && updated.startDate > updated.endDate) return errorResponse(400, 'Tanggal mulai tidak boleh setelah tanggal selesai.');
+    if (all.some(function(s){ return String(s.id) !== String(payload.id) && String(s.name || '').trim() === updated.name; })) return errorResponse(409, 'Tahun pelajaran sudah digunakan.');
     if (updated.isActive) this._deactivateOthers(sheet, headers, payload.id);
     updateRow(sheet, rowIdx, updated, headers);
     return successResponse(updated);
@@ -319,9 +348,9 @@ var SchoolYearHandler = {
     checkPermission(user, 'school_year:manage');
     var sheet   = getSheet(CONFIG.SHEETS.SCHOOL_YEARS);
     var headers = getHeaders(sheet);
-    this._deactivateOthers(sheet, headers, payload.id);
     var rowIdx = findRowById(sheet, payload.id);
     if (rowIdx < 0) return errorResponse(404, 'Tahun pelajaran tidak ditemukan.');
+    this._deactivateOthers(sheet, headers, payload.id);
     var colIsActive = headers.indexOf('isActive') + 1;
     if (colIsActive > 0) sheet.getRange(rowIdx, colIsActive).setValue(true);
     var all = sheetToObjects(sheet);
