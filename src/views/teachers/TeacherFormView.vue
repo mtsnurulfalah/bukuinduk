@@ -71,7 +71,8 @@ async function handleSubmit() {
 }
 
 onMounted(async () => {
-  if (isEdit.value) {
+  if (!isEdit.value) return
+  try {
     const t = await teachersService.get(route.params.id as string)
     Object.assign(form, {
       fullName: t.fullName, nip: t.nip ?? '', nuptk: t.nuptk ?? '',
@@ -81,6 +82,8 @@ onMounted(async () => {
       joinDate: t.joinDate ?? '', phone: t.phone ?? '',
       email: t.email ?? '', address: t.address ?? '', status: t.status,
     })
+  } catch (e: unknown) {
+    errorMsg.value = e instanceof Error ? e.message : 'Gagal memuat data guru.'
   }
 })
 </script>
