@@ -357,15 +357,23 @@ var ScoreHandler = {
     var rows = Array.isArray(payload.rows) ? payload.rows : [];
     if (!rows.length) return errorResponse(400, 'Tidak ada nilai untuk disimpan.');
 
-    // Validasi akses sekali per siswa agar teacher tidak memicu pembacaan
-    // kelas/enrollment berulang untuk setiap sel nilai.
-    var studentIds = {};
+    // Validasi akses per siswa + tahun pelajaran. Ini penting karena satu siswa
+    // dapat memiliki enrollment berbeda pada tahun pelajaran yang berbeda.
+    var studentYearPairs = {};
     rows.forEach(function(row) {
-      if (row.studentId) studentIds[String(row.studentId)] = true;
+      if (row.studentId && row.schoolYearId) {
+        studentYearPairs[String(row.studentId) + '|' + String(row.schoolYearId)] = {
+          studentId: String(row.studentId),
+          schoolYearId: String(row.schoolYearId),
+        };
+      }
     });
-    var studentIdList = Object.keys(studentIds);
-    if (!studentIdList.length) return errorResponse(400, 'ID siswa diperlukan.');
-    studentIdList.forEach(function(id) { this._canManage(id, user); }, this);
+    var pairList = Object.keys(studentYearPairs);
+    if (!pairList.length) return errorResponse(400, 'ID siswa dan tahun pelajaran diperlukan.');
+    pairList.forEach(function(key) {
+      var pair = studentYearPairs[key];
+      this._canManage(pair.studentId, user, pair.schoolYearId);
+    }, this);
 
     var headersDef = ['id','studentId','schoolYearId','semester','subjectId','score','predicate','notes','createdAt','updatedAt','createdBy'];
     var sheet = getOrCreateSheet(CONFIG.SHEETS.SCORES, headersDef);
