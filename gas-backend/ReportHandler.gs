@@ -561,9 +561,22 @@ var ReportHandler = {
     if (!hasPermission(user,'student:export') && !hasPermission(user,'report:export'))
       throw new Error('FORBIDDEN');
 
-    var all = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
-    if (payload.status)      all = all.filter(function(s){ return s.status === payload.status; });
-    if (payload.gender)      all = all.filter(function(s){ return s.gender === payload.gender; });
+    var all;
+    if (user.role === 'teacher') {
+      var teacherResponse = StudentHandler.list(Object.assign({}, payload, {
+        page: 1,
+        limit: 10000,
+      }), user);
+      var teacherResult = JSON.parse(teacherResponse.getContent());
+      if (teacherResult.status >= 400) {
+        return errorResponse(teacherResult.status, teacherResult.error || 'Gagal mengambil data siswa guru.');
+      }
+      all = teacherResult.data.items || [];
+    } else {
+      all = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
+      if (payload.status) all = all.filter(function(s){ return s.status === payload.status; });
+      if (payload.gender) all = all.filter(function(s){ return s.gender === payload.gender; });
+    }
 
     var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
     var classrooms  = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
