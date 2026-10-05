@@ -494,7 +494,7 @@ function onPageChange(page: number) {
   pagination.setPage(page)
   const nextPage = pagination.page.value
   studentsStore.setFilters({ page: nextPage })
-  void void studentsStore.fetchList()
+  void studentsStore.fetchList()
 }
 
 // ── Sort ──────────────────────────────────────────────────────
