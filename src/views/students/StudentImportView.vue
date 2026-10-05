@@ -261,6 +261,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { Download, Upload } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import { BaseCard, BaseButton, BaseAlert, BaseBadge } from '@/components/ui'
@@ -277,6 +278,8 @@ const REQUIRED_COLUMNS = [
   { label: 'Jenis Kelamin', aliases: ['Jenis Kelamin', 'gender'] },
   { label: 'Tanggal Masuk', aliases: ['Tanggal Masuk', 'entryDate'] },
 ] as const
+
+const router = useRouter()
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
@@ -623,7 +626,7 @@ async function handleImport() {
 
 function goBack() {
   if (isBusy.value) return
-  window.location.assign('/students')
+  void router.push('/students')
 }
 
 async function downloadTemplate() {
