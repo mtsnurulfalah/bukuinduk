@@ -45,10 +45,16 @@ export function useSearch(onSearch: (q: string) => void, delay = DEBOUNCE_DELAY,
       clearTimeout(timer)
       timer = null
     }
-    // Set flag agar watch tidak men-trigger onSearch lagi setelah assignment
-    _skipNextWatch = true
-    query.value = ''
-    // Panggil onSearch sekali saja langsung (tanpa debounce)
+
+    // Hindari flag "skip" tertinggal ketika query memang sudah kosong.
+    if (query.value !== '') {
+      _skipNextWatch = true
+      query.value = ''
+    } else {
+      _skipNextWatch = false
+    }
+
+    // Panggil onSearch sekali saja langsung (tanpa debounce).
     onSearch('')
   }
 
