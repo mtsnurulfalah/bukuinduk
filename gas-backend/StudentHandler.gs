@@ -1116,7 +1116,10 @@ var StudentHandler = {
     }
     try {
     checkPermission(user, 'student:import');
-    var rows    = payload.rows || [];
+
+    var rows = payload && Array.isArray(payload.rows) ? payload.rows : null;
+    if (!rows) return errorResponse(400, 'Payload import tidak valid: rows harus berupa array.');
+
     var success = 0;
     var failed  = 0;
     var errors  = [];
@@ -1127,6 +1130,9 @@ var StudentHandler = {
 
     rows.forEach(function(row, i) {
       try {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) {
+          throw new Error('Format data baris tidak valid');
+        }
         if (!row.fullName) throw new Error('Nama lengkap kosong');
 
         // Normalisasi identifier agar hasil import konsisten meski XLSX/GAS
