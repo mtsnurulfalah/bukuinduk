@@ -5,10 +5,12 @@ export const PERMISSIONS = {
   // Students
   STUDENT_VIEW_ALL: 'student:view:all',
   STUDENT_VIEW_OWN_CLASS: 'student:view:own_class',
+  STUDENT_VIEW_DETAIL: 'student:view:detail',
   STUDENT_VIEW_SENSITIVE: 'student:view:sensitive',
   STUDENT_CREATE: 'student:create',
   STUDENT_UPDATE: 'student:update',
   STUDENT_ARCHIVE: 'student:archive',
+  STUDENT_DELETE: 'student:delete',
   STUDENT_IMPORT: 'student:import',
   STUDENT_EXPORT: 'student:export',
   STUDENT_EXPORT_OWN: 'student:export:own',
@@ -29,6 +31,7 @@ export const PERMISSIONS = {
 
   // Reports
   REPORT_VIEW_ALL: 'report:view:all',
+  REPORT_VIEW_OWN: 'report:view:own',
   REPORT_EXPORT: 'report:export',
   SUBJECT_VIEW: 'subject:view',
   SUBJECT_MANAGE: 'subject:manage',
@@ -50,6 +53,9 @@ export const PERMISSIONS = {
   AUDIT_VIEW: 'audit:view',
 
   // Dashboard
+  DASHBOARD_ADMIN: 'dashboard:admin',
+  DASHBOARD_PRINCIPAL: 'dashboard:principal',
+  DASHBOARD_TEACHER: 'dashboard:teacher',
 } as const
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS]
@@ -68,10 +74,12 @@ export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS]
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: [
     PERMISSIONS.STUDENT_VIEW_ALL,
+    PERMISSIONS.STUDENT_VIEW_DETAIL,
     PERMISSIONS.STUDENT_VIEW_SENSITIVE,
     PERMISSIONS.STUDENT_CREATE,
     PERMISSIONS.STUDENT_UPDATE,
     PERMISSIONS.STUDENT_ARCHIVE,
+    PERMISSIONS.STUDENT_DELETE,
     PERMISSIONS.STUDENT_IMPORT,
     PERMISSIONS.STUDENT_EXPORT,
     PERMISSIONS.STUDENT_VERIFY,
@@ -93,6 +101,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.SETTINGS_VIEW,
     PERMISSIONS.SETTINGS_MANAGE,
     PERMISSIONS.AUDIT_VIEW,
+    PERMISSIONS.DASHBOARD_ADMIN,
+    PERMISSIONS.DASHBOARD_PRINCIPAL,
   ],
   principal: [
     PERMISSIONS.STUDENT_VIEW_ALL,
@@ -123,6 +133,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.STUDENT_EXPORT_OWN,
     PERMISSIONS.CLASSROOM_VIEW_OWN,
     PERMISSIONS.SCHOOL_YEAR_VIEW,
+    PERMISSIONS.REPORT_VIEW_OWN,
     PERMISSIONS.SUBJECT_VIEW,
     PERMISSIONS.SCORE_VIEW_OWN_CLASS,
     PERMISSIONS.SCORE_MANAGE_OWN_CLASS,
