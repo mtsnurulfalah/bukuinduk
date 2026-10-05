@@ -98,13 +98,23 @@ var UserHandler = {
     var all = sheetToObjects(sheet);
     var old = all.find(function(u){ return String(u.id) === String(payload.id); });
     if (!old) return errorResponse(404, 'Pengguna tidak ditemukan.');
-    if (String(payload.id) === String(user.id) && payload.isActive === false) {
+    if (String(payload.id) === String(user.id) && payload.isActive !== undefined && !normalizeBoolean(payload.isActive, true)) {
       return errorResponse(400, 'Tidak dapat menonaktifkan akun Anda sendiri.');
     }
     var updated = Object.assign({}, old);
-    ['fullName','email','role','teacherId','isActive'].forEach(function(f){
+    if (payload.role !== undefined && ['admin','principal','teacher'].indexOf(payload.role) === -1) return errorResponse(400, 'Role tidak valid.');
+    var nextEmail = payload.email !== undefined ? String(payload.email).trim().toLowerCase() : String(old.email || '').trim().toLowerCase();
+    if (payload.email !== undefined && all.some(function(u){ return String(u.id) !== String(payload.id) && String(u.email || '').trim().toLowerCase() === nextEmail; })) return errorResponse(409, 'Email sudah digunakan.');
+    if (payload.teacherId) {
+      var linkedTeacher = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS)).find(function(t){ return String(t.id) === String(payload.teacherId); });
+      if (!linkedTeacher) return errorResponse(400, 'Guru yang ditautkan tidak ditemukan.');
+    }
+    ['fullName','role','teacherId','isActive'].forEach(function(f){
       if (payload[f] !== undefined) updated[f] = payload[f];
     });
+    if (payload.email !== undefined) updated.email = nextEmail;
+    if (updated.role !== 'teacher') updated.teacherId = updated.teacherId || '';
+    updated.isActive = normalizeBoolean(updated.isActive, false);
     updated.updatedAt = now();
     updateRow(sheet, rowIdx, updated, headers);
     AuditService.log(user.id, 'UPDATE', 'user', payload.id, this._sanitize(old), this._sanitize(updated), 'Edit pengguna');
