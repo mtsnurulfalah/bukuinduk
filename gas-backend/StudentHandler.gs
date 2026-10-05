@@ -50,8 +50,9 @@ var StudentHandler = {
   },
 
   list: function(payload, user) {
-    // Permission: admin & principal melihat semua; teacher hanya kelas sendiri
-    var all = this._getAll();
+    // Permission: admin & principal melihat semua; teacher hanya kelas sendiri.
+    // Clone records so enrichment/sanitization never mutates the shared cache.
+    var all = this._getAll().map(function(s) { return Object.assign({}, s); });
 
     // BUG-DUP FIX: Angkat pembacaan sheet ke atas function — dibaca SEKALI,
     // dipakai di blok teacher-filter, classroomId-filter, dan enrich.
@@ -121,6 +122,8 @@ var StudentHandler = {
         var cls = classrooms.find(function(c) { return String(c.id) === String(enr.classroomId); });
         s.classroomName = cls ? cls.name : '';
       }
+      // NIK is sensitive and must never be exposed to teacher list/export APIs.
+      if (user.role === 'teacher') delete s.nik;
       return s;
     });
 
@@ -687,6 +690,13 @@ var StudentHandler = {
     if (payload.health) this._saveHealth(id, payload.health);
     if (payload.educationHistory) this._saveEducationHistory(id, payload.educationHistory);
 
+    // Step Pendidikan & Kelas dapat mengubah rombel siswa. Jalankan enrollment
+    // hanya saat kedua ID dikirim dan classroom tidak kosong; field opsional yang
+    // dikosongkan tidak menghapus riwayat enrollment secara implisit.
+    if (payload.classroomId && payload.schoolYearId) {
+      this._doEnroll(id, payload.classroomId, payload.schoolYearId);
+    }
+
     this._invalidateCache();
     AuditService.log(user.id, 'UPDATE', 'student', id, old, updated, 'Edit siswa: ' + updated.fullName);
     return successResponse(updated);
@@ -708,11 +718,26 @@ var StudentHandler = {
     var rowIdx  = findRowById(sheet, id);
     if (rowIdx < 0) return errorResponse(404, 'Siswa tidak ditemukan.');
 
+    var previous = sheetToObjects(sheet).find(function(s) { return String(s.id) === String(id); });
     var colStatus = headers.indexOf('status') + 1;
     if (colStatus > 0) sheet.getRange(rowIdx, colStatus).setValue(status);
 
+    // Simpan metadata keluar saat diarsipkan; kosongkan kembali saat direstore.
+    var colExitDate = headers.indexOf('exitDate') + 1;
+    var colExitReason = headers.indexOf('exitReason') + 1;
+    if (status === 'inactive') {
+      if (colExitDate > 0) sheet.getRange(rowIdx, colExitDate).setValue(now().slice(0, 10));
+      if (colExitReason > 0) sheet.getRange(rowIdx, colExitReason).setValue(reason || '');
+    } else if (status === 'active') {
+      if (colExitDate > 0) sheet.getRange(rowIdx, colExitDate).setValue('');
+      if (colExitReason > 0) sheet.getRange(rowIdx, colExitReason).setValue('');
+    }
+
     this._invalidateCache();
-    AuditService.log(user.id, 'ARCHIVE', 'student', id, null, { status: status }, 'Status siswa: ' + status);
+    AuditService.log(user.id, status === 'active' ? 'RESTORE' : 'ARCHIVE', 'student', id,
+      previous ? { status: previous.status, exitDate: previous.exitDate || '', exitReason: previous.exitReason || '' } : null,
+      { status: status, exitDate: status === 'active' ? '' : now().slice(0, 10), exitReason: status === 'active' ? '' : (reason || '') },
+      'Status siswa: ' + status);
     return successResponse({ message: 'Status siswa diperbarui.' });
   },
 
@@ -825,12 +850,48 @@ var StudentHandler = {
   },
 
   _doEnroll: function(studentId, classroomId, schoolYearId) {
+    if (!studentId || !classroomId || !schoolYearId) throw new Error('Data enrollment tidak lengkap.');
+
+    var students = this._getAll();
+    if (!students.some(function(s) { return String(s.id) === String(studentId); })) {
+      throw new Error('Siswa tidak ditemukan.');
+    }
+
+    var classrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
+    var classroom = classrooms.find(function(c) { return String(c.id) === String(classroomId); });
+    if (!classroom) throw new Error('Kelas tidak ditemukan.');
+    if (String(classroom.schoolYearId) !== String(schoolYearId)) {
+      throw new Error('Kelas tidak sesuai dengan tahun pelajaran.');
+    }
+
+    var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
+    if (!schoolYears.some(function(s) { return String(s.id) === String(schoolYearId); })) {
+      throw new Error('Tahun pelajaran tidak ditemukan.');
+    }
+
     var sheet   = getSheet(CONFIG.SHEETS.ENROLLMENTS);
     var headers = getHeaders(sheet);
 
     // Nonaktifkan enrollment lama di tahun pelajaran yang sama
     var all = sheetToObjects(sheet);
-    all.forEach(function(e, i) {
+    var existingActive = all.find(function(e) {
+      return String(e.studentId) === String(studentId) &&
+        String(e.schoolYearId) === String(schoolYearId) &&
+        String(e.classroomId) === String(classroomId) &&
+        e.status === 'active';
+    });
+    if (existingActive) return existingActive;
+
+    var capacity = Number(classroom.capacity);
+    if (Number.isFinite(capacity) && capacity > 0) {
+      var activeCount = all.filter(function(e) {
+        return String(e.classroomId) === String(classroomId) &&
+          String(e.schoolYearId) === String(schoolYearId) && e.status === 'active';
+      }).length;
+      if (activeCount >= capacity) throw new Error('Kelas sudah mencapai kapasitas ' + capacity + ' siswa.');
+    }
+
+    all.forEach(function(e) {
       if (String(e.studentId) === String(studentId) &&
           String(e.schoolYearId) === String(schoolYearId) &&
           e.status === 'active') {
