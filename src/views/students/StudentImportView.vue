@@ -116,7 +116,7 @@
               <p class="truncate text-sm font-semibold text-primary-800">{{ selectedFile.name }}</p>
               <p class="mt-0.5 text-xs text-primary-700">{{ fileSize }}</p>
             </div>
-            <span class="shrink-0 text-xs font-medium text-primary-700">Siap diproses</span>
+            <span class="shrink-0 text-xs font-medium text-primary-700">{{ hasSubmittedCurrentFile ? 'Sudah dikirim' : 'Siap diproses' }}</span>
           </div>
         </template>
       </div>
@@ -250,7 +250,7 @@
         @click="handleImport"
       >
         <Upload class="h-4 w-4" />
-        {{ hasSubmittedCurrentFile ? 'Pilih File Baru' : 'Import' }}
+        {{ hasSubmittedCurrentFile ? 'Selesai' : 'Import' }}
         <span v-if="!hasSubmittedCurrentFile && previewRows.length">
           ({{ previewRows.length }} siswa)
         </span>
@@ -623,7 +623,7 @@ async function handleImport() {
 
 function goBack() {
   if (isBusy.value) return
-  window.history.back()
+  window.location.assign('/students')
 }
 
 async function downloadTemplate() {
