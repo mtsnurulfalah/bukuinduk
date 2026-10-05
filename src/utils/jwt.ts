@@ -28,32 +28,3 @@ export function isTokenExpired(token: string): boolean {
   return payload.exp * 1000 < Date.now()
 }
 
-/**
- * Ambil user dari token (berdasarkan payload yang disisipkan GAS)
- */
-export function getUserFromToken(token: string): User | null {
-  const payload = decodeJWT(token)
-  if (!payload) return null
-  if (isTokenExpired(token)) return null
-
-  return {
-    id: String(payload.id ?? ''),
-    username: String(payload.username ?? ''),
-    fullName: String(payload.fullName ?? ''),
-    email: String(payload.email ?? ''),
-    role: payload.role as User['role'],
-    isActive: Boolean(payload.isActive ?? true),
-    teacherId: payload.teacherId ? String(payload.teacherId) : undefined,
-    createdAt: String(payload.createdAt ?? ''),
-  }
-}
-
-/**
- * Sisa waktu token dalam menit
- */
-export function tokenExpiresInMinutes(token: string): number {
-  const payload = decodeJWT(token)
-  if (!payload || typeof payload.exp !== 'number') return 0
-  const remaining = payload.exp * 1000 - Date.now()
-  return Math.max(0, Math.floor(remaining / 60000))
-}
