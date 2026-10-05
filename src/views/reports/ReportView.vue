@@ -300,14 +300,22 @@ const EXPORT_HEADERS = {
 }
 
 async function handleExportExcel() {
-  const data = await reportsService.getStudentReport(filters)
-  exportToExcel(data, EXPORT_HEADERS, 'laporan-siswa')
+  try {
+    const data = await reportsService.getStudentReport(filters)
+    exportToExcel(data, EXPORT_HEADERS, 'laporan-siswa')
+  } catch (e: unknown) {
+    toast.error(e instanceof Error ? e.message : 'Gagal mengekspor Excel.')
+  }
 }
 
 async function handleExportPDF() {
-  const data = await reportsService.getStudentReport(filters)
-  exportToPDF(data, EXPORT_HEADERS, 'laporan-siswa',
-    `Laporan Data Siswa${schoolYearStore.activeSchoolYearName ? ' — TP ' + schoolYearStore.activeSchoolYearName : ''}`)
+  try {
+    const data = await reportsService.getStudentReport(filters)
+    exportToPDF(data, EXPORT_HEADERS, 'laporan-siswa',
+      `Laporan Data Siswa${schoolYearStore.activeSchoolYearName ? ' — TP ' + schoolYearStore.activeSchoolYearName : ''}`)
+  } catch (e: unknown) {
+    toast.error(e instanceof Error ? e.message : 'Gagal mengekspor PDF.')
+  }
 }
 
 onMounted(async () => {
