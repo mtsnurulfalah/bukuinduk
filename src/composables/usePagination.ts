@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants'
 
 interface UsePaginationOptions {
