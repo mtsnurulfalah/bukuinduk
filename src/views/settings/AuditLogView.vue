@@ -81,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { Search, X, Plus, Pencil, Trash2, LogIn, LogOut, Download, ShieldCheck, FileDown, AlertTriangle } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import { BaseCard, BaseInput, BaseSelect, BaseButton, BaseSkeleton, BaseEmpty, BaseBadge, BaseRetry } from '@/components/ui'
@@ -95,7 +95,6 @@ const page = ref(1)
 const limit = ref(20)
 const isLoading = ref(true)
 const error = ref('')
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)))
 
 const filters = reactive({ startDate: '', endDate: '', action: '', resourceType: '' })
 const expandedLogId = ref('')
@@ -155,8 +154,6 @@ function resetFilters() {
   page.value = 1
   load()
 }
-
-function onPageChange(p: number) { page.value = p; load() }
 
 async function load() {
   isLoading.value = true
