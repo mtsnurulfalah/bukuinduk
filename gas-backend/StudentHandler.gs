@@ -936,44 +936,8 @@ var StudentHandler = {
     return successResponse(enr);
   },
 
-  _validateEnrollmentTarget: function(studentId, classroomId, schoolYearId) {
+  _validateEnrollmentTarget: function(studentId, classroomId, schoolYearId, enrollments) {
     if (!classroomId || !schoolYearId) throw new Error('Data enrollment tidak lengkap.');
-    var classrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
-    var classroom = classrooms.find(function(c) { return String(c.id) === String(classroomId); });
-    if (!classroom) throw new Error('Kelas tidak ditemukan.');
-    if (String(classroom.schoolYearId) !== String(schoolYearId)) throw new Error('Kelas tidak sesuai dengan tahun pelajaran.');
-
-    var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
-    if (!schoolYears.some(function(s) { return String(s.id) === String(schoolYearId); })) throw new Error('Tahun pelajaran tidak ditemukan.');
-
-    var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
-    var existingActive = studentId && enrollments.find(function(e) {
-      return String(e.studentId) === String(studentId) &&
-        String(e.schoolYearId) === String(schoolYearId) &&
-        String(e.classroomId) === String(classroomId) &&
-        e.status === 'active';
-    });
-    if (existingActive) return existingActive;
-
-    var capacity = Number(classroom.capacity);
-    if (Number.isFinite(capacity) && capacity > 0) {
-      var activeCount = enrollments.filter(function(e) {
-        return String(e.classroomId) === String(classroomId) &&
-          String(e.schoolYearId) === String(schoolYearId) &&
-          e.status === 'active';
-      }).length;
-      if (activeCount >= capacity) throw new Error('Kelas sudah mencapai kapasitas ' + capacity + ' siswa.');
-    }
-    return { classroom: classroom };
-  },
-
-  _doEnroll: function(studentId, classroomId, schoolYearId) {
-    if (!studentId || !classroomId || !schoolYearId) throw new Error('Data enrollment tidak lengkap.');
-
-    var students = this._getAll();
-    if (!students.some(function(s) { return String(s.id) === String(studentId); })) {
-      throw new Error('Siswa tidak ditemukan.');
-    }
 
     var classrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
     var classroom = classrooms.find(function(c) { return String(c.id) === String(classroomId); });
@@ -987,11 +951,40 @@ var StudentHandler = {
       throw new Error('Tahun pelajaran tidak ditemukan.');
     }
 
+    var rows = enrollments || sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
+    var capacity = Number(classroom.capacity);
+    if (Number.isFinite(capacity) && capacity > 0) {
+      var activeCount = rows.filter(function(e) {
+        return String(e.classroomId) === String(classroomId) &&
+          String(e.schoolYearId) === String(schoolYearId) &&
+          e.status === 'active';
+      }).length;
+      var existingForStudent = rows.some(function(e) {
+        return String(e.studentId) === String(studentId) &&
+          String(e.classroomId) === String(classroomId) &&
+          String(e.schoolYearId) === String(schoolYearId) &&
+          e.status === 'active';
+      });
+      if (activeCount >= capacity && !existingForStudent) {
+        throw new Error('Kelas sudah mencapai kapasitas ' + capacity + ' siswa.');
+      }
+    }
+
+    return { classroom: classroom, enrollments: rows };
+  },
+
+  _doEnroll: function(studentId, classroomId, schoolYearId) {
+    if (!studentId || !classroomId || !schoolYearId) throw new Error('Data enrollment tidak lengkap.');
+
+    if (!this._getAll().some(function(s) { return String(s.id) === String(studentId); })) {
+      throw new Error('Siswa tidak ditemukan.');
+    }
+
     var sheet   = getSheet(CONFIG.SHEETS.ENROLLMENTS);
     var headers = getHeaders(sheet);
-
-    // Nonaktifkan enrollment lama di tahun pelajaran yang sama
     var all = sheetToObjects(sheet);
+
+    var target = this._validateEnrollmentTarget(studentId, classroomId, schoolYearId, all);
     var existingActive = all.find(function(e) {
       return String(e.studentId) === String(studentId) &&
         String(e.schoolYearId) === String(schoolYearId) &&
@@ -1000,14 +993,12 @@ var StudentHandler = {
     });
     if (existingActive) return existingActive;
 
-    this._validateEnrollmentTarget(studentId, classroomId, schoolYearId);
-
+    // Nonaktifkan enrollment lama di tahun pelajaran yang sama.
     all.forEach(function(e) {
       if (String(e.studentId) === String(studentId) &&
           String(e.schoolYearId) === String(schoolYearId) &&
           e.status === 'active') {
         var rowIdx = findRowById(sheet, e.id);
-        var colStatus = headers.indexOf('status') + 1;
         if (rowIdx > 0) {
           var colStatus = headers.indexOf('status') + 1;
           var colExitDate = headers.indexOf('exitDate') + 1;
@@ -1029,7 +1020,7 @@ var StudentHandler = {
       createdAt:    now(),
     };
     appendRow(sheet, enr, headers);
-    return enr;
+    return Object.assign({}, enr, { classroomName: target.classroom.name });
   },
 
   importBatch: function(payload, user) {
