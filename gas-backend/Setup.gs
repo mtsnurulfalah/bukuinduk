@@ -10,7 +10,7 @@ function setupSpreadsheet() {
     {
       name: CONFIG.SHEETS.USERS,
       headers: ['id','username','fullName','email','role','passwordHash','isActive',
-                'teacherId','avatarUrl','lastLogin','createdAt','updatedAt','createdBy'],
+                'teacherId','avatarUrl','lastLogin','passwordChangedAt','createdAt','updatedAt','createdBy'],
     },
     {
       name: CONFIG.SHEETS.STUDENTS,
