@@ -45,8 +45,11 @@ var StudentHandler = {
 
   _invalidateCache: function() {
     cacheRemove('students_all');
-    cacheRemove('students_stats');
     cacheRemove('students_completeness');
+    // Stats kini tidak memakai cache agar perubahan CRUD langsung terlihat
+    // untuk semua tahun pelajaran tanpa perlu wildcard invalidation.
+    cacheRemove('students_stats');
+    cacheRemove('reports_intelligence');
   },
 
   list: function(payload, user) {
@@ -59,16 +62,28 @@ var StudentHandler = {
     // Sebelumnya: enrollments dibaca 2–3× dan classrooms dibaca 2× per request.
     var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
     var classrooms  = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
+    var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
+    var defaultYear = schoolYears.find(function(y) { return normalizeBoolean(y.isActive, false); });
+    var effectiveSchoolYearId = payload.schoolYearId
+      ? String(payload.schoolYearId)
+      : (defaultYear ? String(defaultYear.id) : '');
 
-    // Teacher filter: hanya siswa di kelas yang diampu
+    // Teacher filter: hanya siswa di kelas yang diampu pada tahun aktif/yang diminta.
     if (user.role === 'teacher') {
       if (!user.teacherId) return successResponse({ items: [], total: 0, page: 1, limit: 20, totalPages: 0 });
       var myClassrooms = classrooms
-        .filter(function(c) { return String(c.homeroomTeacherId) === String(user.teacherId); })
+        .filter(function(c) {
+          return String(c.homeroomTeacherId) === String(user.teacherId) &&
+            (!effectiveSchoolYearId || String(c.schoolYearId) === effectiveSchoolYearId);
+        })
         .map(function(c) { return String(c.id); });
 
       var myStudentIds = enrollments
-        .filter(function(e) { return myClassrooms.indexOf(String(e.classroomId)) !== -1 && e.status === 'active'; })
+        .filter(function(e) {
+          return myClassrooms.indexOf(String(e.classroomId)) !== -1 &&
+            e.status === 'active' &&
+            (!effectiveSchoolYearId || String(e.schoolYearId) === effectiveSchoolYearId);
+        })
         .map(function(e) { return String(e.studentId); });
 
       all = all.filter(function(s) { return myStudentIds.indexOf(String(s.id)) !== -1; });
@@ -86,11 +101,11 @@ var StudentHandler = {
         .map(function(e) { return String(e.studentId); });
       all = all.filter(function(s) { return ids.indexOf(String(s.id)) !== -1; });
     }
-    if (payload.schoolYearId) {
+    if (effectiveSchoolYearId) {
       // Filter tahun pelajaran berdasarkan rombel aktif pada tahun tersebut.
       var yearIds = enrollments
         .filter(function(e) {
-          return String(e.schoolYearId) === String(payload.schoolYearId) && e.status === 'active';
+          return String(e.schoolYearId) === effectiveSchoolYearId && e.status === 'active';
         })
         .map(function(e) { return String(e.studentId); });
       all = all.filter(function(s) { return yearIds.indexOf(String(s.id)) !== -1; });
@@ -117,7 +132,11 @@ var StudentHandler = {
     // Enrich dengan nama kelas dari enrollment aktif
     // BUG-DUP FIX: Gunakan enrollments & classrooms yang sama — tidak ada pembacaan ulang
     all = all.map(function(s) {
-      var enr = enrollments.find(function(e) { return String(e.studentId) === String(s.id) && e.status === 'active'; });
+      var enr = enrollments.find(function(e) {
+        return String(e.studentId) === String(s.id) &&
+          e.status === 'active' &&
+          (!effectiveSchoolYearId || String(e.schoolYearId) === effectiveSchoolYearId);
+      });
       if (enr) {
         var cls = classrooms.find(function(c) { return String(c.id) === String(enr.classroomId); });
         s.classroomName = cls ? cls.name : '';
@@ -158,13 +177,19 @@ var StudentHandler = {
     if (user.role === 'teacher') {
       if (!user.teacherId) throw new Error('FORBIDDEN');
       var classrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
+      var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
+      var activeYear = schoolYears.find(function(y) { return normalizeBoolean(y.isActive, false); });
       var classIds = classrooms
-        .filter(function(c) { return String(c.homeroomTeacherId) === String(user.teacherId); })
+        .filter(function(c) {
+          return String(c.homeroomTeacherId) === String(user.teacherId) &&
+            (!activeYear || String(c.schoolYearId) === String(activeYear.id));
+        })
         .map(function(c) { return String(c.id); });
       var isMyStudent = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS)).some(function(e) {
         return String(e.studentId) === String(studentId) &&
           classIds.indexOf(String(e.classroomId)) !== -1 &&
-          e.status === 'active';
+          e.status === 'active' &&
+          (!activeYear || String(e.schoolYearId) === String(activeYear.id));
       });
       if (!isMyStudent) throw new Error('FORBIDDEN');
     }
@@ -254,9 +279,19 @@ var StudentHandler = {
 
     // Gunakan allEnrollments/allClassrooms/allSchoolYears yang sudah dibaca di atas
     result.currentEnrollment = (function() {
+      var activeSchoolYear = allSchoolYears.find(function(y) { return normalizeBoolean(y.isActive, false); });
       var enr = allEnrollments.find(function(e) {
-        return String(e.studentId) === String(payload.id) && e.status === 'active';
+        return String(e.studentId) === String(payload.id) &&
+          e.status === 'active' &&
+          activeSchoolYear &&
+          String(e.schoolYearId) === String(activeSchoolYear.id);
       });
+      // Fallback untuk instalasi lama yang belum memiliki tahun aktif.
+      if (!enr) {
+        enr = allEnrollments.find(function(e) {
+          return String(e.studentId) === String(payload.id) && e.status === 'active';
+        });
+      }
       if (!enr) return null;
       var cls = allClassrooms.find(function(c) { return String(c.id) === String(enr.classroomId); });
       var sy  = allSchoolYears.find(function(s) { return String(s.id) === String(enr.schoolYearId); });
@@ -1141,10 +1176,6 @@ var StudentHandler = {
     checkPermission(user, 'student:view:all');
 
     var schoolYearId = payload.schoolYearId ? String(payload.schoolYearId) : '';
-    var cacheKey = 'students_stats' + (schoolYearId ? '_' + schoolYearId : '');
-    var cached = cacheGet(cacheKey);
-    if (cached) return successResponse(cached);
-
     var allStudents = this._getAll();
     var allEnrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
     var allClassrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
