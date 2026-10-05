@@ -238,6 +238,7 @@ var GradeHandler = {
     }
   },
   list: function(payload, user) {
+    if (!hasPermission(user, 'classroom:view:all') && !hasPermission(user, 'classroom:view:own')) throw new Error('FORBIDDEN');
     var all = sheetToObjects(getSheet(CONFIG.SHEETS.GRADES));
     all.sort(function(a,b){ return (a.level||0) - (b.level||0); });
     return successResponse(all);
@@ -287,6 +288,7 @@ var SchoolYearHandler = {
     }
   },
   list: function(payload, user) {
+    checkPermission(user, 'school_year:view');
     var all = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
     all.sort(function(a,b){ return (b.name||'').localeCompare(a.name||''); });
     return successResponse(all.map(function(s){ return Object.assign({}, s, { isActive: normalizeBoolean(s.isActive, false) }); }));
@@ -311,8 +313,10 @@ var SchoolYearHandler = {
     var all = sheetToObjects(sheet);
     var old = all.find(function(s){ return String(s.id) === String(payload.id); });
     var updated = Object.assign({}, old, payload);
+    updated.isActive = normalizeBoolean(updated.isActive, false);
+    if (updated.isActive) this._deactivateOthers(sheet, headers, payload.id);
     updateRow(sheet, rowIdx, updated, headers);
-    return successResponse(Object.assign({}, updated, { isActive: normalizeBoolean(updated.isActive, false) }));
+    return successResponse(updated);
   },
   setActive: function(payload, user) {
     checkPermission(user, 'school_year:manage');
@@ -333,15 +337,21 @@ var SchoolYearHandler = {
     var rowIdx = findRowById(sheet, payload.id);
     if (rowIdx < 0) return errorResponse(404, 'Tahun pelajaran tidak ditemukan.');
 
-    // BUG-45 FIX: Cek apakah masih ada kelas yang menggunakan tahun pelajaran ini.
-    // Menghapus school year dengan kelas aktif akan membuat kelas menjadi orphaned.
+    // Jangan hapus tahun pelajaran yang masih direferensikan oleh data historis.
     var linkedClassrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS))
       .filter(function(c) { return String(c.schoolYearId) === String(payload.id); });
-    if (linkedClassrooms.length > 0) {
+    var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS))
+      .filter(function(e) { return String(e.schoolYearId) === String(payload.id); });
+    var subjects = [];
+    var scores = [];
+    try { subjects = sheetToObjects(getSheet(CONFIG.SHEETS.SUBJECTS)).filter(function(x){ return String(x.schoolYearId) === String(payload.id); }); } catch (e) {}
+    try { scores = sheetToObjects(getSheet(CONFIG.SHEETS.SCORES)).filter(function(x){ return String(x.schoolYearId) === String(payload.id); }); } catch (e) {}
+    var linkedTotal = linkedClassrooms.length + enrollments.length + subjects.length + scores.length;
+    if (linkedTotal > 0) {
       return errorResponse(409,
-        'Tahun pelajaran tidak dapat dihapus karena masih memiliki ' +
-        linkedClassrooms.length + ' kelas. ' +
-        'Hapus semua kelas di tahun pelajaran ini terlebih dahulu.'
+        'Tahun pelajaran tidak dapat dihapus karena masih digunakan oleh ' +
+        linkedClassrooms.length + ' kelas, ' + enrollments.length + ' enrollment, ' +
+        subjects.length + ' mata pelajaran, dan ' + scores.length + ' nilai.'
       );
     }
 
