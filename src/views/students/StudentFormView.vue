@@ -702,7 +702,7 @@ const form = reactive({
   // Pendidikan
   entryDate: '', schoolYearId: '', classroomId: '', notes: '',
   educationHistory: {
-    schoolName: '', level: '', certificateNumber: '',
+    id: '', schoolName: '', level: '', certificateNumber: '',
     graduationYear: undefined as number | undefined,
   },
 
