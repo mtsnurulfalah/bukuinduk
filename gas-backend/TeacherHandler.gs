@@ -53,7 +53,9 @@ var TeacherHandler = {
     var id = generateUUID();
     var ts = now();
     var teacher = {};
-    headers.forEach(function(h){ teacher[h] = payload[h] !== undefined ? payload[h] : ''; });
+    headers.forEach(function(h){
+      teacher[h] = h === 'userId' ? '' : (payload[h] !== undefined ? payload[h] : '');
+    });
     teacher.id = id;
     teacher.nip = nip;
     teacher.nuptk = nuptk;
@@ -83,7 +85,7 @@ var TeacherHandler = {
     if (nextEmail && all.some(function(t){ return String(t.id) !== String(payload.id) && normalizeIdentifier(t.email).toLowerCase() === nextEmail; })) return errorResponse(409, 'Email guru sudah digunakan.');
     var updated = Object.assign({}, old);
     headers.forEach(function(h){
-      if (payload[h] !== undefined && h !== 'id' && h !== 'createdAt') updated[h] = payload[h];
+      if (payload[h] !== undefined && h !== 'id' && h !== 'createdAt' && h !== 'userId') updated[h] = payload[h];
     });
     updated.nip = nextNip;
     updated.nuptk = nextNuptk;
