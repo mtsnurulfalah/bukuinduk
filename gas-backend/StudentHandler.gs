@@ -46,6 +46,7 @@ var StudentHandler = {
   _invalidateCache: function() {
     cacheRemove('students_all');
     cacheRemove('students_completeness');
+      cacheRemove('reports_intelligence');
     // Stats kini tidak memakai cache agar perubahan CRUD langsung terlihat
     // untuk semua tahun pelajaran tanpa perlu wildcard invalidation.
     cacheRemove('students_stats');
@@ -923,6 +924,7 @@ var StudentHandler = {
         payload, { studentId: String(payload.studentId), relationship: String(payload.relationship) });
       appendRow(sheet, newParent, headers);
       cacheRemove('students_completeness');
+      cacheRemove('reports_intelligence');
       AuditService.log(user.id, 'CREATE', 'student_parent', String(newParent.id), null, newParent, 'Tambah data orang tua/wali');
       return successResponse(newParent);
     }
@@ -958,6 +960,7 @@ var StudentHandler = {
       updated.updatedAt = now();
       updateRow(sheet, rowIdx, updated, headers);
       cacheRemove('students_completeness');
+      cacheRemove('reports_intelligence');
       AuditService.log(user.id, 'UPDATE', 'student_health', String(existing.id), existing, updated, 'Perbarui data kesehatan siswa');
       return successResponse(updated);
     } else {
@@ -965,6 +968,7 @@ var StudentHandler = {
         payload, { studentId: String(payload.studentId) });
       appendRow(sheet, newHealth, headers);
       cacheRemove('students_completeness');
+      cacheRemove('reports_intelligence');
       AuditService.log(user.id, 'CREATE', 'student_health', String(newHealth.id), null, newHealth, 'Tambah data kesehatan siswa');
       return successResponse(newHealth);
     }
@@ -1011,6 +1015,7 @@ var StudentHandler = {
     checkPermission(user, 'student:update');
     var enr = this._doEnroll(payload.studentId, payload.classroomId, payload.schoolYearId);
     cacheRemove('students_completeness');
+    cacheRemove('reports_intelligence');
     return successResponse(enr);
   
     } finally {
