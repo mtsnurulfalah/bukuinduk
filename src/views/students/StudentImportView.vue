@@ -162,7 +162,7 @@
       :title="'Preview Data (' + previewRows.length + ' baris)'"
       subtitle="Menampilkan maksimal 10 baris pertama untuk pemeriksaan cepat."
     >
-      <div class="mt-3 max-w-full overflow-auto rounded-lg border border-slate-200">
+      <div class="mt-3 max-h-[28rem] max-w-full overflow-auto rounded-lg border border-slate-200">
         <table class="min-w-[980px] w-full text-xs">
           <thead class="sticky top-0 z-10">
             <tr class="bg-slate-50 text-left uppercase text-slate-500">
