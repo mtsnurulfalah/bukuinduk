@@ -165,8 +165,8 @@ var UserHandler = {
     var headers = getHeaders(sheet);
     var rowIdx  = findRowById(sheet, payload.id);
     if (rowIdx < 0) return errorResponse(404, 'Pengguna tidak ditemukan.');
-    var col = headers.indexOf('passwordHash') + 1;
-    if (col > 0) sheet.getRange(rowIdx, col).setValue(hashPassword(payload.newPassword));
+    var col = ensureHeader(sheet, 'passwordHash');
+    if (rowIdx > 0) sheet.getRange(rowIdx, col).setValue(hashPassword(payload.newPassword));
     var colChangedAt = ensureHeader(sheet, 'passwordChangedAt');
     sheet.getRange(rowIdx, colChangedAt).setValue(Math.floor(Date.now() / 1000));
     var colUpdated = ensureHeader(sheet, 'updatedAt');
