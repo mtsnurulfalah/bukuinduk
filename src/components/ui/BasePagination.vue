@@ -13,6 +13,7 @@
     <div class="flex items-center gap-1 order-1 sm:order-2">
       <!-- First -->
       <button
+        type="button"
         :disabled="currentPage === 1"
         class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         title="Halaman pertama"
@@ -40,6 +41,7 @@
         <span v-if="page === '...'" class="px-2 text-slate-400 text-sm">…</span>
         <button
           v-else
+          type="button"
           :class="[
             'h-8 w-8 rounded-lg text-sm font-medium transition-colors',
             page === currentPage
@@ -54,6 +56,7 @@
 
       <!-- Next -->
       <button
+        type="button"
         :disabled="currentPage === totalPages"
         class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         title="Berikutnya"
