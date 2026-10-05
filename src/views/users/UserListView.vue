@@ -100,14 +100,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { UserPlus, Pencil, UserX, UserCheck, KeyRound } from 'lucide-vue-next'
 import { PageHeader, SearchFilter, DataTable } from '@/components/shared'
 import type { TableColumn } from '@/components/shared/DataTable.vue'
 import { BaseCard, BaseButton, BaseSelect, BaseAvatar, BaseBadge, BasePagination, BaseConfirmDialog, BaseModal, BaseInput, BaseRetry } from '@/components/ui'
 import { usersService } from '@/services'
 import { useConfirm, useSearch } from '@/composables'
-import { ROLE_LABELS, ROLES } from '@/constants'
+import { ROLE_LABELS } from '@/constants'
 import type { Role } from '@/constants'
 import { formatDateTime } from '@/utils'
 import { toast } from 'vue-sonner'
