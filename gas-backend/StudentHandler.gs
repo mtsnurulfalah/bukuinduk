@@ -772,16 +772,26 @@ var StudentHandler = {
       return String(p.studentId != null ? p.studentId : p.studentID) === String(payload.studentId) && p.relationship === payload.relationship;
     });
 
+    if (!payload.studentId || ['father','mother','guardian'].indexOf(String(payload.relationship || '')) === -1) {
+      return errorResponse(400, 'Siswa dan hubungan orang tua/wali wajib valid.');
+    }
+    if (!this._getViewableStudent(payload.studentId, user)) return errorResponse(404, 'Siswa tidak ditemukan.');
+
     if (existing) {
       var rowIdx = findRowById(sheet, existing.id);
-      var updated = Object.assign({}, existing, payload);
+      var updated = Object.assign({}, existing);
+      headers.forEach(function(h) {
+        if (['id','studentId','studentID','relationship','createdAt'].indexOf(h) !== -1) return;
+        if (payload[h] !== undefined) updated[h] = payload[h];
+      });
       updated.updatedAt = now();
       updateRow(sheet, rowIdx, updated, headers);
       cacheRemove('students_completeness');
       AuditService.log(user.id, 'UPDATE', 'student_parent', String(existing.id), existing, updated, 'Perbarui data orang tua/wali');
       return successResponse(updated);
     } else {
-      var newParent = Object.assign({ id: generateUUID(), createdAt: now(), updatedAt: now(), isAlive: true }, payload);
+      var newParent = Object.assign({ id: generateUUID(), createdAt: now(), updatedAt: now(), isAlive: true },
+        payload, { studentId: String(payload.studentId), relationship: String(payload.relationship) });
       appendRow(sheet, newParent, headers);
       cacheRemove('students_completeness');
       AuditService.log(user.id, 'CREATE', 'student_parent', String(newParent.id), null, newParent, 'Tambah data orang tua/wali');
@@ -806,15 +816,24 @@ var StudentHandler = {
     var all     = sheetToObjects(sheet);
     var existing = all.find(function(h) { return String(h.studentId != null ? h.studentId : h.studentID) === String(payload.studentId); });
 
+    if (!payload.studentId) return errorResponse(400, 'ID siswa diperlukan.');
+    if (!this._getViewableStudent(payload.studentId, user)) return errorResponse(404, 'Siswa tidak ditemukan.');
+
     if (existing) {
       var rowIdx = findRowById(sheet, existing.id);
-      var updated = Object.assign({}, existing, payload, { updatedAt: now() });
+      var updated = Object.assign({}, existing);
+      headers.forEach(function(h) {
+        if (['id','studentId','studentID','createdAt'].indexOf(h) !== -1) return;
+        if (payload[h] !== undefined) updated[h] = payload[h];
+      });
+      updated.updatedAt = now();
       updateRow(sheet, rowIdx, updated, headers);
       cacheRemove('students_completeness');
       AuditService.log(user.id, 'UPDATE', 'student_health', String(existing.id), existing, updated, 'Perbarui data kesehatan siswa');
       return successResponse(updated);
     } else {
-      var newHealth = Object.assign({ id: generateUUID(), createdAt: now(), updatedAt: now() }, payload);
+      var newHealth = Object.assign({ id: generateUUID(), createdAt: now(), updatedAt: now() },
+        payload, { studentId: String(payload.studentId) });
       appendRow(sheet, newHealth, headers);
       cacheRemove('students_completeness');
       AuditService.log(user.id, 'CREATE', 'student_health', String(newHealth.id), null, newHealth, 'Tambah data kesehatan siswa');
@@ -1108,12 +1127,19 @@ var StudentHandler = {
              e.level === ed.level;
     });
 
-    var data = Object.assign({ id: generateUUID(), createdAt: now() }, ed, { studentId: studentId });
+    var data = Object.assign({}, existing || {}, ed, {
+      id: existing ? existing.id : generateUUID(),
+      studentId: studentId,
+      createdAt: existing ? existing.createdAt : now(),
+      updatedAt: now(),
+    });
 
     if (existing) {
-      // Update row yang sudah ada — jangan duplikasi
-      data.id = existing.id;
-      data.createdAt = existing.createdAt;
+      // Update hanya field pendidikan yang dikirim, tanpa mengosongkan kolom lain.
+      headers.forEach(function(h) {
+        if (['id','studentId','studentID','createdAt'].indexOf(h) !== -1) return;
+        if (ed[h] !== undefined) data[h] = ed[h];
+      });
       var rowIdx = findRowById(sheet, existing.id);
       if (rowIdx > 0) updateRow(sheet, rowIdx, data, headers);
     } else {
