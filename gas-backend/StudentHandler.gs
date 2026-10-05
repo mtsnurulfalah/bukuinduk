@@ -122,8 +122,19 @@ var StudentHandler = {
         var cls = classrooms.find(function(c) { return String(c.id) === String(enr.classroomId); });
         s.classroomName = cls ? cls.name : '';
       }
-      // NIK is sensitive and must never be exposed to teacher list/export APIs.
-      if (user.role === 'teacher') delete s.nik;
+      // Roster/list API hanya mengembalikan field yang dibutuhkan guru.
+      if (user.role === 'teacher') {
+        delete s.nik;
+        delete s.phone;
+        delete s.email;
+        delete s.address;
+        delete s.rtRw;
+        delete s.village;
+        delete s.district;
+        delete s.city;
+        delete s.province;
+        delete s.postalCode;
+      }
       return s;
     });
 
@@ -260,6 +271,11 @@ var StudentHandler = {
       result.parents = result.parents.map(function(p) {
         var c = Object.assign({}, p);
         delete c.nik;
+        delete c.incomeRange;
+        delete c.phone;
+        delete c.address;
+        delete c.religion;
+        delete c.birthDate;
         return c;
       });
       result.health = null;
