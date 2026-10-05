@@ -128,6 +128,7 @@ var ClassroomHandler = {
     cls.createdAt = ts;
     cls.updatedAt = ts;
     appendRow(sheet, cls, headers);
+    cacheRemove('reports_intelligence');
     AuditService.log(user.id, 'CREATE', 'classroom', id, null, cls, 'Tambah kelas: ' + cls.name);
     return successResponse(Object.assign({}, cls, { id: id }));
   
@@ -195,6 +196,7 @@ var ClassroomHandler = {
     updated.isActive = normalizeBoolean(updated.isActive, false);
     updated.updatedAt = now();
     updateRow(sheet, rowIdx, updated, headers);
+    cacheRemove('reports_intelligence');
     AuditService.log(user.id, 'UPDATE', 'classroom', payload.id, old, updated, 'Edit kelas');
     return successResponse(updated);
   
@@ -227,6 +229,7 @@ var ClassroomHandler = {
     }
 
     sheet.deleteRow(rowIdx);
+    cacheRemove('reports_intelligence');
     AuditService.log(user.id, 'DELETE', 'classroom', payload.id, null, null, 'Hapus kelas');
     return successResponse({ message: 'Kelas berhasil dihapus.' });
   
