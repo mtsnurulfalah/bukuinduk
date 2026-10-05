@@ -122,6 +122,7 @@ var ClassroomHandler = {
 
     var all = this._getAll();
     var old = all.find(function(c){ return String(c.id) === String(payload.id); });
+    if (!old) return errorResponse(404, 'Kelas tidak ditemukan.');
     var updated = Object.assign({}, old);
     if (payload.gradeId && !sheetToObjects(getSheet(CONFIG.SHEETS.GRADES)).some(function(g){ return String(g.id) === String(payload.gradeId); })) return errorResponse(400, 'Tingkat kelas tidak ditemukan.');
     if (payload.schoolYearId && !sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS)).some(function(s){ return String(s.id) === String(payload.schoolYearId); })) return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
