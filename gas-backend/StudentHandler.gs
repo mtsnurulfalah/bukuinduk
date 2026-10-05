@@ -95,9 +95,14 @@ var StudentHandler = {
     if (payload.status)      all = all.filter(function(s) { return s.status === payload.status; });
     if (payload.gender)      all = all.filter(function(s) { return s.gender === payload.gender; });
     if (payload.classroomId) {
-      // BUG-DUP FIX: Gunakan variabel enrollments yang sudah dibaca di atas
+      // Batasi filter kelas ke tahun pelajaran efektif agar ID kelas dari tahun
+      // lain tidak dapat mencampur hasil ketika studentId kebetulan sama.
       var ids = enrollments
-        .filter(function(e) { return String(e.classroomId) === String(payload.classroomId) && e.status === 'active'; })
+        .filter(function(e) {
+          return String(e.classroomId) === String(payload.classroomId) &&
+            e.status === 'active' &&
+            (!effectiveSchoolYearId || String(e.schoolYearId) === effectiveSchoolYearId);
+        })
         .map(function(e) { return String(e.studentId); });
       all = all.filter(function(s) { return ids.indexOf(String(s.id)) !== -1; });
     }
@@ -1211,10 +1216,17 @@ var StudentHandler = {
       graduatedStudents:   students.filter(function(s){ return s.status === 'graduated'; }).length,
       transferredStudents: students.filter(function(s){ return s.status === 'transferred'; }).length,
       newStudentsThisYear: schoolYearId
-        ? allEnrollments.filter(function(e) {
-            return String(e.schoolYearId) === schoolYearId &&
-              e.entryDate && String(e.entryDate).slice(0, 4) === String(thisYear);
-          }).length
+        ? (function() {
+            var seen = {};
+            allEnrollments.forEach(function(e) {
+              if (String(e.schoolYearId) === schoolYearId &&
+                  e.entryDate &&
+                  String(e.entryDate).slice(0, 4) === String(thisYear)) {
+                seen[String(e.studentId)] = true;
+              }
+            });
+            return Object.keys(seen).length;
+          })()
         : students.filter(function(s){
             return s.entryDate && String(s.entryDate).startsWith(String(thisYear));
           }).length,
@@ -1226,7 +1238,7 @@ var StudentHandler = {
       }).length,
     };
 
-    cacheSet(cacheKey, stats, 300);
+    // Statistik tidak dicache karena dapat berubah akibat enrollment/status CRUD.
     return successResponse(stats);
   },
 
