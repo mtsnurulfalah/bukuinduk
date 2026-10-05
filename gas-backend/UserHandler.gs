@@ -69,6 +69,15 @@ var UserHandler = {
     var headers = getHeaders(sheet);
     var id = generateUUID();
     var ts = now();
+    var teacherId = payload.teacherId ? String(payload.teacherId) : '';
+    if (payload.role === 'teacher') {
+      if (!teacherId) return errorResponse(400, 'Akun guru wajib ditautkan ke data guru.');
+      var teacher = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS)).find(function(t) { return String(t.id) === teacherId; });
+      if (!teacher) return errorResponse(400, 'Guru yang ditautkan tidak ditemukan.');
+    } else {
+      teacherId = '';
+    }
+
     var newUser = {
       id:           id,
       username:     normalizedUsername,
@@ -77,7 +86,7 @@ var UserHandler = {
       role:         payload.role,
       passwordHash: hashPassword(payload.password),
       isActive:     payload.isActive !== false,
-      teacherId:    payload.teacherId || '',
+      teacherId:    teacherId,
       avatarUrl:    '',
       lastLogin:    '',
       createdAt:    ts,
@@ -105,15 +114,19 @@ var UserHandler = {
     if (payload.role !== undefined && ['admin','principal','teacher'].indexOf(payload.role) === -1) return errorResponse(400, 'Role tidak valid.');
     var nextEmail = payload.email !== undefined ? String(payload.email).trim().toLowerCase() : String(old.email || '').trim().toLowerCase();
     if (payload.email !== undefined && all.some(function(u){ return String(u.id) !== String(payload.id) && String(u.email || '').trim().toLowerCase() === nextEmail; })) return errorResponse(409, 'Email sudah digunakan.');
-    if (payload.teacherId) {
-      var linkedTeacher = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS)).find(function(t){ return String(t.id) === String(payload.teacherId); });
+    var nextTeacherId = payload.teacherId !== undefined ? String(payload.teacherId || '') : String(old.teacherId || '');
+    if (updated.role === 'teacher') {
+      if (!nextTeacherId) return errorResponse(400, 'Akun guru wajib ditautkan ke data guru.');
+      var linkedTeacher = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS)).find(function(t){ return String(t.id) === nextTeacherId; });
       if (!linkedTeacher) return errorResponse(400, 'Guru yang ditautkan tidak ditemukan.');
+    } else {
+      nextTeacherId = '';
     }
     ['fullName','role','teacherId','isActive'].forEach(function(f){
       if (payload[f] !== undefined) updated[f] = payload[f];
     });
     if (payload.email !== undefined) updated.email = nextEmail;
-    if (updated.role !== 'teacher') updated.teacherId = updated.teacherId || '';
+    updated.teacherId = nextTeacherId;
     updated.isActive = normalizeBoolean(updated.isActive, false);
     updated.updatedAt = now();
     updateRow(sheet, rowIdx, updated, headers);
@@ -167,10 +180,9 @@ var UserHandler = {
     var sheet  = getSheet(CONFIG.SHEETS.USERS);
     var rowIdx = findRowById(sheet, payload.id);
     if (rowIdx < 0) return errorResponse(404, 'Pengguna tidak ditemukan.');
-    var linkedTeachers = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS))
-      .filter(function(t){ return String(t.userId) === String(payload.id); });
-    if (linkedTeachers.length > 0) {
-      return errorResponse(409, 'Akun tidak dapat dihapus karena masih terhubung ke data guru. Putuskan relasinya atau nonaktifkan akun terlebih dahulu.');
+    var foundUser = sheetToObjects(sheet).find(function(u){ return String(u.id) === String(payload.id); });
+    if (foundUser && foundUser.teacherId) {
+      return errorResponse(409, 'Akun tidak dapat dihapus karena masih ditautkan ke data guru. Putuskan relasi akun-guru atau nonaktifkan akun terlebih dahulu.');
     }
     sheet.deleteRow(rowIdx);
     AuditService.log(user.id, 'DELETE', 'user', payload.id, null, null, 'Hapus pengguna');
