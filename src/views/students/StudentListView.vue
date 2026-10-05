@@ -434,7 +434,7 @@ const pagination = usePagination({
 const { query: searchQuery, clear: clearSearch } = useSearch((q) => {
   pagination.reset()
   studentsStore.setFilters({ search: q, page: 1 })
-  void void void studentsStore.fetchList()
+  void studentsStore.fetchList()
 }, undefined, studentsStore.filters.search ?? '')
 
 const hasActiveFilters = computed(() =>
