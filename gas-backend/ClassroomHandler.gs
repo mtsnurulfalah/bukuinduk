@@ -262,22 +262,43 @@ var ClassroomHandler = {
     var students    = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
     var grades      = sheetToObjects(getSheet(CONFIG.SHEETS.GRADES));
 
+    // Index satu kali agar rekap Dashboard tidak melakukan filter penuh
+    // terhadap seluruh data untuk setiap kelas.
+    var studentById = {};
+    students.forEach(function(student) {
+      studentById[String(student.id)] = student;
+    });
+
+    var gradeById = {};
+    grades.forEach(function(grade) {
+      gradeById[String(grade.id)] = grade;
+    });
+
+    var rosterByClass = {};
+    enrollments.forEach(function(enr) {
+      if (enr.status !== 'active') return;
+      var classroomId = String(enr.classroomId || '');
+      var schoolYearId = String(enr.schoolYearId || '');
+      var key = classroomId + '|' + schoolYearId;
+      var student = studentById[String(enr.studentId || '')];
+      if (!student || student.status !== 'active') return;
+      if (!rosterByClass[key]) rosterByClass[key] = { total: 0, male: 0, female: 0 };
+      rosterByClass[key].total += 1;
+      if (student.gender === 'L') rosterByClass[key].male += 1;
+      else if (student.gender === 'P') rosterByClass[key].female += 1;
+    });
+
     var stats = all.map(function(cls) {
-      var enrs = enrollments.filter(function(e){
-        return String(e.classroomId) === String(cls.id) &&
-          String(e.schoolYearId) === String(cls.schoolYearId) &&
-          e.status === 'active';
-      });
-      var sids = enrs.map(function(e){ return String(e.studentId); });
-      var clsStudents = students.filter(function(s){ return sids.indexOf(String(s.id)) !== -1; });
-      var grade = grades.find(function(g){ return String(g.id) === String(cls.gradeId); });
+      var key = String(cls.id) + '|' + String(cls.schoolYearId);
+      var roster = rosterByClass[key] || { total: 0, male: 0, female: 0 };
+      var grade = gradeById[String(cls.gradeId)];
       return {
         classroomId:     cls.id,
         classroomName:   cls.name,
         gradeName:       grade ? grade.name : '',
-        totalStudents:   clsStudents.length,
-        maleStudents:    clsStudents.filter(function(s){ return s.gender === 'L'; }).length,
-        femaleStudents:  clsStudents.filter(function(s){ return s.gender === 'P'; }).length,
+        totalStudents:   roster.total,
+        maleStudents:    roster.male,
+        femaleStudents:  roster.female,
       };
     });
 
@@ -304,9 +325,20 @@ var ClassroomHandler = {
     });
 
     var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
+    var students = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
+    var studentById = {};
+    students.forEach(function(student) {
+      studentById[String(student.id)] = student;
+    });
+
     all = all.map(function(c){
       var count = enrollments.filter(function(e){
-        return String(e.classroomId) === String(c.id) && e.status === 'active';
+        var student = studentById[String(e.studentId || '')];
+        return String(e.classroomId) === String(c.id) &&
+          String(e.schoolYearId) === String(c.schoolYearId) &&
+          e.status === 'active' &&
+          student &&
+          student.status === 'active';
       }).length;
       var sy = schoolYears.find(function(s){ return String(s.id) === String(c.schoolYearId); });
       return Object.assign({}, c, {
