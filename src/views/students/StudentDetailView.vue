@@ -528,13 +528,15 @@ const ParentCard = defineComponent({
       const fields = [
         h(InfoRow, { label: 'Nama', value: toStr(parent?.fullName) }),
         ...(props.showSensitive
-          ? [h(InfoRow, { label: 'NIK', value: toStr(parent?.nik) })]
+          ? [
+              h(InfoRow, { label: 'NIK', value: toStr(parent?.nik) }),
+              h(InfoRow, { label: 'Tgl Lahir', value: fmtDate(parent?.birthDate) }),
+              h(InfoRow, { label: 'Penghasilan', value: toStr(parent?.incomeRange) }),
+              h(InfoRow, { label: 'No. HP', value: toStr(parent?.phone) }),
+            ]
           : []),
-        h(InfoRow, { label: 'Tgl Lahir', value: fmtDate(parent?.birthDate) }),
         h(InfoRow, { label: 'Pendidikan', value: toStr(parent?.education) }),
         h(InfoRow, { label: 'Pekerjaan', value: toStr(parent?.occupation) }),
-        h(InfoRow, { label: 'Penghasilan', value: toStr(parent?.incomeRange) }),
-        h(InfoRow, { label: 'No. HP', value: toStr(parent?.phone) }),
         h(InfoRow, {
           label: 'Status',
           value: normalizeIsAlive(parent?.isAlive) ? 'Masih Hidup' : 'Almarhum/ah',
