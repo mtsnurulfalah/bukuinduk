@@ -6,3 +6,4 @@ export { useConfirm } from './useConfirm'
 export { useAsync } from './useAsync'
 
 export { usePwaInstall } from './usePwa'
+export { useDashboardData } from './useDashboardData'
