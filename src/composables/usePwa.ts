@@ -34,7 +34,10 @@ export function usePwaInstall() {
   }
 
   function handleBeforeInstallPrompt(event: Event) {
-    event.preventDefault()
+    // Jangan memanggil preventDefault(): Chrome akan menampilkan mekanisme
+    // instalasi bawaannya tanpa meninggalkan warning "Banner not shown".
+    // Event tetap disimpan agar tombol Pasang pada UI aplikasi dapat memanggil
+    // prompt() dari gesture pengguna.
     installPrompt.value = event as BeforeInstallPromptEvent
     isInstallable.value = !dismissedRecently() && !isStandalone.value
   }
