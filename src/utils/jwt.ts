@@ -1,5 +1,3 @@
-import type { User } from '@/types'
-
 /**
  * Decode JWT payload tanpa verifikasi signature
  * (verifikasi dilakukan di server GAS)
