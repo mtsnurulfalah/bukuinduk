@@ -460,7 +460,6 @@ var ScoreHandler = {
   },
 
   remove: function(payload, user) {
-    this._canManage(payload.studentId, user);
     var sheet = getOrCreateSheet(CONFIG.SHEETS.SCORES,
       ['id','studentId','schoolYearId','semester','subjectId','score','predicate','notes','createdAt','updatedAt','createdBy']);
     var rowIdx = findRowById(sheet, payload.id);
@@ -468,6 +467,12 @@ var ScoreHandler = {
     var all = sheetToObjects(sheet);
     var existing = all.find(function(g) { return String(g.id) === String(payload.id); });
     if (!existing) return errorResponse(404, 'Nilai tidak ditemukan.');
+    // Otorisasi berdasarkan studentId yang benar-benar dimiliki oleh nilai.
+    // Jangan mempercayai studentId dari payload sebelum target row ditemukan.
+    this._canManage(existing.studentId, user);
+    if (payload.studentId && String(payload.studentId) !== String(existing.studentId)) {
+      return errorResponse(400, 'ID siswa tidak cocok dengan data nilai.');
+    }
     sheet.deleteRow(rowIdx);
     AuditService.log(user.id, 'DELETE', 'student_score', String(payload.id), existing, null, 'Hapus nilai siswa');
     return successResponse({ message: 'Nilai berhasil dihapus.' });
