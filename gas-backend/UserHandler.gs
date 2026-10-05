@@ -22,6 +22,46 @@ var UserHandler = {
     return s;
   },
 
+  _syncTeacherLink: function(userId, teacherId, previousTeacherId) {
+    var sheet = getSheet(CONFIG.SHEETS.TEACHERS);
+    var headers = getHeaders(sheet);
+    var all = sheetToObjects(sheet);
+
+    if (previousTeacherId && String(previousTeacherId) !== String(teacherId || '')) {
+      var previous = all.find(function(t) { return String(t.id) === String(previousTeacherId); });
+      if (previous) {
+        var previousRow = findRowById(sheet, previous.id);
+        if (previousRow > 0) {
+          var colUserId = headers.indexOf('userId') + 1;
+          if (colUserId > 0 && String(previous.userId || '') === String(userId)) {
+            sheet.getRange(previousRow, colUserId).setValue('');
+          }
+        }
+      }
+    }
+
+    if (!teacherId) return;
+
+    var teacher = all.find(function(t) { return String(t.id) === String(teacherId); });
+    if (!teacher) throw new Error('Guru yang ditautkan tidak ditemukan.');
+
+    var linkedUsers = sheetToObjects(getSheet(CONFIG.SHEETS.USERS)).filter(function(u) {
+      return String(u.id) !== String(userId) && String(u.teacherId || '') === String(teacherId);
+    });
+    if (linkedUsers.length > 0) throw new Error('Guru tersebut sudah ditautkan ke akun pengguna lain.');
+
+    var teacherRow = findRowById(sheet, teacherId);
+    var teacherUserId = String(teacher.userId || '');
+    if (teacherUserId && teacherUserId !== String(userId)) {
+      throw new Error('Guru tersebut sudah terhubung ke akun pengguna lain.');
+    }
+
+    var col = headers.indexOf('userId') + 1;
+    if (teacherRow > 0 && col > 0) {
+      sheet.getRange(teacherRow, col).setValue(String(userId));
+    }
+  },
+
   list: function(payload, user) {
     checkPermission(user, 'user:view');
     var all = sheetToObjects(getSheet(CONFIG.SHEETS.USERS));
@@ -74,6 +114,9 @@ var UserHandler = {
       if (!teacherId) return errorResponse(400, 'Akun guru wajib ditautkan ke data guru.');
       var teacher = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS)).find(function(t) { return String(t.id) === teacherId; });
       if (!teacher) return errorResponse(400, 'Guru yang ditautkan tidak ditemukan.');
+      if (teacher.userId && String(teacher.userId) !== String(id)) return errorResponse(409, 'Guru tersebut sudah terhubung ke akun pengguna lain.');
+      var teacherUsers = all.filter(function(u) { return String(u.teacherId || '') === teacherId; });
+      if (teacherUsers.length) return errorResponse(409, 'Guru tersebut sudah terhubung ke akun pengguna lain.');
     } else {
       teacherId = '';
     }
@@ -94,6 +137,7 @@ var UserHandler = {
       createdBy:    user.id,
     };
     appendRow(sheet, newUser, headers);
+    if (teacherId) this._syncTeacherLink(id, teacherId, '');
     AuditService.log(user.id, 'CREATE', 'user', id, null, this._sanitize(newUser), 'Buat pengguna: ' + newUser.username);
     return successResponse(this._sanitize(newUser));
   },
@@ -116,10 +160,13 @@ var UserHandler = {
     if (payload.email !== undefined && all.some(function(u){ return String(u.id) !== String(payload.id) && String(u.email || '').trim().toLowerCase() === nextEmail; })) return errorResponse(409, 'Email sudah digunakan.');
     var nextRole = payload.role !== undefined ? String(payload.role) : String(old.role || '');
     var nextTeacherId = payload.teacherId !== undefined ? String(payload.teacherId || '') : String(old.teacherId || '');
+    var previousTeacherId = String(old.teacherId || '');
     if (nextRole === 'teacher') {
       if (!nextTeacherId) return errorResponse(400, 'Akun guru wajib ditautkan ke data guru.');
       var linkedTeacher = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS)).find(function(t){ return String(t.id) === nextTeacherId; });
       if (!linkedTeacher) return errorResponse(400, 'Guru yang ditautkan tidak ditemukan.');
+      if (linkedTeacher.userId && String(linkedTeacher.userId) !== String(payload.id)) return errorResponse(409, 'Guru tersebut sudah terhubung ke akun pengguna lain.');
+      if (all.some(function(u){ return String(u.id) !== String(payload.id) && String(u.teacherId || '') === nextTeacherId; })) return errorResponse(409, 'Guru tersebut sudah terhubung ke akun pengguna lain.');
     } else {
       nextTeacherId = '';
     }
@@ -132,6 +179,7 @@ var UserHandler = {
     updated.isActive = normalizeBoolean(updated.isActive, false);
     updated.updatedAt = now();
     updateRow(sheet, rowIdx, updated, headers);
+    this._syncTeacherLink(payload.id, nextTeacherId, previousTeacherId);
     AuditService.log(user.id, 'UPDATE', 'user', payload.id, this._sanitize(old), this._sanitize(updated), 'Edit pengguna');
     return successResponse(this._sanitize(updated));
   },
