@@ -104,8 +104,14 @@ export const useStudentsStore = defineStore('students', () => {
 
   /** Hapus item dari list (setelah arsip/delete) */
   function removeFromList(id: string) {
+    const previousLength = list.value.length
     list.value = list.value.filter(s => s.id !== id)
-    total.value = Math.max(0, total.value - 1)
+
+    // Jangan kurangi total jika ID tidak ditemukan (misalnya respons archive
+    // datang terlambat atau list sudah berubah karena request lain).
+    if (list.value.length !== previousLength) {
+      total.value = Math.max(0, total.value - 1)
+    }
   }
 
   function clearCurrent() {
