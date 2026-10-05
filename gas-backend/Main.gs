@@ -163,7 +163,7 @@ var ROLE_PERMISSIONS = {
   teacher: [
     'student:view:own_class','student:export:own',
     'classroom:view:own','school_year:view',
-    'report:view:own','subject:view','score:view:own_class','score:manage:own_class',
+    'subject:view','score:view:own_class','score:manage:own_class',
   ]
 };
 
