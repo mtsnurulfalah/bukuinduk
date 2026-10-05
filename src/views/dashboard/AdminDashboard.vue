@@ -461,4 +461,26 @@ const shortcuts = [
   },
 ]
 
+
+// ── Data fetching ─────────────────────────────────────────────────
+const dashboardMounted = ref(false)
+const activeSchoolYearId = computed(() => schoolYearStore.activeSchoolYear?.id ?? '')
+
+async function loadData() {
+  if (!schoolYearStore.initialized) {
+    await schoolYearStore.fetch().catch(() => {})
+  }
+  await loadDashboardData(activeSchoolYearId.value || undefined)
+}
+
+watch(activeSchoolYearId, (nextId, previousId) => {
+  if (!dashboardMounted.value || nextId === previousId) return
+  void loadData()
+})
+
+onMounted(async () => {
+  await loadData()
+  dashboardMounted.value = true
+})
+
 </script>
