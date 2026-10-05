@@ -250,6 +250,9 @@ var ClassroomHandler = {
     if (effectiveSchoolYearId) {
       all = all.filter(function(c){ return String(c.schoolYearId) === effectiveSchoolYearId; });
     }
+    if (payload.classroomId) {
+      all = all.filter(function(c){ return String(c.id) === String(payload.classroomId); });
+    }
     var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
     var students    = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
     var grades      = sheetToObjects(getSheet(CONFIG.SHEETS.GRADES));
