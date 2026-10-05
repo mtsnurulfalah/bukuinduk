@@ -723,31 +723,73 @@ var StudentHandler = {
   },
 
   _setStatus: function(id, status, reason, user) {
+    var allowedStatuses = ['active', 'inactive'];
+    if (allowedStatuses.indexOf(status) === -1) {
+      return errorResponse(400, 'Status siswa tidak valid.');
+    }
+
     var sheet   = getSheet(CONFIG.SHEETS.STUDENTS);
     var headers = getHeaders(sheet);
     var rowIdx  = findRowById(sheet, id);
     if (rowIdx < 0) return errorResponse(404, 'Siswa tidak ditemukan.');
 
     var previous = sheetToObjects(sheet).find(function(s) { return String(s.id) === String(id); });
-    var colStatus = headers.indexOf('status') + 1;
-    if (colStatus > 0) sheet.getRange(rowIdx, colStatus).setValue(status);
+    if (!previous) return errorResponse(404, 'Siswa tidak ditemukan.');
 
-    // Simpan metadata keluar saat diarsipkan; kosongkan kembali saat direstore.
+    var statusDate = now().slice(0, 10);
+    var colStatus = headers.indexOf('status') + 1;
     var colExitDate = headers.indexOf('exitDate') + 1;
     var colExitReason = headers.indexOf('exitReason') + 1;
+    var colUpdatedAt = headers.indexOf('updatedAt') + 1;
+
+    if (colStatus > 0) sheet.getRange(rowIdx, colStatus).setValue(status);
+    if (colUpdatedAt > 0) sheet.getRange(rowIdx, colUpdatedAt).setValue(now());
+
     if (status === 'inactive') {
-      if (colExitDate > 0) sheet.getRange(rowIdx, colExitDate).setValue(now().slice(0, 10));
-      if (colExitReason > 0) sheet.getRange(rowIdx, colExitReason).setValue(reason || '');
-    } else if (status === 'active') {
+      if (colExitDate > 0) sheet.getRange(rowIdx, colExitDate).setValue(statusDate);
+      if (colExitReason > 0) sheet.getRange(rowIdx, colExitReason).setValue(reason ? String(reason).trim() : '');
+
+      // Siswa nonaktif tidak boleh tetap menjadi anggota aktif sebuah rombel.
+      // Riwayat enrollment dipertahankan dengan status inactive.
+      var enrollmentSheet = getSheet(CONFIG.SHEETS.ENROLLMENTS);
+      var enrollmentHeaders = getHeaders(enrollmentSheet);
+      var enrollments = sheetToObjects(enrollmentSheet);
+      var colEnrollmentStatus = enrollmentHeaders.indexOf('status') + 1;
+      var colEnrollmentExitDate = enrollmentHeaders.indexOf('exitDate') + 1;
+      enrollments.forEach(function(enr) {
+        if (String(enr.studentId) === String(id) && enr.status === 'active') {
+          var enrollmentRow = findRowById(enrollmentSheet, enr.id);
+          if (enrollmentRow > 0) {
+            if (colEnrollmentStatus > 0) enrollmentSheet.getRange(enrollmentRow, colEnrollmentStatus).setValue('inactive');
+            if (colEnrollmentExitDate > 0) enrollmentSheet.getRange(enrollmentRow, colEnrollmentExitDate).setValue(statusDate);
+          }
+        }
+      });
+    } else {
       if (colExitDate > 0) sheet.getRange(rowIdx, colExitDate).setValue('');
       if (colExitReason > 0) sheet.getRange(rowIdx, colExitReason).setValue('');
     }
 
     this._invalidateCache();
-    AuditService.log(user.id, status === 'active' ? 'RESTORE' : 'ARCHIVE', 'student', id,
-      previous ? { status: previous.status, exitDate: previous.exitDate || '', exitReason: previous.exitReason || '' } : null,
-      { status: status, exitDate: status === 'active' ? '' : now().slice(0, 10), exitReason: status === 'active' ? '' : (reason || '') },
-      'Status siswa: ' + status);
+    cacheRemove('students_completeness');
+
+    AuditService.log(
+      user.id,
+      status === 'active' ? 'RESTORE' : 'ARCHIVE',
+      'student',
+      id,
+      {
+        status: previous.status,
+        exitDate: previous.exitDate || '',
+        exitReason: previous.exitReason || '',
+      },
+      {
+        status: status,
+        exitDate: status === 'active' ? '' : statusDate,
+        exitReason: status === 'active' ? '' : (reason ? String(reason).trim() : ''),
+      },
+      'Status siswa: ' + status
+    );
     return successResponse({ message: 'Status siswa diperbarui.' });
   },
 
@@ -1050,24 +1092,49 @@ var StudentHandler = {
 
   getStats: function(payload, user) {
     checkPermission(user, 'student:view:all');
-    var cacheKey = 'students_stats';
+
+    var schoolYearId = payload.schoolYearId ? String(payload.schoolYearId) : '';
+    var cacheKey = 'students_stats' + (schoolYearId ? '_' + schoolYearId : '');
     var cached = cacheGet(cacheKey);
     if (cached) return successResponse(cached);
 
-    var all = this._getAll();
+    var allStudents = this._getAll();
+    var allEnrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
+    var allClassrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
+    var students = allStudents;
+
+    if (schoolYearId) {
+      var yearStudentIds = {};
+      allEnrollments.forEach(function(enr) {
+        if (String(enr.schoolYearId) === schoolYearId && enr.status === 'active') {
+          yearStudentIds[String(enr.studentId)] = true;
+        }
+      });
+      students = allStudents.filter(function(s) { return yearStudentIds[String(s.id)]; });
+    }
+
     var thisYear = new Date().getFullYear();
     var stats = {
-      totalStudents:      all.length,
-      activeStudents:     all.filter(function(s){ return s.status === 'active'; }).length,
-      maleStudents:       all.filter(function(s){ return s.gender === 'L'; }).length,
-      femaleStudents:     all.filter(function(s){ return s.gender === 'P'; }).length,
-      graduatedStudents:  all.filter(function(s){ return s.status === 'graduated'; }).length,
-      transferredStudents:all.filter(function(s){ return s.status === 'transferred'; }).length,
-      newStudentsThisYear:all.filter(function(s){
-        return s.entryDate && s.entryDate.toString().startsWith(thisYear.toString());
+      totalStudents:       students.length,
+      activeStudents:      students.filter(function(s){ return s.status === 'active'; }).length,
+      maleStudents:        students.filter(function(s){ return s.gender === 'L'; }).length,
+      femaleStudents:      students.filter(function(s){ return s.gender === 'P'; }).length,
+      graduatedStudents:   students.filter(function(s){ return s.status === 'graduated'; }).length,
+      transferredStudents: students.filter(function(s){ return s.status === 'transferred'; }).length,
+      newStudentsThisYear: schoolYearId
+        ? allEnrollments.filter(function(e) {
+            return String(e.schoolYearId) === schoolYearId &&
+              e.entryDate && String(e.entryDate).slice(0, 4) === String(thisYear);
+          }).length
+        : students.filter(function(s){
+            return s.entryDate && String(s.entryDate).startsWith(String(thisYear));
+          }).length,
+      totalTeachers: sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS))
+        .filter(function(t){ return t.status === 'active'; }).length,
+      totalClassrooms: allClassrooms.filter(function(c){
+        return normalizeBoolean(c.isActive, false) &&
+          (!schoolYearId || String(c.schoolYearId) === schoolYearId);
       }).length,
-      totalTeachers:    sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS)).filter(function(t){ return t.status === 'active'; }).length,
-      totalClassrooms:  sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS)).filter(function(c){ return normalizeBoolean(c.isActive, false); }).length,
     };
 
     cacheSet(cacheKey, stats, 300);
