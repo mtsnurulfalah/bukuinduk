@@ -82,6 +82,13 @@ var ClassroomHandler = {
   },
 
   create: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'classroom:manage');
     if (!payload.name) return errorResponse(400, 'Nama kelas wajib diisi.');
     var id = generateUUID();
@@ -111,9 +118,19 @@ var ClassroomHandler = {
     appendRow(sheet, cls, headers);
     AuditService.log(user.id, 'CREATE', 'classroom', id, null, cls, 'Tambah kelas: ' + cls.name);
     return successResponse(Object.assign({}, cls, { id: id }));
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   update: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'classroom:manage');
     var sheet   = getSheet(CONFIG.SHEETS.CLASSROOMS);
     var headers = getHeaders(sheet);
@@ -154,9 +171,19 @@ var ClassroomHandler = {
     updateRow(sheet, rowIdx, updated, headers);
     AuditService.log(user.id, 'UPDATE', 'classroom', payload.id, old, updated, 'Edit kelas');
     return successResponse(updated);
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   remove: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'classroom:manage');
     var sheet  = getSheet(CONFIG.SHEETS.CLASSROOMS);
     var rowIdx = findRowById(sheet, payload.id);
@@ -176,7 +203,10 @@ var ClassroomHandler = {
     sheet.deleteRow(rowIdx);
     AuditService.log(user.id, 'DELETE', 'classroom', payload.id, null, null, 'Hapus kelas');
     return successResponse({ message: 'Kelas berhasil dihapus.' });
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   getStats: function(payload, user) {
     var canViewAll = hasPermission(user,'classroom:view:all');
