@@ -276,7 +276,7 @@ async function loadAll() {
   try {
     const [s, cs, sd, tableData] = await Promise.all([
       reportsService.getDashboardStats(f.schoolYearId || undefined),
-      reportsService.getClassroomStats(f.schoolYearId || undefined),
+      reportsService.getClassroomStats({ schoolYearId: f.schoolYearId || undefined, classroomId: f.classroomId || undefined }),
       reportsService.getStatusDistribution(f),
       studentsService.exportData(f),
     ])
