@@ -62,7 +62,8 @@ function hashPassword(password) {
 }
 
 function verifyPassword(plainPassword, storedHash) {
-  var parts = storedHash.split(':');
+  if (!plainPassword || !storedHash || String(storedHash).indexOf(':') === -1) return false;
+  var parts = String(storedHash).split(':');
   if (parts.length !== 2) return false;
   var salt = parts[0];
   var salted = salt + ':' + plainPassword;
