@@ -99,11 +99,15 @@ var ClassroomHandler = {
     }
     var sheet   = getSheet(CONFIG.SHEETS.CLASSROOMS);
     var headers = getHeaders(sheet);
+    var capacity = payload.capacity === undefined || payload.capacity === '' ? 30 : Number(payload.capacity);
+    if (!Number.isFinite(capacity) || capacity < 1 || capacity > 50) return errorResponse(400, 'Kapasitas kelas harus antara 1 sampai 50 siswa.');
     var cls = {};
     headers.forEach(function(h){ cls[h] = payload[h] !== undefined ? payload[h] : ''; });
     cls.id = id;
+    cls.capacity = capacity;
     cls.isActive = normalizeBoolean(payload.isActive, true);
     cls.createdAt = ts;
+    cls.updatedAt = ts;
     appendRow(sheet, cls, headers);
     AuditService.log(user.id, 'CREATE', 'classroom', id, null, cls, 'Tambah kelas: ' + cls.name);
     return successResponse(Object.assign({}, cls, { id: id }));
@@ -129,9 +133,23 @@ var ClassroomHandler = {
       var candidateYear = String(payload.schoolYearId !== undefined ? payload.schoolYearId : old.schoolYearId);
       if (all.some(function(c){ return String(c.id) !== String(payload.id) && String(c.schoolYearId) === candidateYear && String(c.name || '').trim().toLowerCase() === candidateName; })) return errorResponse(409, 'Nama kelas sudah digunakan pada tahun pelajaran ini.');
     }
+    if (payload.capacity !== undefined) {
+      var nextCapacity = Number(payload.capacity);
+      if (!Number.isFinite(nextCapacity) || nextCapacity < 1 || nextCapacity > 50) return errorResponse(400, 'Kapasitas kelas harus antara 1 sampai 50 siswa.');
+      var activeEnrollmentCount = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS)).filter(function(e){ return String(e.classroomId) === String(payload.id) && e.status === 'active'; }).length;
+      if (nextCapacity < activeEnrollmentCount) return errorResponse(409, 'Kapasitas baru tidak boleh lebih kecil dari jumlah siswa aktif saat ini (' + activeEnrollmentCount + ').');
+      updated.capacity = nextCapacity;
+    }
+    if (payload.schoolYearId && String(payload.schoolYearId) !== String(old.schoolYearId)) {
+      var linkedEnrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS)).filter(function(e){ return String(e.classroomId) === String(payload.id); });
+      if (linkedEnrollments.length) return errorResponse(409, 'Tahun pelajaran kelas tidak dapat diubah karena sudah memiliki riwayat enrollment. Buat kelas baru untuk tahun pelajaran lain.');
+    }
     headers.forEach(function(h){
-      if (payload[h] !== undefined && h !== 'id' && h !== 'createdAt') updated[h] = payload[h];
+      if (payload[h] !== undefined && h !== 'id' && h !== 'createdAt' && h !== 'updatedAt' && h !== 'capacity') updated[h] = payload[h];
     });
+    updated.capacity = Number(updated.capacity || 30);
+    updated.isActive = normalizeBoolean(updated.isActive, false);
+    updated.updatedAt = now();
     updateRow(sheet, rowIdx, updated, headers);
     AuditService.log(user.id, 'UPDATE', 'classroom', payload.id, old, updated, 'Edit kelas');
     return successResponse(updated);
