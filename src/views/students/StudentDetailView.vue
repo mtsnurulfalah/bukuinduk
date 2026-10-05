@@ -763,8 +763,11 @@ async function confirmRestore(): Promise<void> {
     await studentsService.restore(id)
     try {
       // Refetch via store agar store.current juga diperbarui
-      await studentsStore.fetchDetail(id)
-      if (_isMounted) _studentData.value = studentsStore.current
+      const refreshed = await studentsStore.fetchDetail(id)
+      if (_isMounted) {
+        _studentData.value = refreshed ?? studentsStore.current
+        if (refreshed) studentsStore.updateInList(refreshed)
+      }
     } catch {
       // Fallback optimistic jika refetch gagal
       if (_isMounted && _studentData.value) {
