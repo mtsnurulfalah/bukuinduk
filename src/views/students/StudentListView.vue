@@ -546,8 +546,13 @@ const archiveTargetId = ref('')
 const archiveName     = ref('')
 
 async function handleArchive(id: string, name: string) {
+  if (!id || id === 'undefined' || id === 'null') {
+    toast.error('ID siswa tidak valid.')
+    return
+  }
+
   archiveTargetId.value = id
-  archiveName.value     = name
+  archiveName.value     = name || 'Siswa'
 
   // Promise-based confirm — resolve true/false saat user klik confirm/cancel.
   // BUG-2 FIX: doArchive() hanya dipanggil di sini, TIDAK dari @confirm event.
