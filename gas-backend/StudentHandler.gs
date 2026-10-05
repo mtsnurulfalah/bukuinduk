@@ -595,6 +595,13 @@ var StudentHandler = {
   },
 
   create: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'student:create');
 
     var normalizedNis = normalizeIdentifier(payload.nis);
@@ -647,9 +654,19 @@ var StudentHandler = {
     this._invalidateCache();
     AuditService.log(user.id, 'CREATE', 'student', id, null, student, 'Tambah siswa: ' + student.fullName);
     return successResponse(Object.assign({}, student, { id: id }));
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   update: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'student:update');
     var id = payload.id;
     if (!id) return errorResponse(400, 'ID siswa diperlukan.');
@@ -726,7 +743,10 @@ var StudentHandler = {
     this._invalidateCache();
     AuditService.log(user.id, 'UPDATE', 'student', id, old, updated, 'Edit siswa: ' + updated.fullName);
     return successResponse(updated);
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   archive: function(payload, user) {
     checkPermission(user, 'student:archive');
@@ -930,11 +950,21 @@ var StudentHandler = {
   },
 
   enroll: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'student:update');
     var enr = this._doEnroll(payload.studentId, payload.classroomId, payload.schoolYearId);
     cacheRemove('students_completeness');
     return successResponse(enr);
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   _validateEnrollmentTarget: function(studentId, classroomId, schoolYearId, enrollments) {
     if (!classroomId || !schoolYearId) throw new Error('Data enrollment tidak lengkap.');
@@ -1024,6 +1054,13 @@ var StudentHandler = {
   },
 
   importBatch: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'student:import');
     var rows    = payload.rows || [];
     var success = 0;
@@ -1081,7 +1118,10 @@ var StudentHandler = {
     this._invalidateCache();
     AuditService.log(user.id, 'IMPORT', 'student', null, null, { count: success }, 'Import ' + success + ' siswa');
     return successResponse({ success: success, failed: failed, errors: errors });
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   exportData: function(payload, user) {
     if (!hasPermission(user, 'student:export') && !hasPermission(user, 'student:export:own')) {
