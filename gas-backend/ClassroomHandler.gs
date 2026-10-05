@@ -48,7 +48,9 @@ var ClassroomHandler = {
       var teacher = teachers.find(function(t){ return String(t.id) === String(c.homeroomTeacherId); });
       var sy = schoolYears.find(function(s){ return String(s.id) === String(c.schoolYearId); });
       var count = enrollments.filter(function(e){
-        return String(e.classroomId) === String(c.id) && e.status === 'active';
+        return String(e.classroomId) === String(c.id) &&
+          String(e.schoolYearId) === String(c.schoolYearId) &&
+          e.status === 'active';
       }).length;
       return Object.assign({}, c, {
         gradeName: grade ? grade.name : '',
@@ -262,7 +264,9 @@ var ClassroomHandler = {
 
     var stats = all.map(function(cls) {
       var enrs = enrollments.filter(function(e){
-        return String(e.classroomId) === String(cls.id) && e.status === 'active';
+        return String(e.classroomId) === String(cls.id) &&
+          String(e.schoolYearId) === String(cls.schoolYearId) &&
+          e.status === 'active';
       });
       var sids = enrs.map(function(e){ return String(e.studentId); });
       var clsStudents = students.filter(function(s){ return sids.indexOf(String(s.id)) !== -1; });
