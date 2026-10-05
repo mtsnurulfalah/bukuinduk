@@ -82,7 +82,12 @@ Salin semua file dari folder `gas-backend/` ke editor GAS:
 - `TeacherHandler.gs`
 - `UserHandler.gs`
 - `ReportHandler.gs`
+- `AcademicHandler.gs` **(wajib untuk Mata Pelajaran & Nilai Siswa)**
 - `Setup.gs`
+
+> **Penting — sinkronisasi backend:** folder `gas-backend/` adalah source of truth untuk Web App GAS. Setelah mengubah file backend (termasuk `Main.gs`, `ReportHandler.gs`, atau `AcademicHandler.gs`), **simpan semua file lalu buat `Deploy → Manage deployments → Edit → New version`** pada Web App yang sama. Jangan mengandalkan deployment lama karena frontend dapat memanggil action yang belum dikenal oleh backend.
+
+> **Diagnosa error action 404:** pesan seperti `Report method tidak ditemukan`, `Action "subjects.list" tidak ditemukan`, atau `Action "scores.list" tidak ditemukan` menunjukkan Web App GAS yang sedang dipakai frontend belum memuat kontrak API dari source terbaru. Pastikan `Main.gs`, `ReportHandler.gs`, dan `AcademicHandler.gs` yang di-deploy berasal dari commit terbaru.
 
 ### 4. Konfigurasi Script Properties
 
