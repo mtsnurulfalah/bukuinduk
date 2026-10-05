@@ -1,4 +1,4 @@
-import type { ApiResponse, GasRequest } from '@/types'
+import type { ApiResponse } from '@/types'
 import { getToken, clearAuth } from '@/utils'
 
 // BUG-01 FIX: Validasi VITE_GAS_URL di module level agar error terdeteksi saat startup,
