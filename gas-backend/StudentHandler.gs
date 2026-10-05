@@ -170,7 +170,7 @@ var StudentHandler = {
    * Ambil siswa yang boleh dilihat user. Teacher hanya boleh melihat siswa
    * yang terdaftar aktif pada kelas yang diampunya.
    */
-  _getViewableStudent: function(studentId, user) {
+  _getViewableStudent: function(studentId, user, schoolYearId) {
     if (!hasPermission(user, 'student:view:all') && !hasPermission(user, 'student:view:own_class')) {
       throw new Error('FORBIDDEN');
     }
@@ -184,18 +184,20 @@ var StudentHandler = {
       if (!user.teacherId) throw new Error('FORBIDDEN');
       var classrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
       var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
+      var requestedYearId = schoolYearId ? String(schoolYearId) : '';
       var activeYear = schoolYears.find(function(y) { return normalizeBoolean(y.isActive, false); });
+      var effectiveYearId = requestedYearId || (activeYear ? String(activeYear.id) : '');
       var classIds = classrooms
         .filter(function(c) {
           return String(c.homeroomTeacherId) === String(user.teacherId) &&
-            (!activeYear || String(c.schoolYearId) === String(activeYear.id));
+            (!effectiveYearId || String(c.schoolYearId) === effectiveYearId);
         })
         .map(function(c) { return String(c.id); });
       var isMyStudent = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS)).some(function(e) {
         return String(e.studentId) === String(studentId) &&
           classIds.indexOf(String(e.classroomId)) !== -1 &&
           e.status === 'active' &&
-          (!activeYear || String(e.schoolYearId) === String(activeYear.id));
+          (!effectiveYearId || String(e.schoolYearId) === effectiveYearId);
       });
       if (!isMyStudent) throw new Error('FORBIDDEN');
     }
@@ -204,7 +206,7 @@ var StudentHandler = {
   },
 
   get: function(payload, user) {
-    var source = this._getViewableStudent(payload.id, user);
+    var source = this._getViewableStudent(payload.id, user, payload.schoolYearId);
     if (!source) return errorResponse(404, 'Siswa tidak ditemukan.');
 
     // Jangan mutasi objek cache _getAll(): salin sebelum menghapus field sensitif.
@@ -225,14 +227,10 @@ var StudentHandler = {
   },
 
   getFull: function(payload, user) {
-    if (!hasPermission(user, 'student:view:all') && !hasPermission(user, 'student:view:own_class')) {
-      throw new Error('FORBIDDEN');
-    }
+    var source = this._getViewableStudent(payload.id, user, payload.schoolYearId);
+    if (!source) return errorResponse(404, 'Siswa tidak ditemukan.');
 
-    var result = JSON.parse(JSON.stringify(
-      this._getAll().find(function(x) { return String(x.id) === String(payload.id); }) || null
-    ));
-    if (!result) return errorResponse(404, 'Siswa tidak ditemukan.');
+    var result = JSON.parse(JSON.stringify(source));
 
     // Normalisasi nama kolom lama/typo dari spreadsheet ke nama field frontend.
     // Header database saat ini memakai "addres" dan "endryDate".
@@ -248,20 +246,7 @@ var StudentHandler = {
     var allClassrooms  = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
     var allSchoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
 
-    // BUG-40 FIX: Untuk teacher, pastikan siswa ada di kelas yang diampu.
-    if (user.role === 'teacher') {
-      if (!user.teacherId) throw new Error('FORBIDDEN');
-      var myClassroomIds = allClassrooms
-        .filter(function(c) { return String(c.homeroomTeacherId) === String(user.teacherId); })
-        .map(function(c) { return String(c.id); });
-      var isMyStudent = allEnrollments.some(function(e) {
-        return String(e.studentId) === String(payload.id) &&
-               myClassroomIds.indexOf(String(e.classroomId)) !== -1 &&
-               e.status === 'active';
-      });
-      if (!isMyStudent) throw new Error('FORBIDDEN');
-      delete result.nik;
-    }
+    // Scope teacher telah diverifikasi oleh _getViewableStudent().
 
     // Lampirkan relasi
     result.parents = sheetToObjects(getSheet(CONFIG.SHEETS.PARENTS))
@@ -297,18 +282,13 @@ var StudentHandler = {
     // Gunakan allEnrollments/allClassrooms/allSchoolYears yang sudah dibaca di atas
     result.currentEnrollment = (function() {
       var activeSchoolYear = allSchoolYears.find(function(y) { return normalizeBoolean(y.isActive, false); });
+      var requestedYearId = payload.schoolYearId ? String(payload.schoolYearId) : '';
+      var effectiveYearId = requestedYearId || (activeSchoolYear ? String(activeSchoolYear.id) : '');
       var enr = allEnrollments.find(function(e) {
         return String(e.studentId) === String(payload.id) &&
           e.status === 'active' &&
-          activeSchoolYear &&
-          String(e.schoolYearId) === String(activeSchoolYear.id);
+          (!effectiveYearId || String(e.schoolYearId) === effectiveYearId);
       });
-      // Fallback untuk instalasi lama yang belum memiliki tahun aktif.
-      if (!enr) {
-        enr = allEnrollments.find(function(e) {
-          return String(e.studentId) === String(payload.id) && e.status === 'active';
-        });
-      }
       if (!enr) return null;
       var cls = allClassrooms.find(function(c) { return String(c.id) === String(enr.classroomId); });
       var sy  = allSchoolYears.find(function(s) { return String(s.id) === String(enr.schoolYearId); });
@@ -320,6 +300,15 @@ var StudentHandler = {
 
     // Teacher role: hapus data sensitif
     if (user.role === 'teacher') {
+      delete result.phone;
+      delete result.email;
+      delete result.address;
+      delete result.rtRw;
+      delete result.village;
+      delete result.district;
+      delete result.city;
+      delete result.province;
+      delete result.postalCode;
       result.parents = result.parents.map(function(p) {
         var c = Object.assign({}, p);
         delete c.nik;
@@ -888,7 +877,16 @@ var StudentHandler = {
     var parents = sheetToObjects(getSheet(CONFIG.SHEETS.PARENTS))
       .filter(function(p) { return String(p.studentId != null ? p.studentId : p.studentID) === String(payload.studentId); });
     if (user.role === 'teacher') {
-      parents = parents.map(function(p) { var c = Object.assign({}, p); delete c.nik; return c; });
+      parents = parents.map(function(p) {
+        var c = Object.assign({}, p);
+        delete c.nik;
+        delete c.incomeRange;
+        delete c.phone;
+        delete c.address;
+        delete c.religion;
+        delete c.birthDate;
+        return c;
+      });
     }
     return successResponse(parents);
   },
