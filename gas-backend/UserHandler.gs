@@ -85,6 +85,13 @@ var UserHandler = {
   },
 
   create: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'user:manage');
     if (!payload.username || !payload.fullName || !payload.email || !payload.role || !payload.password)
       return errorResponse(400, 'Semua field wajib (username, fullName, email, role, password).');
@@ -140,9 +147,19 @@ var UserHandler = {
     if (teacherId) this._syncTeacherLink(id, teacherId, '');
     AuditService.log(user.id, 'CREATE', 'user', id, null, this._sanitize(newUser), 'Buat pengguna: ' + newUser.username);
     return successResponse(this._sanitize(newUser));
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   update: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'user:manage');
     var sheet   = getSheet(CONFIG.SHEETS.USERS);
     var headers = getHeaders(sheet);
@@ -182,9 +199,19 @@ var UserHandler = {
     this._syncTeacherLink(payload.id, nextTeacherId, previousTeacherId);
     AuditService.log(user.id, 'UPDATE', 'user', payload.id, this._sanitize(old), this._sanitize(updated), 'Edit pengguna');
     return successResponse(this._sanitize(updated));
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   toggleActive: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'user:manage');
     var sheet   = getSheet(CONFIG.SHEETS.USERS);
     var headers = getHeaders(sheet);
@@ -203,9 +230,19 @@ var UserHandler = {
     if (colUpdated > 0) sheet.getRange(rowIdx, colUpdated).setValue(now());
     AuditService.log(user.id, 'UPDATE', 'user', payload.id, null, { isActive: newStatus }, 'Toggle status pengguna');
     return successResponse(this._sanitize(Object.assign({}, found, { isActive: newStatus })));
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   resetPassword: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'user:manage');
     if (!payload.newPassword || payload.newPassword.length < 8)
       return errorResponse(400, 'Password baru minimal 8 karakter.');
@@ -221,9 +258,19 @@ var UserHandler = {
     sheet.getRange(rowIdx, colUpdated).setValue(now());
     AuditService.log(user.id, 'UPDATE', 'user', payload.id, null, null, 'Reset password pengguna');
     return successResponse({ message: 'Password berhasil direset.' });
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   remove: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'user:manage');
     if (String(payload.id) === String(user.id))
       return errorResponse(400, 'Tidak dapat menghapus akun Anda sendiri.');
@@ -237,5 +284,8 @@ var UserHandler = {
     sheet.deleteRow(rowIdx);
     AuditService.log(user.id, 'DELETE', 'user', payload.id, null, null, 'Hapus pengguna');
     return successResponse({ message: 'Pengguna berhasil dihapus.' });
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 };
