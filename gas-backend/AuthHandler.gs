@@ -107,10 +107,8 @@ var AuthHandler = {
 
     // BUG-46 FIX: Simpan timestamp perubahan password agar token lama bisa diinvalidasi.
     // verifyJWT() akan menolak token dengan iat < passwordChangedAt.
-    var colChangedAt = headers.indexOf('passwordChangedAt') + 1;
-    if (rowIdx > 0 && colChangedAt > 0) {
-      sheet.getRange(rowIdx, colChangedAt).setValue(Math.floor(Date.now() / 1000));
-    }
+    var colChangedAt = ensureHeader(sheet, 'passwordChangedAt');
+    if (rowIdx > 0) sheet.getRange(rowIdx, colChangedAt).setValue(Math.floor(Date.now() / 1000));
 
     AuditService.log(user.id, 'UPDATE', 'user', user.id, null, null, 'Ganti password');
     return successResponse({ message: 'Password berhasil diubah. Silakan login kembali.' });
