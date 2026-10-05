@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import BaseBadge from '@/components/ui/BaseBadge.vue'
-import { formatStudentStatus, studentStatusColor } from '@/utils'
+import { formatStudentStatus } from '@/utils'
 
 const props = defineProps<{ status?: string | null; dot?: boolean }>()
 
