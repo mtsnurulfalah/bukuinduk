@@ -1133,7 +1133,18 @@ var StudentHandler = {
         if (!row || typeof row !== 'object' || Array.isArray(row)) {
           throw new Error('Format data baris tidak valid');
         }
+        row.fullName = normalizeIdentifier(row.fullName);
+        row.gender = normalizeIdentifier(row.gender).toUpperCase();
+        row.entryDate = normalizeIdentifier(row.entryDate);
+
         if (!row.fullName) throw new Error('Nama lengkap kosong');
+        if (!row.gender || ['L', 'P'].indexOf(row.gender) === -1) {
+          throw new Error('Jenis kelamin harus L/P');
+        }
+        if (!row.entryDate) throw new Error('Tanggal masuk kosong');
+        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(row.entryDate)) {
+          throw new Error('Tanggal masuk harus YYYY-MM-DD');
+        }
 
         // Normalisasi identifier agar hasil import konsisten meski XLSX/GAS
         // mengirimkannya sebagai number atau mengandung whitespace.
@@ -1171,7 +1182,8 @@ var StudentHandler = {
         success++;
       } catch (e) {
         failed++;
-        errors.push('Baris ' + (i + 2) + ': ' + e.message);
+        var errorMessage = (e && e.message) ? e.message : String(e);
+        errors.push('Baris ' + (i + 2) + ': ' + errorMessage);
       }
     });
 
