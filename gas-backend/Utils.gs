@@ -43,13 +43,6 @@ function normalizeIdentifier(value) {
   return value === null || value === undefined ? '' : String(value).trim();
 }
 
-// ── CORS preflight ────────────────────────────────────────────
-function handleCors() {
-  return ContentService
-    .createTextOutput('')
-    .setMimeType(ContentService.MimeType.TEXT);
-}
-
 // ── Password hashing (SHA-256 + salt) ────────────────────────
 function _generateSalt() {
   // BUG-33 FIX: Gunakan Utilities.getUuid() sebagai sumber entropy yang lebih baik
@@ -123,19 +116,29 @@ function verifyJWT(token) {
 
     // BUG-46 FIX: Validasi token tidak diterbitkan sebelum password terakhir diubah.
     // Cek passwordChangedAt dari user record di sheet — jika iat < passwordChangedAt, token lama.
-    if (payload.id) {
-      try {
-        var users = sheetToObjects(getSheet(CONFIG.SHEETS.USERS));
-        var u = users.find(function(x) { return String(x.id) === String(payload.id); });
-        if (u && u.passwordChangedAt) {
-          var changedAt = parseInt(u.passwordChangedAt);
-          if (!isNaN(changedAt) && payload.iat < changedAt) return null;
-        }
-      } catch (lookupErr) {
-        // Jika lookup gagal (misal sheet error), jangan block — biarkan token berlaku
+    if (!payload.id) return null;
+    var users = sheetToObjects(getSheet(CONFIG.SHEETS.USERS));
+    var u = users.find(function(x) { return String(x.id) === String(payload.id); });
+    if (!u) return null;
+    if (!normalizeBoolean(u.isActive, false)) return null;
+
+    if (u.passwordChangedAt) {
+      var changedAt = Number(u.passwordChangedAt);
+      if (!Number.isFinite(changedAt)) {
+        var parsedChangedAt = new Date(String(u.passwordChangedAt)).getTime();
+        changedAt = Number.isFinite(parsedChangedAt) ? Math.floor(parsedChangedAt / 1000) : 0;
       }
+      if (changedAt && payload.iat < changedAt) return null;
     }
 
+    // Sheet menjadi sumber kebenaran untuk role/profil agar perubahan role
+    // atau teacherId berlaku segera tanpa menunggu JWT lama kadaluarsa.
+    payload.username = u.username || payload.username || '';
+    payload.fullName = u.fullName || payload.fullName || '';
+    payload.email = u.email || payload.email || '';
+    payload.role = u.role || payload.role;
+    payload.teacherId = u.teacherId || null;
+    payload.isActive = true;
     return payload;
   } catch (e) {
     return null;
