@@ -14,8 +14,8 @@ import { DEBOUNCE_DELAY } from '@/constants'
  * query.value = '' yang men-trigger watch → debounce → onSearch('') lagi
  * (double call). Sekarang: set flag untuk skip satu watch cycle.
  */
-export function useSearch(onSearch: (q: string) => void, delay = DEBOUNCE_DELAY) {
-  const query = ref('')
+export function useSearch(onSearch: (q: string) => void, delay = DEBOUNCE_DELAY, initialQuery = '') {
+  const query = ref(initialQuery)
   let timer: ReturnType<typeof setTimeout> | null = null
   // Flag untuk mencegah double-call saat clear() dipanggil
   let _skipNextWatch = false
