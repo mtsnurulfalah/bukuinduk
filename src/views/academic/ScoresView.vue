@@ -203,25 +203,55 @@ async function loadStudentsAndScores() {
   isLoading.value = true
   error.value = ''
   resetMaps()
+
   try {
     await loadContext()
-    const [subjectData, studentResponse, gradeData] = await Promise.all([
-      subjectsService.list(schoolYearId.value, true),
-      studentsService.list({
+
+    // Jangan gunakan Promise.all untuk tiga sumber data di sini:
+    // kegagalan subjects.list sebelumnya membuat halaman Nilai menampilkan
+    // error "subjects.list" seolah-olah itu kegagalan modul nilai.
+    let subjectError = ''
+    let studentError = ''
+    let scoreError = ''
+
+    try {
+      subjects.value = await subjectsService.list(schoolYearId.value, true)
+    } catch (e: unknown) {
+      subjectError = e instanceof Error ? e.message : 'Gagal memuat mata pelajaran.'
+    }
+
+    try {
+      const studentResponse = await studentsService.list({
         schoolYearId: schoolYearId.value,
         classroomId: classroomId.value || undefined,
         page: 1,
         limit: 1000,
-      }),
-      gradesService.list({
+      })
+      students.value = studentResponse.items
+    } catch (e: unknown) {
+      studentError = e instanceof Error ? e.message : 'Gagal memuat daftar siswa.'
+    }
+
+    try {
+      grades.value = await gradesService.list({
         schoolYearId: schoolYearId.value,
         semester: Number(semester.value) as 1 | 2,
         classroomId: classroomId.value || undefined,
-      }),
-    ])
-    subjects.value = subjectData
-    students.value = studentResponse.items
-    grades.value = gradeData
+      })
+    } catch (e: unknown) {
+      scoreError = e instanceof Error ? e.message : 'Gagal memuat data nilai.'
+    }
+
+    const errors = [
+      subjectError ? `Mata pelajaran: ${subjectError}` : '',
+      studentError ? `Siswa: ${studentError}` : '',
+      scoreError ? `Nilai: ${scoreError}` : '',
+    ].filter(Boolean)
+
+    if (errors.length) {
+      error.value = errors.join(' · ')
+      return
+    }
 
     const activeStudentIds = new Set(students.value.map(s => s.id))
     grades.value.forEach(g => {
@@ -232,7 +262,7 @@ async function loadStudentsAndScores() {
       originalMap[key] = value
     })
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Gagal memuat data nilai.'
+    error.value = e instanceof Error ? e.message : 'Gagal memuat konteks data nilai.'
   } finally {
     isLoading.value = false
   }
