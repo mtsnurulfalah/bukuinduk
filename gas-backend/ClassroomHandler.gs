@@ -328,6 +328,13 @@ var GradeHandler = {
     return successResponse(all);
   },
   create: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'classroom:manage');
     var sheet = getSheet(CONFIG.SHEETS.GRADES);
     var headers = getHeaders(sheet);
@@ -341,8 +348,18 @@ var GradeHandler = {
     var grade = { id: generateUUID(), name: name, level: level, description: String(payload.description || '').trim(), createdAt: now(), updatedAt: now() };
     appendRow(sheet, grade, headers);
     return successResponse(grade);
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
   update: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'classroom:manage');
     var sheet  = getSheet(CONFIG.SHEETS.GRADES);
     var headers = getHeaders(sheet);
@@ -368,8 +385,18 @@ var GradeHandler = {
     updated.updatedAt = now();
     updateRow(sheet, rowIdx, updated, headers);
     return successResponse(updated);
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
   remove: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'classroom:manage');
     var linkedClassrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS)).filter(function(c){ return String(c.gradeId) === String(payload.id); });
     if (linkedClassrooms.length > 0) return errorResponse(409, 'Tingkat kelas tidak dapat dihapus karena masih digunakan oleh ' + linkedClassrooms.length + ' kelas.');
@@ -378,7 +405,10 @@ var GradeHandler = {
     if (rowIdx < 0) return errorResponse(404, 'Tingkat tidak ditemukan.');
     sheet.deleteRow(rowIdx);
     return successResponse({ message: 'Tingkat berhasil dihapus.' });
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 };
 
 // ── SchoolYearHandler ─────────────────────────────────────────
@@ -400,17 +430,53 @@ var SchoolYearHandler = {
     return successResponse(all.map(function(s){ return Object.assign({}, s, { isActive: normalizeBoolean(s.isActive, false) }); }));
   },
   create: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'school_year:manage');
-    if (!payload.name || !/^\d{4}\/\d{4}$/.test(payload.name))
+    var name = String(payload.name || '').trim();
+    if (!/^\d{4}\/\d{4}$/.test(name)) {
       return errorResponse(400, 'Format nama harus YYYY/YYYY.');
+    }
+    var startDate = String(payload.startDate || '').trim();
+    var endDate = String(payload.endDate || '').trim();
+    if (startDate && endDate && startDate > endDate) {
+      return errorResponse(400, 'Tanggal mulai tidak boleh setelah tanggal selesai.');
+    }
     var sheet   = getSheet(CONFIG.SHEETS.SCHOOL_YEARS);
     var headers = getHeaders(sheet);
-    var sy = { id: generateUUID(), name: payload.name, startDate: payload.startDate||'', endDate: payload.endDate||'', isActive: payload.isActive||false, createdAt: now() };
+    var all = sheetToObjects(sheet);
+    if (all.some(function(item) { return String(item.name || '').trim() === name; })) {
+      return errorResponse(409, 'Tahun pelajaran sudah digunakan.');
+    }
+    var sy = {
+      id: generateUUID(),
+      name: name,
+      startDate: startDate,
+      endDate: endDate,
+      isActive: normalizeBoolean(payload.isActive, false),
+      createdAt: now(),
+      updatedAt: now(),
+    };
     appendRow(sheet, sy, headers);
     if (sy.isActive) this._deactivateOthers(sheet, headers, sy.id);
     return successResponse(sy);
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
   update: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'school_year:manage');
     var sheet  = getSheet(CONFIG.SHEETS.SCHOOL_YEARS);
     var headers = getHeaders(sheet);
@@ -430,8 +496,18 @@ var SchoolYearHandler = {
     if (updated.isActive) this._deactivateOthers(sheet, headers, payload.id);
     updateRow(sheet, rowIdx, updated, headers);
     return successResponse(updated);
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
   setActive: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'school_year:manage');
     var sheet   = getSheet(CONFIG.SHEETS.SCHOOL_YEARS);
     var headers = getHeaders(sheet);
@@ -443,22 +519,40 @@ var SchoolYearHandler = {
     var all = sheetToObjects(sheet);
     var sy = all.find(function(s){ return String(s.id) === String(payload.id); });
     return successResponse(Object.assign({}, sy, { isActive: true }));
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
   remove: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'school_year:manage');
     var sheet = getSheet(CONFIG.SHEETS.SCHOOL_YEARS);
     var rowIdx = findRowById(sheet, payload.id);
     if (rowIdx < 0) return errorResponse(404, 'Tahun pelajaran tidak ditemukan.');
+
+    var currentAll = sheetToObjects(sheet);
+    var current = currentAll.find(function(item) { return String(item.id) === String(payload.id); });
+    if (current && normalizeBoolean(current.isActive, false)) {
+      return errorResponse(409, 'Tahun pelajaran aktif tidak dapat dihapus. Tetapkan tahun aktif lain terlebih dahulu.');
+    }
 
     // Jangan hapus tahun pelajaran yang masih direferensikan oleh data historis.
     var linkedClassrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS))
       .filter(function(c) { return String(c.schoolYearId) === String(payload.id); });
     var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS))
       .filter(function(e) { return String(e.schoolYearId) === String(payload.id); });
-    var subjects = [];
-    var scores = [];
-    try { subjects = sheetToObjects(getSheet(CONFIG.SHEETS.SUBJECTS)).filter(function(x){ return String(x.schoolYearId) === String(payload.id); }); } catch (e) {}
-    try { scores = sheetToObjects(getSheet(CONFIG.SHEETS.SCORES)).filter(function(x){ return String(x.schoolYearId) === String(payload.id); }); } catch (e) {}
+    var subjects = sheetToObjects(getOrCreateSheet(CONFIG.SHEETS.SUBJECTS,
+      ['id','schoolYearId','code','name','shortName','groupName','isActive','sortOrder','createdAt','updatedAt','createdBy']))
+      .filter(function(x){ return String(x.schoolYearId) === String(payload.id); });
+    var scores = sheetToObjects(getOrCreateSheet(CONFIG.SHEETS.SCORES,
+      ['id','studentId','schoolYearId','semester','subjectId','score','predicate','notes','createdAt','updatedAt','createdBy']))
+      .filter(function(x){ return String(x.schoolYearId) === String(payload.id); });
     var linkedTotal = linkedClassrooms.length + enrollments.length + subjects.length + scores.length;
     if (linkedTotal > 0) {
       return errorResponse(409,
@@ -470,7 +564,10 @@ var SchoolYearHandler = {
 
     sheet.deleteRow(rowIdx);
     return successResponse({ message: 'Tahun pelajaran dihapus.' });
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
   _deactivateOthers: function(sheet, headers, exceptId) {
     var all = sheetToObjects(sheet);
     var colIsActive = headers.indexOf('isActive') + 1;
