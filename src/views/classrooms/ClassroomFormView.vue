@@ -85,29 +85,27 @@ async function handleSubmit() {
 }
 
 onMounted(async () => {
-  // Fetch schoolYear + grades. schoolYearStore.fetch() skip jika sudah initialized,
-  // tapi grades bisa kosong jika fetch pertama (via router guard) hanya berhasil
-  // sebagian. Cek setelah fetch dan retry grades jika masih kosong.
-  await schoolYearStore.fetch()
+  try {
+    await schoolYearStore.fetch()
+    if (schoolYearStore.grades.length === 0) {
+      await schoolYearStore.fetchGrades()
+    }
 
-  // Jika grades kosong setelah fetch (silent fail pertama kali atau store sudah
-  // initialized tapi grades belum terisi), fetch grades secara eksplisit.
-  if (schoolYearStore.grades.length === 0) {
-    await schoolYearStore.fetchGrades()
-  }
+    form.schoolYearId = schoolYearStore.activeSchoolYear?.id ?? ''
 
-  form.schoolYearId = schoolYearStore.activeSchoolYear?.id ?? ''
+    const teachers = await teachersService.listActive()
+    teacherOptions.value = teachers.map(t => ({ value: t.id, label: t.fullName }))
 
-  const teachers = await teachersService.listActive()
-  teacherOptions.value = teachers.map(t => ({ value: t.id, label: t.fullName }))
-
-  if (isEdit.value) {
-    const cls = await classroomsService.get(route.params.id as string)
-    Object.assign(form, {
-      name: cls.name, gradeId: cls.gradeId, schoolYearId: cls.schoolYearId,
-      homeroomTeacherId: cls.homeroomTeacherId ?? '',
-      capacity: cls.capacity ?? 30, isActive: cls.isActive,
-    })
+    if (isEdit.value) {
+      const cls = await classroomsService.get(route.params.id as string)
+      Object.assign(form, {
+        name: cls.name, gradeId: cls.gradeId, schoolYearId: cls.schoolYearId,
+        homeroomTeacherId: cls.homeroomTeacherId ?? '',
+        capacity: cls.capacity ?? 30, isActive: cls.isActive,
+      })
+    }
+  } catch (e: unknown) {
+    errorMsg.value = e instanceof Error ? e.message : 'Gagal memuat data formulir kelas.'
   }
 })
 </script>
