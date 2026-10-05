@@ -25,8 +25,14 @@ var ClassroomHandler = {
     var canViewOwn = hasPermission(user,'classroom:view:own');
     if (!canViewAll && !canViewOwn) throw new Error('FORBIDDEN');
     var all = this._getAll();
-    if (payload.schoolYearId) {
-      all = all.filter(function(c){ return String(c.schoolYearId) === String(payload.schoolYearId); });
+    var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
+    var activeYear = schoolYears.find(function(y) { return normalizeBoolean(y.isActive, false); });
+    var effectiveSchoolYearId = payload.schoolYearId
+      ? String(payload.schoolYearId)
+      : (user.role === 'teacher' && activeYear ? String(activeYear.id) : '');
+
+    if (effectiveSchoolYearId) {
+      all = all.filter(function(c){ return String(c.schoolYearId) === effectiveSchoolYearId; });
     }
     if (user.role === 'teacher' && !canViewAll) {
       if (!user.teacherId) return successResponse([]);
@@ -35,7 +41,6 @@ var ClassroomHandler = {
 
     var grades = sheetToObjects(getSheet(CONFIG.SHEETS.GRADES));
     var teachers = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS));
-    var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
     var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
 
     all = all.map(function(c) {
@@ -63,7 +68,14 @@ var ClassroomHandler = {
     if (!canViewAll && !hasPermission(user,'classroom:view:own')) throw new Error('FORBIDDEN');
     var all = this._getAll();
     var c = all.find(function(x){ return String(x.id) === String(payload.id); });
-    if (c && user.role === 'teacher' && String(c.homeroomTeacherId) !== String(user.teacherId)) throw new Error('FORBIDDEN');
+    if (c && user.role === 'teacher') {
+      var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
+      var activeYear = schoolYears.find(function(y) { return normalizeBoolean(y.isActive, false); });
+      if (String(c.homeroomTeacherId) !== String(user.teacherId) ||
+          (activeYear && String(c.schoolYearId) !== String(activeYear.id))) {
+        throw new Error('FORBIDDEN');
+      }
+    }
     if (!c) return errorResponse(404, 'Kelas tidak ditemukan.');
 
     var grades = sheetToObjects(getSheet(CONFIG.SHEETS.GRADES));
@@ -226,11 +238,17 @@ var ClassroomHandler = {
     var canViewAll = hasPermission(user,'classroom:view:all');
     if (!canViewAll && !hasPermission(user,'classroom:view:own')) throw new Error('FORBIDDEN');
     var all = this._getAll();
+    var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
+    var activeYear = schoolYears.find(function(y) { return normalizeBoolean(y.isActive, false); });
+    var effectiveSchoolYearId = payload.schoolYearId
+      ? String(payload.schoolYearId)
+      : (user.role === 'teacher' && activeYear ? String(activeYear.id) : '');
+
     if (user.role === 'teacher' && !canViewAll) {
       all = all.filter(function(c){ return String(c.homeroomTeacherId) === String(user.teacherId); });
     }
-    if (payload.schoolYearId) {
-      all = all.filter(function(c){ return String(c.schoolYearId) === String(payload.schoolYearId); });
+    if (effectiveSchoolYearId) {
+      all = all.filter(function(c){ return String(c.schoolYearId) === effectiveSchoolYearId; });
     }
     var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
     var students    = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
@@ -263,13 +281,19 @@ var ClassroomHandler = {
     if (!canViewAll && !canViewOwn) throw new Error('FORBIDDEN');
     var teacherId = canViewAll ? payload.teacherId : user.teacherId;
     if (!teacherId) return successResponse([]);
+
+    var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
+    var activeYear = schoolYears.find(function(y) { return normalizeBoolean(y.isActive, false); });
+    var effectiveSchoolYearId = payload.schoolYearId
+      ? String(payload.schoolYearId)
+      : (!canViewAll && activeYear ? String(activeYear.id) : '');
+
     var all = this._getAll().filter(function(c){
-      return String(c.homeroomTeacherId) === String(teacherId);
+      return String(c.homeroomTeacherId) === String(teacherId) &&
+        (!effectiveSchoolYearId || String(c.schoolYearId) === effectiveSchoolYearId);
     });
 
     var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
-    var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
-
     all = all.map(function(c){
       var count = enrollments.filter(function(e){
         return String(e.classroomId) === String(c.id) && e.status === 'active';
