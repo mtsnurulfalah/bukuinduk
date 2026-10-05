@@ -26,6 +26,7 @@
 
       <!-- Prev -->
       <button
+        type="button"
         :disabled="currentPage === 1"
         class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         title="Sebelumnya"
@@ -69,6 +70,7 @@
 
       <!-- Last -->
       <button
+        type="button"
         :disabled="currentPage === totalPages"
         class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         title="Halaman terakhir"
