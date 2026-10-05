@@ -14,7 +14,8 @@ export const useStudentsStore = defineStore('students', () => {
   const isLoadingDetail = ref(false)
   const error = ref<string | null>(null)
 
-  // Token request detail agar respons lama tidak menimpa siswa yang lebih baru.
+  // Token request mencegah respons lama menimpa hasil terbaru saat filter berubah cepat.
+  let listRequestVersion = 0
   let detailRequestVersion = 0
 
   // Filters yang aktif saat ini (dipertahankan saat navigasi back)
@@ -33,22 +34,26 @@ export const useStudentsStore = defineStore('students', () => {
   // ── Actions ──────────────────────────────────────────────────
 
   async function fetchList(overrides?: Partial<StudentFilters>): Promise<void> {
+    const requestVersion = ++listRequestVersion
+    if (overrides && Object.keys(overrides).length) {
+      filters.value = { ...filters.value, ...overrides }
+    }
     isLoading.value = true
     error.value = null
     try {
-      const params = { ...filters.value, ...overrides }
-      // Hapus key kosong agar tidak dikirim ke GAS
       const cleaned = Object.fromEntries(
-        Object.entries(params).filter(([, v]) => v !== '' && v != null)
+        Object.entries(filters.value).filter(([, v]) => v !== '' && v != null)
       ) as StudentFilters
 
       const res = await studentsService.list(cleaned)
+      if (requestVersion !== listRequestVersion) return
       list.value = res.items
       total.value = res.total
     } catch (err: unknown) {
+      if (requestVersion !== listRequestVersion) return
       error.value = err instanceof Error ? err.message : 'Gagal memuat data siswa.'
     } finally {
-      isLoading.value = false
+      if (requestVersion === listRequestVersion) isLoading.value = false
     }
   }
 
