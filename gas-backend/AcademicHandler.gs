@@ -38,6 +38,7 @@ var SubjectHandler = {
   create: function(payload, user) {
     checkPermission(user, 'subject:manage');
     if (!payload.schoolYearId) return errorResponse(400, 'Tahun pelajaran wajib dipilih.');
+    if (!sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS)).some(function(y){ return String(y.id) === String(payload.schoolYearId); })) return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
     if (!payload.name || !String(payload.name).trim()) return errorResponse(400, 'Nama mata pelajaran wajib diisi.');
 
     var sheet = getOrCreateSheet(CONFIG.SHEETS.SUBJECTS,
@@ -85,6 +86,8 @@ var SubjectHandler = {
     var all = sheetToObjects(sheet);
     var old = all.find(function(s) { return String(s.id) === String(payload.id); });
     if (!old) return errorResponse(404, 'Mata pelajaran tidak ditemukan.');
+
+    if (payload.schoolYearId && !sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS)).some(function(y){ return String(y.id) === String(payload.schoolYearId); })) return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
 
     var updated = Object.assign({}, old, payload, {
       code: normalizeIdentifier(payload.code !== undefined ? payload.code : old.code).toUpperCase(),
@@ -144,7 +147,7 @@ var ScoreHandler = {
     }
   },
 
-  _allowed: function(studentId, user, mode) {
+  _allowed: function(studentId, user) {
     var all = hasPermission(user, 'score:view:all');
     if (all) return true;
     if (!hasPermission(user, 'score:view:own_class')) return false;
@@ -359,10 +362,12 @@ var ScoreHandler = {
     });
 
     var existingByKey = {};
-    existingRows.forEach(function(g) {
+    var existingRowIndexById = {};
+    existingRows.forEach(function(g, index) {
       var key = String(g.studentId || '') + '|' + String(g.schoolYearId || '') + '|' +
         String(g.semester || '') + '|' + String(g.subjectId || '');
       existingByKey[key] = g;
+      existingRowIndexById[String(g.id)] = index + 2;
     });
 
     var updates = [];
@@ -391,7 +396,7 @@ var ScoreHandler = {
         var existing = existingByKey[key];
         if (score === null) {
           if (existing) {
-            var deleteIdx = findRowById(sheet, existing.id);
+            var deleteIdx = existingRowIndexById[String(existing.id)] || -1;
             if (deleteIdx > 0) deleteRowIndexes.push(deleteIdx);
           }
           success++;
@@ -404,13 +409,13 @@ var ScoreHandler = {
           semester: semester,
           subjectId: row.subjectId,
           score: score,
-          predicate: row.predicate || (score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : 'D'),
+          predicate: score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : 'D',
           notes: String(row.notes || '').trim(),
           updatedAt: now(),
         });
 
         if (existing) {
-          updates.push({ rowIndex: findRowById(sheet, existing.id), data: updated });
+          updates.push({ rowIndex: existingRowIndexById[String(existing.id)] || -1, data: updated });
         } else {
           newRows.push(Object.assign({
             id: generateUUID(),
