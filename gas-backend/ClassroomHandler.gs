@@ -21,12 +21,16 @@ var ClassroomHandler = {
   },
 
   list: function(payload, user) {
-    if (!hasPermission(user,'classroom:view:all') && !hasPermission(user,'classroom:view:own')) {
-      throw new Error('FORBIDDEN');
-    }
+    var canViewAll = hasPermission(user,'classroom:view:all');
+    var canViewOwn = hasPermission(user,'classroom:view:own');
+    if (!canViewAll && !canViewOwn) throw new Error('FORBIDDEN');
     var all = this._getAll();
     if (payload.schoolYearId) {
       all = all.filter(function(c){ return String(c.schoolYearId) === String(payload.schoolYearId); });
+    }
+    if (user.role === 'teacher' && !canViewAll) {
+      if (!user.teacherId) return successResponse([]);
+      all = all.filter(function(c) { return String(c.homeroomTeacherId) === String(user.teacherId); });
     }
 
     var grades = sheetToObjects(getSheet(CONFIG.SHEETS.GRADES));
@@ -55,8 +59,11 @@ var ClassroomHandler = {
   },
 
   get: function(payload, user) {
+    var canViewAll = hasPermission(user,'classroom:view:all');
+    if (!canViewAll && !hasPermission(user,'classroom:view:own')) throw new Error('FORBIDDEN');
     var all = this._getAll();
     var c = all.find(function(x){ return String(x.id) === String(payload.id); });
+    if (c && user.role === 'teacher' && String(c.homeroomTeacherId) !== String(user.teacherId)) throw new Error('FORBIDDEN');
     if (!c) return errorResponse(404, 'Kelas tidak ditemukan.');
 
     var grades = sheetToObjects(getSheet(CONFIG.SHEETS.GRADES));
@@ -79,6 +86,17 @@ var ClassroomHandler = {
     if (!payload.name) return errorResponse(400, 'Nama kelas wajib diisi.');
     var id = generateUUID();
     var ts = now();
+    if (!payload.gradeId || !payload.schoolYearId) return errorResponse(400, 'Tingkat dan tahun pelajaran wajib diisi.');
+    var grades = sheetToObjects(getSheet(CONFIG.SHEETS.GRADES));
+    if (!grades.some(function(g){ return String(g.id) === String(payload.gradeId); })) return errorResponse(400, 'Tingkat kelas tidak ditemukan.');
+    var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
+    if (!schoolYears.some(function(s){ return String(s.id) === String(payload.schoolYearId); })) return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
+    var existingClasses = this._getAll();
+    if (existingClasses.some(function(c){ return String(c.schoolYearId) === String(payload.schoolYearId) && String(c.name || '').trim().toLowerCase() === String(payload.name).trim().toLowerCase(); })) return errorResponse(409, 'Nama kelas sudah digunakan pada tahun pelajaran ini.');
+    if (payload.homeroomTeacherId) {
+      var teachers = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS));
+      if (!teachers.some(function(t){ return String(t.id) === String(payload.homeroomTeacherId); })) return errorResponse(400, 'Wali kelas tidak ditemukan.');
+    }
     var sheet   = getSheet(CONFIG.SHEETS.CLASSROOMS);
     var headers = getHeaders(sheet);
     var cls = {};
@@ -101,6 +119,16 @@ var ClassroomHandler = {
     var all = this._getAll();
     var old = all.find(function(c){ return String(c.id) === String(payload.id); });
     var updated = Object.assign({}, old);
+    if (payload.gradeId && !sheetToObjects(getSheet(CONFIG.SHEETS.GRADES)).some(function(g){ return String(g.id) === String(payload.gradeId); })) return errorResponse(400, 'Tingkat kelas tidak ditemukan.');
+    if (payload.schoolYearId && !sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS)).some(function(s){ return String(s.id) === String(payload.schoolYearId); })) return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
+    if (payload.homeroomTeacherId) {
+      if (!sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS)).some(function(t){ return String(t.id) === String(payload.homeroomTeacherId); })) return errorResponse(400, 'Wali kelas tidak ditemukan.');
+    }
+    if (payload.name || payload.schoolYearId) {
+      var candidateName = String(payload.name !== undefined ? payload.name : old.name).trim().toLowerCase();
+      var candidateYear = String(payload.schoolYearId !== undefined ? payload.schoolYearId : old.schoolYearId);
+      if (all.some(function(c){ return String(c.id) !== String(payload.id) && String(c.schoolYearId) === candidateYear && String(c.name || '').trim().toLowerCase() === candidateName; })) return errorResponse(409, 'Nama kelas sudah digunakan pada tahun pelajaran ini.');
+    }
     headers.forEach(function(h){
       if (payload[h] !== undefined && h !== 'id' && h !== 'createdAt') updated[h] = payload[h];
     });
@@ -135,7 +163,12 @@ var ClassroomHandler = {
   },
 
   getStats: function(payload, user) {
+    var canViewAll = hasPermission(user,'classroom:view:all');
+    if (!canViewAll && !hasPermission(user,'classroom:view:own')) throw new Error('FORBIDDEN');
     var all = this._getAll();
+    if (user.role === 'teacher' && !canViewAll) {
+      all = all.filter(function(c){ return String(c.homeroomTeacherId) === String(user.teacherId); });
+    }
     if (payload.schoolYearId) {
       all = all.filter(function(c){ return String(c.schoolYearId) === String(payload.schoolYearId); });
     }
@@ -165,7 +198,11 @@ var ClassroomHandler = {
   },
 
   getByTeacher: function(payload, user) {
-    var teacherId = payload.teacherId;
+    var canViewAll = hasPermission(user,'classroom:view:all');
+    var canViewOwn = hasPermission(user,'classroom:view:own');
+    if (!canViewAll && !canViewOwn) throw new Error('FORBIDDEN');
+    var teacherId = canViewAll ? payload.teacherId : user.teacherId;
+    if (!teacherId) return successResponse([]);
     var all = this._getAll().filter(function(c){
       return String(c.homeroomTeacherId) === String(teacherId);
     });
@@ -227,6 +264,8 @@ var GradeHandler = {
   },
   remove: function(payload, user) {
     checkPermission(user, 'classroom:manage');
+    var linkedClassrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS)).filter(function(c){ return String(c.gradeId) === String(payload.id); });
+    if (linkedClassrooms.length > 0) return errorResponse(409, 'Tingkat kelas tidak dapat dihapus karena masih digunakan oleh ' + linkedClassrooms.length + ' kelas.');
     var sheet = getSheet(CONFIG.SHEETS.GRADES);
     var rowIdx = findRowById(sheet, payload.id);
     if (rowIdx < 0) return errorResponse(404, 'Tingkat tidak ditemukan.');
