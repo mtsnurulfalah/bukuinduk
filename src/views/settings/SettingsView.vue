@@ -366,21 +366,25 @@ async function handleBackup() {
 }
 
 onMounted(async () => {
-  await Promise.all([settingsStore.fetch(), schoolYearStore.fetch()])
-  // Isi form dari store — tanpa academicYear (BUG-58 fix)
-  if (settingsStore.data) {
-    const { schoolName, schoolNpsn, schoolAddress, schoolPhone, schoolEmail,
-            schoolWebsite, principalName, principalNip } = settingsStore.data
-    Object.assign(schoolForm, {
-      schoolName:    schoolName    ?? '',
-      schoolNpsn:    schoolNpsn    ?? '',
-      schoolAddress: schoolAddress ?? '',
-      schoolPhone:   schoolPhone   ?? '',
-      schoolEmail:   schoolEmail   ?? '',
-      schoolWebsite: schoolWebsite ?? '',
-      principalName: principalName ?? '',
-      principalNip:  principalNip  ?? '',
-    })
+  try {
+    await Promise.all([settingsStore.fetch(), schoolYearStore.fetch()])
+    // Isi form dari store — tanpa academicYear (BUG-58 fix)
+    if (settingsStore.data) {
+      const { schoolName, schoolNpsn, schoolAddress, schoolPhone, schoolEmail,
+              schoolWebsite, principalName, principalNip } = settingsStore.data
+      Object.assign(schoolForm, {
+        schoolName:    schoolName    ?? '',
+        schoolNpsn:    schoolNpsn    ?? '',
+        schoolAddress: schoolAddress ?? '',
+        schoolPhone:   schoolPhone   ?? '',
+        schoolEmail:   schoolEmail   ?? '',
+        schoolWebsite: schoolWebsite ?? '',
+        principalName: principalName ?? '',
+        principalNip:  principalNip  ?? '',
+      })
+    }
+  } catch (e: unknown) {
+    errorMsg.value = e instanceof Error ? e.message : 'Gagal memuat pengaturan.'
   }
 })
 </script>
