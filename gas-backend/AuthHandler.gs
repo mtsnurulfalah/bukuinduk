@@ -76,7 +76,6 @@ var AuthHandler = {
     var sanitized = Object.assign({}, found);
     delete sanitized.passwordHash;
     return successResponse(sanitized);
-    return successResponse(sanitized);
   },
 
   changePassword: function(payload, user) {
