@@ -16,7 +16,7 @@
           </div>
         </div>
 
-        <div class="flex items-center gap-3 shrink-0">
+        <div class="flex flex-wrap items-center justify-end gap-2 sm:gap-3 shrink-0">
           <RouterLink
             to="/reports/intelligence"
             class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:text-primary-700"
@@ -51,7 +51,8 @@
 
     <BaseRetry
       v-else-if="error"
-      class="m-5"
+      class="m-4 sm:m-5"
+      :loading="isLoading"
       title="Kualitas data belum dapat dimuat"
       :message="error"
       button-text="Muat ulang"
@@ -187,6 +188,7 @@ import { BaseBadge, BaseRetry, BaseSkeleton } from '@/components/ui'
 const data = ref<DataCompleteness | null>(null)
 const isLoading = ref(true)
 const error = ref('')
+let latestRequestId = 0
 
 const qualityLabel = computed(() => {
   const value = data.value?.overallPercent ?? 0
@@ -205,27 +207,29 @@ const qualityColor = computed<'green' | 'blue' | 'amber' | 'red'>(() => {
 })
 
 function formatDate(value: string) {
-  try {
-    return new Intl.DateTimeFormat('id-ID', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(value))
-  } catch {
-    return value || 'baru saja'
-  }
+  const date = new Date(value)
+  if (!value || Number.isNaN(date.getTime())) return 'baru saja'
+  return new Intl.DateTimeFormat('id-ID', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
 }
 
 async function load() {
+  const requestId = ++latestRequestId
   isLoading.value = true
   error.value = ''
   try {
-    data.value = await reportsService.getDataCompleteness()
+    const value = await reportsService.getDataCompleteness()
+    if (requestId === latestRequestId) data.value = value
   } catch (e: unknown) {
-    error.value = e instanceof Error
-      ? e.message
-      : 'Gagal memuat ringkasan kualitas data.'
+    if (requestId === latestRequestId) {
+      error.value = e instanceof Error
+        ? e.message
+        : 'Gagal memuat ringkasan kualitas data.'
+    }
   } finally {
-    isLoading.value = false
+    if (requestId === latestRequestId) isLoading.value = false
   }
 }
 
