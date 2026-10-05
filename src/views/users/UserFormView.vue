@@ -97,12 +97,23 @@ async function handleSubmit() {
 }
 
 onMounted(async () => {
-  const teachers = await teachersService.listActive()
-  teacherOptions.value = teachers.map(t => ({ value: t.id, label: t.fullName }))
+  try {
+    const teachers = await teachersService.listActive()
+    teacherOptions.value = teachers.map(t => ({ value: t.id, label: t.fullName }))
 
-  if (isEdit.value) {
-    const user = await usersService.get(route.params.id as string)
-    Object.assign(form, { fullName: user.fullName, username: user.username, email: user.email || '', role: user.role, teacherId: user.teacherId ?? '', isActive: user.isActive })
+    if (isEdit.value) {
+      const user = await usersService.get(route.params.id as string)
+      Object.assign(form, {
+        fullName: user.fullName,
+        username: user.username,
+        email: user.email || '',
+        role: user.role,
+        teacherId: user.teacherId ?? '',
+        isActive: user.isActive,
+      })
+    }
+  } catch (e: unknown) {
+    errorMsg.value = e instanceof Error ? e.message : 'Gagal memuat data pengguna.'
   }
 })
 </script>
