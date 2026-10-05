@@ -143,17 +143,14 @@ var ClassroomHandler = {
     var rowIdx = findRowById(sheet, payload.id);
     if (rowIdx < 0) return errorResponse(404, 'Kelas tidak ditemukan.');
 
-    // BUG-44 FIX: Cek apakah kelas masih memiliki siswa aktif.
-    // Menghapus kelas yang masih berisi siswa akan meninggalkan orphaned enrollment.
-    var activeEnrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS))
-      .filter(function(e) {
-        return String(e.classroomId) === String(payload.id) && e.status === 'active';
-      });
-    if (activeEnrollments.length > 0) {
+    // Kelas adalah referensi historis untuk enrollment. Jangan hapus bila
+    // pernah dipakai, karena akan membuat riwayat siswa menjadi orphan.
+    var linkedEnrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS))
+      .filter(function(e) { return String(e.classroomId) === String(payload.id); });
+    if (linkedEnrollments.length > 0) {
       return errorResponse(409,
         'Kelas tidak dapat dihapus karena masih memiliki ' +
-        activeEnrollments.length + ' siswa aktif. ' +
-        'Pindahkan atau arsipkan siswa terlebih dahulu.'
+        linkedEnrollments.length + ' riwayat enrollment. Arsipkan/nonaktifkan kelas saja.'
       );
     }
 
