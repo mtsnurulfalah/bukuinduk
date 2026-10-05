@@ -177,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ChevronRight, Lightbulb, ShieldCheck } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { reportsService } from '@/services'
@@ -234,4 +234,7 @@ async function load() {
 }
 
 onMounted(load)
+onUnmounted(() => {
+  latestRequestId += 1
+})
 </script>
