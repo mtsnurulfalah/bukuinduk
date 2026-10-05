@@ -114,17 +114,19 @@ var UserHandler = {
     if (payload.role !== undefined && ['admin','principal','teacher'].indexOf(payload.role) === -1) return errorResponse(400, 'Role tidak valid.');
     var nextEmail = payload.email !== undefined ? String(payload.email).trim().toLowerCase() : String(old.email || '').trim().toLowerCase();
     if (payload.email !== undefined && all.some(function(u){ return String(u.id) !== String(payload.id) && String(u.email || '').trim().toLowerCase() === nextEmail; })) return errorResponse(409, 'Email sudah digunakan.');
+    var nextRole = payload.role !== undefined ? String(payload.role) : String(old.role || '');
     var nextTeacherId = payload.teacherId !== undefined ? String(payload.teacherId || '') : String(old.teacherId || '');
-    if (updated.role === 'teacher') {
+    if (nextRole === 'teacher') {
       if (!nextTeacherId) return errorResponse(400, 'Akun guru wajib ditautkan ke data guru.');
       var linkedTeacher = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS)).find(function(t){ return String(t.id) === nextTeacherId; });
       if (!linkedTeacher) return errorResponse(400, 'Guru yang ditautkan tidak ditemukan.');
     } else {
       nextTeacherId = '';
     }
-    ['fullName','role','teacherId','isActive'].forEach(function(f){
+    ['fullName','isActive'].forEach(function(f){
       if (payload[f] !== undefined) updated[f] = payload[f];
     });
+    updated.role = nextRole;
     if (payload.email !== undefined) updated.email = nextEmail;
     updated.teacherId = nextTeacherId;
     updated.isActive = normalizeBoolean(updated.isActive, false);
