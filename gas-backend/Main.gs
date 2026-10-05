@@ -82,19 +82,12 @@ function doGet(e) {
   try {
     var params = (e && e.parameter) ? e.parameter : {};
 
-    // GET API tetap menggunakan router yang sama dengan POST.
-    // Terima payload dari dua nama umum: payload dan data.
-    if (params.action) {
-      return doPost({
-        parameter: {
-          action: params.action,
-          payload: params.payload || params.data || '{}',
-          token: params.token || ''
-        }
-      });
+    // GET hanya untuk health check. Jangan menerima token/payload bisnis
+    // melalui URL karena dapat masuk browser history atau server logs.
+    if (params.action || params.token || params.payload || params.data) {
+      return errorResponse(405, 'API bisnis hanya menerima POST. Gunakan endpoint health tanpa parameter.');
     }
 
-    // Health check biasa — selalu JSON 200 selama deployment GAS aktif.
     return createResponse(200, {
       message: 'Buku Induk Digital API',
       version: CONFIG.APP_VERSION,
