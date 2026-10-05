@@ -162,16 +162,36 @@ function getSheet(name) {
 function getOrCreateSheet(name, headers) {
   var ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   var sheet = ss.getSheetByName(name);
+
   if (!sheet) {
     sheet = ss.insertSheet(name);
     if (headers && headers.length) {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sheet.getRange(1, 1, 1, headers.length)
+        .setBackground('#1e3a8a')
+        .setFontColor('#ffffff')
+        .setFontWeight('bold');
       sheet.setFrozenRows(1);
     }
-  } else if (headers && headers.length && sheet.getLastColumn() === 0) {
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.setFrozenRows(1);
+    return sheet;
   }
+
+  if (headers && headers.length) {
+    var existingHeaders = getHeaders(sheet);
+    var missing = headers.filter(function(header) {
+      return existingHeaders.indexOf(header) === -1;
+    });
+    if (missing.length) {
+      var startColumn = existingHeaders.length + 1;
+      sheet.getRange(1, startColumn, 1, missing.length).setValues([missing]);
+      sheet.getRange(1, startColumn, 1, missing.length)
+        .setBackground('#1e3a8a')
+        .setFontColor('#ffffff')
+        .setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    }
+  }
+
   return sheet;
 }
 
