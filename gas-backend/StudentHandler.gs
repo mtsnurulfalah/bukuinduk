@@ -1142,7 +1142,7 @@ var StudentHandler = {
           throw new Error('Jenis kelamin harus L/P');
         }
         if (!row.entryDate) throw new Error('Tanggal masuk kosong');
-        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(row.entryDate)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(row.entryDate)) {
           throw new Error('Tanggal masuk harus YYYY-MM-DD');
         }
 
