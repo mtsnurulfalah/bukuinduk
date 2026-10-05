@@ -20,7 +20,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['vue', 'vue-router', 'pinia'],
-          utils: ['axios', 'date-fns'],
+          utils: ['date-fns'],
           icons: ['lucide-vue-next'],
           excel: ['xlsx'],
           pdf: ['jspdf', 'jspdf-autotable'],
