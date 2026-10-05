@@ -1,6 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router'
 import { PERMISSIONS } from '@/constants'
-import type { Permission } from '@/constants'
 
 // Semua view di-lazy load untuk code splitting otomatis
 const routes: RouteRecordRaw[] = [
