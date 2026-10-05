@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-start gap-4">
+  <div class="min-w-0 overflow-hidden bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 flex items-start gap-3 sm:gap-4">
     <!-- Icon -->
     <div :class="['p-3 rounded-xl shrink-0', iconBg]">
       <component :is="icon" :class="['h-5 w-5', iconColor]" />
@@ -8,8 +8,8 @@
     <!-- Content -->
     <div class="flex-1 min-w-0">
       <p class="text-sm text-slate-500 font-medium truncate">{{ label }}</p>
-      <div class="flex items-end gap-2 mt-1">
-        <p v-if="!loading" class="text-2xl font-bold text-slate-800 leading-none">
+      <div class="flex flex-wrap items-end gap-x-2 gap-y-1 mt-1 min-w-0">
+        <p v-if="!loading" class="text-2xl font-bold text-slate-800 leading-none break-words">
           {{ formattedValue }}
         </p>
         <BaseSkeleton v-else height="h-7" width="w-16" />
