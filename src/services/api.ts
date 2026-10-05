@@ -1,5 +1,5 @@
 import type { ApiResponse } from '@/types'
-import { getToken, clearAuth } from '@/utils'
+import { getToken }
 
 // BUG-01 FIX: Validasi VITE_GAS_URL di module level agar error terdeteksi saat startup,
 // bukan saat request pertama dengan pesan "Failed to fetch" yang tidak informatif.
