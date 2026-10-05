@@ -461,43 +461,4 @@ const shortcuts = [
   },
 ]
 
-// ── Data fetching ─────────────────────────────────────────────────
-
-// BUG FIX: Pisahkan fetch agar error satu tidak memblokir yang lain.
-// Juga tunggu schoolYearStore ter-fetch dulu agar syId valid.
-async function loadData() {
-  errorStats.value = ''
-  errorClass.value = ''
-  isLoadingStats.value = true
-  isLoadingClass.value = true
-
-  // Pastikan data tahun pelajaran sudah tersedia
-  if (!schoolYearStore.initialized) {
-    await schoolYearStore.fetch().catch(() => {})
-  }
-  const syId = schoolYearStore.activeSchoolYear?.id
-
-  // Fetch stats dan classStats secara paralel tapi handle error masing-masing
-  await Promise.allSettled([
-    reportsService.getDashboardStats(syId)
-      .then(s => { stats.value = s })
-      .catch(err => {
-        errorStats.value = err instanceof Error
-          ? err.message
-          : 'Gagal memuat statistik dashboard.'
-      })
-      .finally(() => { isLoadingStats.value = false }),
-
-    reportsService.getClassroomStats(syId)
-      .then(cs => { classStats.value = cs })
-      .catch(err => {
-        errorClass.value = err instanceof Error
-          ? err.message
-          : 'Gagal memuat data kelas.'
-      })
-      .finally(() => { isLoadingClass.value = false }),
-  ])
-}
-
-onMounted(loadData)
 </script>
