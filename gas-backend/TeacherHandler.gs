@@ -39,6 +39,13 @@ var TeacherHandler = {
   },
 
   create: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'teacher:manage');
     if (!payload.fullName) return errorResponse(400, 'Nama lengkap wajib diisi.');
     var sheet   = getSheet(CONFIG.SHEETS.TEACHERS);
@@ -66,9 +73,19 @@ var TeacherHandler = {
     appendRow(sheet, teacher, headers);
     AuditService.log(user.id, 'CREATE', 'teacher', id, null, teacher, 'Tambah guru: ' + teacher.fullName);
     return successResponse(Object.assign({}, teacher, { id: id }));
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   update: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'teacher:manage');
     var sheet   = getSheet(CONFIG.SHEETS.TEACHERS);
     var headers = getHeaders(sheet);
@@ -94,9 +111,19 @@ var TeacherHandler = {
     updateRow(sheet, rowIdx, updated, headers);
     AuditService.log(user.id, 'UPDATE', 'teacher', payload.id, old, updated, 'Edit guru');
     return successResponse(updated);
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   remove: function(payload, user) {
+    var _writeLock = LockService.getScriptLock();
+    try {
+      _writeLock.waitLock(15000);
+    } catch (lockErr) {
+      return errorResponse(429, 'Server sedang memproses perubahan lain. Silakan coba lagi.');
+    }
+    try {
     checkPermission(user, 'teacher:manage');
     var sheet  = getSheet(CONFIG.SHEETS.TEACHERS);
     var rowIdx = findRowById(sheet, payload.id);
@@ -109,7 +136,10 @@ var TeacherHandler = {
     sheet.deleteRow(rowIdx);
     AuditService.log(user.id, 'DELETE', 'teacher', payload.id, null, null, 'Hapus guru');
     return successResponse({ message: 'Guru berhasil dihapus.' });
-  },
+  
+    } finally {
+      _writeLock.releaseLock();
+    }},
 
   listActive: function(payload, user) {
     checkPermission(user, 'teacher:view');
