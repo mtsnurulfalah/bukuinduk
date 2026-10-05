@@ -20,12 +20,6 @@ export function usePermission() {
   }
 
   /**
-   * Cek apakah user memiliki salah satu dari beberapa permission.
-   */
-  /**
-   * Cek apakah user memiliki semua permission yang diberikan.
-   */
-  /**
    * Cek apakah user memiliki role tertentu.
    */
   function hasRole(role: string | string[]): boolean {
