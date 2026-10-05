@@ -12,17 +12,28 @@ var AuthHandler = {
       return errorResponse(400, 'Username dan password wajib diisi.');
     }
 
+    // Batasi percobaan login gagal per username untuk mengurangi brute-force.
+    var loginKey = 'login_fail_' + username.slice(0, 200);
+    var failedAttempts = parseInt(CacheService.getScriptCache().get(loginKey) || '0', 10);
+    if (failedAttempts >= 10) {
+      return errorResponse(429, 'Terlalu banyak percobaan login. Coba lagi beberapa menit kemudian.');
+    }
+
     var sheet = getSheet(CONFIG.SHEETS.USERS);
     var users = sheetToObjects(sheet);
     var user  = users.find(function(u) {
       return u.username && u.username.toString().toLowerCase() === username;
     });
 
-    if (!user) return errorResponse(401, 'Username atau password salah.');
+    if (!user) {
+      CacheService.getScriptCache().put(loginKey, String(failedAttempts + 1), 600);
+      return errorResponse(401, 'Username atau password salah.');
+    }
     if (!normalizeBoolean(user.isActive, false)) {
       return errorResponse(403, 'Akun Anda tidak aktif. Hubungi administrator.');
     }
     if (!verifyPassword(password, user.passwordHash)) {
+      CacheService.getScriptCache().put(loginKey, String(failedAttempts + 1), 600);
       return errorResponse(401, 'Username atau password salah.');
     }
 
@@ -44,6 +55,8 @@ var AuthHandler = {
       teacherId: user.teacherId || null,
       createdAt: user.createdAt || '',
     };
+
+    CacheService.getScriptCache().remove(loginKey);
 
     var token = generateJWT(tokenPayload);
 
