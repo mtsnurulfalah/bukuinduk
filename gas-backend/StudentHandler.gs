@@ -203,7 +203,18 @@ var StudentHandler = {
 
     // Jangan mutasi objek cache _getAll(): salin sebelum menghapus field sensitif.
     var student = Object.assign({}, source);
-    if (user.role === 'teacher') delete student.nik;
+    if (user.role === 'teacher') {
+      delete student.nik;
+      delete student.phone;
+      delete student.email;
+      delete student.address;
+      delete student.rtRw;
+      delete student.village;
+      delete student.district;
+      delete student.city;
+      delete student.province;
+      delete student.postalCode;
+    }
     return successResponse(student);
   },
 
