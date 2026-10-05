@@ -97,6 +97,10 @@ var UserHandler = {
     if (rowIdx < 0) return errorResponse(404, 'Pengguna tidak ditemukan.');
     var all = sheetToObjects(sheet);
     var old = all.find(function(u){ return String(u.id) === String(payload.id); });
+    if (!old) return errorResponse(404, 'Pengguna tidak ditemukan.');
+    if (String(payload.id) === String(user.id) && payload.isActive === false) {
+      return errorResponse(400, 'Tidak dapat menonaktifkan akun Anda sendiri.');
+    }
     var updated = Object.assign({}, old);
     ['fullName','email','role','teacherId','isActive'].forEach(function(f){
       if (payload[f] !== undefined) updated[f] = payload[f];
@@ -115,6 +119,10 @@ var UserHandler = {
     if (rowIdx < 0) return errorResponse(404, 'Pengguna tidak ditemukan.');
     var all = sheetToObjects(sheet);
     var found = all.find(function(u){ return String(u.id) === String(payload.id); });
+    if (!found) return errorResponse(404, 'Pengguna tidak ditemukan.');
+    if (String(payload.id) === String(user.id) && normalizeBoolean(found.isActive, false)) {
+      return errorResponse(400, 'Tidak dapat menonaktifkan akun Anda sendiri.');
+    }
     var newStatus = !normalizeBoolean(found.isActive, false);
     var colActive = headers.indexOf('isActive') + 1;
     if (colActive > 0) sheet.getRange(rowIdx, colActive).setValue(newStatus);
@@ -149,6 +157,11 @@ var UserHandler = {
     var sheet  = getSheet(CONFIG.SHEETS.USERS);
     var rowIdx = findRowById(sheet, payload.id);
     if (rowIdx < 0) return errorResponse(404, 'Pengguna tidak ditemukan.');
+    var linkedTeachers = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS))
+      .filter(function(t){ return String(t.userId) === String(payload.id); });
+    if (linkedTeachers.length > 0) {
+      return errorResponse(409, 'Akun tidak dapat dihapus karena masih terhubung ke data guru. Putuskan relasinya atau nonaktifkan akun terlebih dahulu.');
+    }
     sheet.deleteRow(rowIdx);
     AuditService.log(user.id, 'DELETE', 'user', payload.id, null, null, 'Hapus pengguna');
     return successResponse({ message: 'Pengguna berhasil dihapus.' });
