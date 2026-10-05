@@ -53,11 +53,14 @@ var UserHandler = {
     if (validRoles.indexOf(payload.role) === -1)
       return errorResponse(400, 'Role tidak valid. Gunakan: admin, principal, atau teacher.');
 
+    var normalizedUsername = String(payload.username).trim().toLowerCase();
+    var normalizedEmail = String(payload.email).trim().toLowerCase();
+    if (normalizedUsername.length < 3) return errorResponse(400, 'Username minimal 3 karakter.');
     var all = sheetToObjects(getSheet(CONFIG.SHEETS.USERS));
-    if (all.find(function(u){ return u.username === payload.username; }))
-      return errorResponse(409, 'Username "' + payload.username + '" sudah digunakan.');
-    if (all.find(function(u){ return u.email === payload.email; }))
-      return errorResponse(409, 'Email "' + payload.email + '" sudah digunakan.');
+    if (all.find(function(u){ return String(u.username || '').trim().toLowerCase() === normalizedUsername; }))
+      return errorResponse(409, 'Username "' + normalizedUsername + '" sudah digunakan.');
+    if (all.find(function(u){ return String(u.email || '').trim().toLowerCase() === normalizedEmail; }))
+      return errorResponse(409, 'Email "' + normalizedEmail + '" sudah digunakan.');
 
     if (payload.password.length < 8)
       return errorResponse(400, 'Password minimal 8 karakter.');
@@ -68,9 +71,9 @@ var UserHandler = {
     var ts = now();
     var newUser = {
       id:           id,
-      username:     payload.username.toLowerCase().trim(),
-      fullName:     payload.fullName,
-      email:        payload.email,
+      username:     normalizedUsername,
+      fullName:     String(payload.fullName).trim(),
+      email:        normalizedEmail,
       role:         payload.role,
       passwordHash: hashPassword(payload.password),
       isActive:     payload.isActive !== false,
@@ -131,6 +134,10 @@ var UserHandler = {
     if (rowIdx < 0) return errorResponse(404, 'Pengguna tidak ditemukan.');
     var col = headers.indexOf('passwordHash') + 1;
     if (col > 0) sheet.getRange(rowIdx, col).setValue(hashPassword(payload.newPassword));
+    var colChangedAt = ensureHeader(sheet, 'passwordChangedAt');
+    sheet.getRange(rowIdx, colChangedAt).setValue(Math.floor(Date.now() / 1000));
+    var colUpdated = ensureHeader(sheet, 'updatedAt');
+    sheet.getRange(rowIdx, colUpdated).setValue(now());
     AuditService.log(user.id, 'UPDATE', 'user', payload.id, null, null, 'Reset password pengguna');
     return successResponse({ message: 'Password berhasil direset.' });
   },
