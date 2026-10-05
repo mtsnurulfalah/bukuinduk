@@ -89,7 +89,16 @@ var SubjectHandler = {
 
     if (payload.schoolYearId && !sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS)).some(function(y){ return String(y.id) === String(payload.schoolYearId); })) return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
 
-    var updated = Object.assign({}, old, payload, {
+    if (payload.schoolYearId && String(payload.schoolYearId) !== String(old.schoolYearId)) {
+      var linkedScores = sheetToObjects(getOrCreateSheet(CONFIG.SHEETS.SCORES,
+        ['id','studentId','schoolYearId','semester','subjectId','score','predicate','notes','createdAt','updatedAt','createdBy']))
+        .filter(function(g) { return String(g.subjectId) === String(payload.id); });
+      if (linkedScores.length) return errorResponse(409, 'Tahun pelajaran mata pelajaran tidak dapat diubah karena sudah memiliki data nilai.');
+    }
+
+    var updated = Object.assign({}, old);
+    updated.schoolYearId = payload.schoolYearId !== undefined ? String(payload.schoolYearId) : String(old.schoolYearId);
+    Object.assign(updated, {
       code: normalizeIdentifier(payload.code !== undefined ? payload.code : old.code).toUpperCase(),
       name: String(payload.name !== undefined ? payload.name : old.name).trim(),
       shortName: String(payload.shortName !== undefined ? payload.shortName : old.shortName || '').trim(),
@@ -187,6 +196,8 @@ var ScoreHandler = {
       throw new Error('FORBIDDEN');
     }
 
+    if (user.role === 'teacher' && !payload.schoolYearId) return errorResponse(400, 'Tahun pelajaran wajib dipilih untuk data nilai guru.');
+
     var all = sheetToObjects(getOrCreateSheet(CONFIG.SHEETS.SCORES,
       ['id','studentId','schoolYearId','semester','subjectId','score','predicate','notes','createdAt','updatedAt','createdBy']));
 
@@ -197,6 +208,7 @@ var ScoreHandler = {
       all = all.filter(function(g) { return String(g.semester) === String(payload.semester); });
     }
     if (payload.studentId) {
+      if (!payload.schoolYearId && user.role === 'teacher') return errorResponse(400, 'Tahun pelajaran wajib dipilih untuk data nilai guru.');
       if (!this._allowed(payload.studentId, user, payload.schoolYearId)) throw new Error('FORBIDDEN');
       all = all.filter(function(g) { return String(g.studentId) === String(payload.studentId); });
     } else if (payload.classroomId) {
