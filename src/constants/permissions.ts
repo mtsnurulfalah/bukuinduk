@@ -49,7 +49,6 @@ export const PERMISSIONS = {
   // Audit
   AUDIT_VIEW: 'audit:view',
 
-  // Dashboard
 } as const
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS]
