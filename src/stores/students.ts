@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Student, StudentFilters } from '@/types'
-import type { PaginatedResponse } from '@/types'
 import { studentsService } from '@/services'
 import { DEFAULT_PAGE_SIZE } from '@/constants'
 
