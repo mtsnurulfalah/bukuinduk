@@ -20,7 +20,7 @@ var CONFIG = (function () {
     JWT_SECRET:     jwtSecret,
     JWT_EXPIRES_IN: parseInt(props.getProperty('JWT_EXPIRES_IN') || '3600'), // seconds (1 jam)
     SPREADSHEET_ID: props.getProperty('SPREADSHEET_ID') || '',
-    APP_VERSION:    '1.0.0',
+    APP_VERSION:    '1.1.0',
     PHOTO_FOLDER_ID: props.getProperty('PHOTO_FOLDER_ID') || '',
 
     // Nama sheet
