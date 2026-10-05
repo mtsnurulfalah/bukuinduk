@@ -28,8 +28,11 @@ export const reportsService = {
   },
 
   /** Statistik per kelas */
-  async getClassroomStats(schoolYearId?: string): Promise<ClassroomStats[]> {
-    return gasRequest<ClassroomStats[]>('reports.classroomStats', { schoolYearId }, { retry404: 2 })
+  async getClassroomStats(filters?: string | Pick<ReportFilters, 'schoolYearId' | 'classroomId'>): Promise<ClassroomStats[]> {
+    const payload = typeof filters === 'string' || filters === undefined
+      ? { schoolYearId: filters }
+      : filters
+    return gasRequest<ClassroomStats[]>('reports.classroomStats', payload, { retry404: 2 })
   },
 
   /** Distribusi jenis kelamin per kelas */
