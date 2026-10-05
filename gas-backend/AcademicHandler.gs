@@ -147,23 +147,39 @@ var ScoreHandler = {
     }
   },
 
-  _allowed: function(studentId, user) {
-    var all = hasPermission(user, 'score:view:all');
-    if (all) return true;
+  _allowed: function(studentId, user, schoolYearId) {
+    if (hasPermission(user, 'score:view:all')) return true;
     if (!hasPermission(user, 'score:view:own_class')) return false;
     try {
-      StudentHandler._getViewableStudent(studentId, user);
+      if (user.role === 'teacher' && schoolYearId) this._assertTeacherYearAccess(studentId, schoolYearId, user);
+      else StudentHandler._getViewableStudent(studentId, user);
       return true;
     } catch (e) {
       return false;
     }
   },
 
-  _canManage: function(studentId, user) {
+  _canManage: function(studentId, user, schoolYearId) {
     if (hasPermission(user, 'score:manage:all')) return true;
     if (!hasPermission(user, 'score:manage:own_class')) throw new Error('FORBIDDEN');
-    StudentHandler._getViewableStudent(studentId, user);
+    if (schoolYearId && user.role === 'teacher') this._assertTeacherYearAccess(studentId, schoolYearId, user);
+    else StudentHandler._getViewableStudent(studentId, user);
     return true;
+  },
+
+  _assertTeacherYearAccess: function(studentId, schoolYearId, user) {
+    if (!user.teacherId) throw new Error('FORBIDDEN');
+    var classrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
+    var myClassroomIds = classrooms.filter(function(c) {
+      return String(c.homeroomTeacherId) === String(user.teacherId);
+    }).map(function(c) { return String(c.id); });
+    var enrolled = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS)).some(function(e) {
+      return String(e.studentId) === String(studentId) &&
+        String(e.schoolYearId) === String(schoolYearId) &&
+        myClassroomIds.indexOf(String(e.classroomId)) !== -1 &&
+        e.status === 'active';
+    });
+    if (!enrolled) throw new Error('FORBIDDEN');
   },
 
   list: function(payload, user) {
@@ -181,9 +197,10 @@ var ScoreHandler = {
       all = all.filter(function(g) { return String(g.semester) === String(payload.semester); });
     }
     if (payload.studentId) {
-      if (!this._allowed(payload.studentId, user, 'view')) throw new Error('FORBIDDEN');
+      if (!this._allowed(payload.studentId, user, payload.schoolYearId)) throw new Error('FORBIDDEN');
       all = all.filter(function(g) { return String(g.studentId) === String(payload.studentId); });
     } else if (payload.classroomId) {
+      if (!payload.schoolYearId) return errorResponse(400, 'Tahun pelajaran wajib dipilih saat memfilter kelas.');
       var classrooms = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
       var classroom = classrooms.find(function(c) { return String(c.id) === String(payload.classroomId); });
       if (!classroom) return errorResponse(404, 'Kelas tidak ditemukan.');
@@ -250,7 +267,7 @@ var ScoreHandler = {
   },
 
   _upsert: function(sheet, headers, payload, user) {
-    this._canManage(payload.studentId, user);
+    this._canManage(payload.studentId, user, payload.schoolYearId);
     if (!payload.schoolYearId) return errorResponse(400, 'Tahun pelajaran wajib diisi.');
     var semester = Number(payload.semester);
     if (semester !== 1 && semester !== 2) return errorResponse(400, 'Semester harus 1 atau 2.');
@@ -288,7 +305,7 @@ var ScoreHandler = {
       return successResponse({ id: existing ? existing.id : '', deleted: true });
     }
 
-    var predicate = payload.predicate || (score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : 'D');
+    var predicate = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : 'D';
     var base = {
       studentId: payload.studentId,
       schoolYearId: payload.schoolYearId,
