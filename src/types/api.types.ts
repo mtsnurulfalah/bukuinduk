@@ -15,13 +15,6 @@ export interface PaginatedResponse<T> {
   totalPages: number
 }
 
-// Payload request ke GAS
-export interface GasRequest<T = unknown> {
-  action: string
-  payload?: T
-  token?: string
-}
-
 // Statistik untuk dashboard
 export interface DashboardStats {
   totalStudents: number
@@ -202,7 +195,7 @@ export interface StudentGrade {
   subjectName: string
   subjectCode?: string
   classroomName?: string
-  score?: number
+  score?: number | null
   predicate?: string
   notes?: string
   createdAt: string
