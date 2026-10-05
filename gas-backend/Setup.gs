@@ -128,6 +128,7 @@ function _createDefaultAdmin(ss) {
     '',                         // teacherId
     '',                         // avatarUrl
     '',                         // lastLogin
+    '',                         // passwordChangedAt
     now(),                      // createdAt
     now(),                      // updatedAt
     '',                         // createdBy
