@@ -199,6 +199,7 @@ async function save() {
       const index = subjects.value.findIndex(s => s.id === updated.id)
       if (index >= 0) subjects.value[index] = updated
       else subjects.value.push(updated)
+      subjects.value.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
     } else {
       const created = await subjectsService.create({ schoolYearId: schoolYearId.value, ...form })
       subjects.value.push(created)
