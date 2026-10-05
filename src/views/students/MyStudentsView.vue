@@ -36,6 +36,13 @@
       <BaseSkeleton v-for="i in 5" :key="i" height="h-16" />
     </div>
 
+    <BaseRetry
+      v-else-if="error"
+      title="Daftar siswa gagal dimuat"
+      :message="error"
+      @retry="loadStudents"
+    />
+
     <!-- Empty -->
     <BaseEmpty
       v-else-if="!filtered.length"
@@ -81,7 +88,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ChevronRight } from 'lucide-vue-next'
 import { PageHeader, SearchFilter, StudentStatusBadge } from '@/components/shared'
-import { BaseCard, BaseAvatar, BaseSkeleton, BaseEmpty } from '@/components/ui'
+import { BaseCard, BaseAvatar, BaseSkeleton, BaseEmpty, BaseRetry } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
 import { classroomsService, studentsService } from '@/services'
 import type { Classroom, Student } from '@/types'
@@ -92,6 +99,7 @@ const students = ref<Student[]>([])
 const activeClassroomId = ref('')
 const search = ref('')
 const isLoading = ref(true)
+const error = ref('')
 
 const filtered = computed(() => {
   let result = students.value
@@ -111,23 +119,35 @@ async function selectClassroom(id: string) {
   activeClassroomId.value = id
 }
 
-onMounted(async () => {
+async function loadStudents() {
   const teacherId = authStore.user?.teacherId
-  if (!teacherId) { isLoading.value = false; return }
+  error.value = ''
+  isLoading.value = true
+
+  if (!teacherId) {
+    error.value = 'Akun guru belum terhubung ke profil guru.'
+    isLoading.value = false
+    return
+  }
 
   try {
     classrooms.value = await classroomsService.getByTeacher(teacherId)
     if (classrooms.value.length) {
-      // Ambil siswa dari semua kelas yang diampu
       const { items } = await studentsService.list({
         classroomId: classrooms.value.length === 1 ? classrooms.value[0].id : undefined,
         status: 'active',
         limit: 500,
       })
       students.value = items
+    } else {
+      students.value = []
     }
-  } catch { /* silent */ } finally {
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : 'Gagal memuat daftar siswa.'
+  } finally {
     isLoading.value = false
   }
-})
+}
+
+onMounted(loadStudents)
 </script>
