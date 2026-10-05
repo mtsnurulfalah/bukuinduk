@@ -578,6 +578,14 @@ var ReportHandler = {
       if (payload.gender) all = all.filter(function(s){ return s.gender === payload.gender; });
     }
 
+    // Teacher result dari StudentHandler.list() sudah dibatasi tahun aktif
+    // dan sudah memiliki classroomName. Jangan re-enrich dengan enrollment
+    // lintas tahun yang dapat mengganti nama kelas menjadi nilai historis.
+    if (user.role === 'teacher') {
+      all.sort(function(a,b){ return (a.fullName||'').localeCompare(b.fullName||''); });
+      return successResponse(all);
+    }
+
     var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
     var classrooms  = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
 
@@ -588,8 +596,8 @@ var ReportHandler = {
     });
 
     if (payload.classroomId) {
-      all = all.filter(function(s){ 
-        var enr = enrollments.find(function(e){ return String(e.studentId)===String(s.id) && String(e.classroomId)===String(payload.classroomId); });
+      all = all.filter(function(s){
+        var enr = enrollments.find(function(e){ return String(e.studentId)===String(s.id) && String(e.classroomId)===String(payload.classroomId) && e.status==='active'; });
         return !!enr;
       });
     }
