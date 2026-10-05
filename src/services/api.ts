@@ -17,6 +17,18 @@ export function setUnauthorizedHandler(handler: () => void) {
   _onUnauthorized = handler
 }
 
+function addCacheBust(url: string, attempt: number) {
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}__bid=${Date.now()}-${attempt}`
+}
+
+function formatGasActionError(action: string, message: string) {
+  if (/Action "\s*[^"]+\s*" tidak ditemukan|method tidak ditemukan/i.test(message)) {
+    return `Backend GAS belum memuat action "${action}". Deploy ulang versi Web App GAS terbaru (termasuk Main.gs, ReportHandler.gs, dan AcademicHandler.gs).`
+  }
+  return message
+}
+
 /**
  * Kirim request ke Google Apps Script Web App.
  *
@@ -65,7 +77,7 @@ export async function gasRequest<T = unknown>(
     let response: Response | null = null
 
     for (let attempt = 0; ; attempt++) {
-      response = await fetch(GAS_URL, {
+      response = await fetch(addCacheBust(GAS_URL, attempt), {
         method:   'POST',
         headers:  { 'Content-Type': 'application/x-www-form-urlencoded' },
         body:     formData.toString(),
@@ -136,7 +148,8 @@ export async function gasRequest<T = unknown>(
     }
 
     if (data.status >= 400) {
-      throw new Error(data.error ?? data.message ?? 'Terjadi kesalahan.')
+      const message = data.error ?? data.message ?? 'Terjadi kesalahan.'
+      throw new Error(formatGasActionError(action, message))
     }
 
     return data.data as T
