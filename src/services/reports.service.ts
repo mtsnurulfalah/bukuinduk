@@ -19,7 +19,7 @@ export const reportsService = {
 
   /** Kualitas & kelengkapan data siswa aktif */
   async getDataCompleteness(): Promise<DataCompleteness> {
-    return gasRequest<DataCompleteness>('reports.dataCompleteness', undefined, { retry404: 2 })
+    return gasRequest<DataCompleteness>('reports.dataCompleteness', undefined, { retry404: 3, timeout: 90_000 })
   },
 
   /** Intelligence Center — temuan otomatis dan antrian tindak lanjut */
