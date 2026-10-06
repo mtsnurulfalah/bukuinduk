@@ -6,16 +6,14 @@
       showImage ? 'bg-slate-200' : colorClass,
     ]"
   >
-    <!-- BUG-14 FIX: Tampilkan gambar hanya jika src ada DAN belum error load.
-         Saat gambar 404/gagal, imgError=true → fallback ke initials ditampilkan. -->
     <img
       v-if="showImage"
-      :src="currentSrc"
+      :src="imageSrc"
       :alt="name ?? 'Avatar'"
       class="h-full w-full object-cover"
       referrerpolicy="no-referrer"
       decoding="async"
-      @error="handleImageError"
+      @error="imgError = true"
     />
     <span
       v-else
@@ -28,7 +26,8 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { initials, getPhotoUrlCandidates } from '@/utils'
+import { initials } from '@/utils'
+import { normalizePhotoUrl } from '@/utils/image'
 
 interface Props {
   name?: string | null
@@ -43,51 +42,10 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const imgError = ref(false)
-const candidateIndex = ref(0)
+const imageSrc = computed(() => normalizePhotoUrl(props.src))
+const showImage = computed(() => Boolean(imageSrc.value) && !imgError.value)
 
-/**
- * Normalisasi URL foto siswa sebelum diberikan ke <img>.
- * Data lama dapat menyimpan URL Drive dalam beberapa bentuk; thumbnail
- * lebih konsisten untuk hotlink gambar dari Google Drive.
- */
-function normalizeImageSrc(value: string | null | undefined): string {
-  const src = String(value ?? '').trim()
-  if (!src) return ''
-
-  if (/^(data:image\/|blob:)/i.test(src)) return src
-
-  if (/^https?:\/\/drive\.google\.com\//i.test(src)) {
-    const fileId =
-      src.match(/\/file\/d\/([A-Za-z0-9_-]+)/i)?.[1] ??
-      src.match(/[?&]id=([A-Za-z0-9_-]+)/i)?.[1]
-
-    if (fileId) {
-      return `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w1000`
-    }
-  }
-
-  return src
-}
-
-const resolvedSrc = computed(() => normalizeImageSrc(props.src))
-const photoCandidates = computed(() => getPhotoUrlCandidates(props.src).length
-  ? getPhotoUrlCandidates(props.src)
-  : (resolvedSrc.value ? [resolvedSrc.value] : []))
-
-const currentSrc = computed(() => photoCandidates.value[candidateIndex.value] ?? '')
-const showImage = computed(() => Boolean(currentSrc.value) && !imgError.value)
-
-function handleImageError() {
-  if (candidateIndex.value < photoCandidates.value.length - 1) {
-    candidateIndex.value += 1
-    return
-  }
-  imgError.value = true
-}
-
-// Reset fallback chain saat sumber foto berubah.
-watch(() => props.src, () => {
-  candidateIndex.value = 0
+watch(imageSrc, () => {
   imgError.value = false
 })
 
