@@ -769,13 +769,20 @@ async function confirmRestore(): Promise<void> {
     try {
       // Refetch via store agar store.current juga diperbarui
       const refreshed = await studentsStore.fetchDetail(id)
-      if (_isMounted) {
+      const routeStillPointsToSameStudent =
+        _isMounted && String(route.params.id ?? '') === id
+
+      if (routeStillPointsToSameStudent) {
         _studentData.value = refreshed ?? studentsStore.current
         if (refreshed) studentsStore.updateInList(refreshed)
       }
     } catch {
-      // Fallback optimistic jika refetch gagal
-      if (_isMounted && _studentData.value) {
+      // Fallback optimistic jika refetch gagal.
+      if (
+        _isMounted &&
+        String(route.params.id ?? '') === id &&
+        _studentData.value
+      ) {
         const optimistic: Student = { ..._studentData.value, status: 'active' }
         _studentData.value = optimistic
         studentsStore.updateInList(optimistic)
@@ -792,9 +799,14 @@ async function confirmRestore(): Promise<void> {
 }
 
 async function handlePrintBook(): Promise<void> {
-  if (!student.value || !can(PERMISSIONS.STUDENT_EXPORT)) return
-  if (!settingsStore.initialized) await settingsStore.fetch()
-  await exportStudentBook(student.value, settingsStore.data, true, enrollments.value)
+  if (!student.value || !can(PERMISSIONS.STUDENT_EXPORT) || isExporting.value) return
+
+  try {
+    if (!settingsStore.initialized) await settingsStore.fetch()
+    await exportStudentBook(student.value, settingsStore.data, true, enrollments.value)
+  } catch (e: unknown) {
+    toast.error(e instanceof Error ? e.message : 'Gagal membuat Buku Induk PDF.')
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -803,6 +815,13 @@ async function handlePrintBook(): Promise<void> {
 onMounted(async () => {
   _isMounted = true
   _loadedStudentId = String(route.params.id ?? '')
+
+  if (!_loadedStudentId || _loadedStudentId === 'undefined' || _loadedStudentId === 'null') {
+    error.value = 'ID siswa tidak valid.'
+    isLoading.value = false
+    return
+  }
+
   await retryLoad(_loadedStudentId)
 })
 
@@ -810,12 +829,27 @@ watch(
   () => route.params.id,
   async (newId) => {
     const nextId = String(newId ?? '')
-    // Komponen detail dapat dipakai ulang saat hanya parameter ID berubah.
-    if (!_isMounted || !nextId || nextId === _loadedStudentId) return
+
+    if (!_isMounted || nextId === _loadedStudentId) return
+
     _loadedStudentId = nextId
+
+    if (!nextId || nextId === 'undefined' || nextId === 'null') {
+      error.value = 'ID siswa tidak valid.'
+      studentsStore.clearCurrent()
+      isLoading.value = false
+      return
+    }
+
     await retryLoad(nextId)
   }
 )
+
+watch(canAccessAdminTab, (allowed) => {
+  if (!allowed && activeTab.value === 'admin') {
+    activeTab.value = 'identity'
+  }
+})
 
 onUnmounted(() => {
   // Set flag agar tidak ada response yang masuk setelah komponen unmount
