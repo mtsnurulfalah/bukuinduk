@@ -48,6 +48,25 @@ export function isValidPostalCode(code: string): boolean {
 }
 
 /**
+ * Validasi tanggal kalender dalam format YYYY-MM-DD.
+ */
+export function isValidDateOnly(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return false
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(Date.UTC(year, month - 1, day))
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  )
+}
+
+/**
  * Aturan validasi Yup untuk form
  */
 import * as yup from 'yup'
@@ -56,24 +75,55 @@ export const studentSchema = yup.object({
   nis: yup
     .string()
     .required('NIS wajib diisi')
+    .trim()
     .matches(/^[A-Za-z0-9]{3,20}$/, 'NIS harus 3–20 karakter alfanumerik'),
   nisn: yup
     .string()
     .required('NISN wajib diisi')
+    .trim()
     .matches(/^\d{10}$/, 'NISN harus 10 digit angka'),
   nik: yup
     .string()
     .optional()
+    .trim()
     .test('nik', 'NIK harus 16 digit angka', v => !v || /^\d{16}$/.test(v)),
   fullName: yup
     .string()
     .required('Nama lengkap wajib diisi')
+    .trim()
     .min(3, 'Nama minimal 3 karakter')
     .max(255, 'Nama maksimal 255 karakter'),
   gender: yup.string().required('Jenis kelamin wajib dipilih').oneOf(['L', 'P']),
-  birthDate: yup.string().required('Tanggal lahir wajib diisi'),
+  birthPlace: yup
+    .string()
+    .required('Tempat lahir wajib diisi')
+    .trim()
+    .min(2, 'Tempat lahir minimal 2 karakter')
+    .max(100, 'Tempat lahir maksimal 100 karakter'),
+  birthDate: yup
+    .string()
+    .required('Tanggal lahir wajib diisi')
+    .test('date-only', 'Tanggal lahir harus valid dan berformat YYYY-MM-DD', v => Boolean(v && isValidDateOnly(v))),
   religion: yup.string().required('Agama wajib dipilih'),
-  entryDate: yup.string().required('Tanggal masuk wajib diisi'),
+  entryDate: yup
+    .string()
+    .required('Tanggal masuk wajib diisi')
+    .test('date-only', 'Tanggal masuk harus valid dan berformat YYYY-MM-DD', v => Boolean(v && isValidDateOnly(v))),
+  postalCode: yup
+    .string()
+    .optional()
+    .trim()
+    .test('postal-code', 'Kode pos harus 5 digit angka', v => !v || /^\d{5}$/.test(v)),
+  phone: yup
+    .string()
+    .optional()
+    .trim()
+    .test('phone', 'Nomor HP tidak valid', v => !v || isValidPhone(v)),
+  email: yup
+    .string()
+    .optional()
+    .trim()
+    .test('email', 'Format email tidak valid', v => !v || isValidEmail(v)),
 })
 
 export const loginSchema = yup.object({
