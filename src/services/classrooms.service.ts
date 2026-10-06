@@ -1,12 +1,36 @@
 import { gasRequest } from './api'
 import type { Classroom, ClassroomFormData, Grade, SchoolYear, SchoolYearFormData } from '@/types'
+import { gasRequest } from './api'
+import type { Classroom, ClassroomFormData, Grade, SchoolYear, SchoolYearFormData } from '@/types'
 import type { ClassroomStats } from '@/types'
+
+function normalizeArrayResponse<T>(
+  value: unknown,
+  keys: string[] = [],
+): T[] {
+  if (Array.isArray(value)) return value as T[]
+  if (!value || typeof value !== 'object') return []
+
+  const record = value as Record<string, unknown>
+
+  for (const key of ['items', ...keys, 'data']) {
+    const candidate = record[key]
+    if (Array.isArray(candidate)) return candidate as T[]
+  }
+
+  return []
+}
 
 export const classroomsService = {
   // ── Classrooms ───────────────────────────────────────────────
 
   async list(schoolYearId?: string): Promise<Classroom[]> {
-    return gasRequest<Classroom[]>('classrooms.list', { schoolYearId }, { retry404: 2 })
+    const response = await gasRequest<unknown>(
+      'classrooms.list',
+      { schoolYearId },
+      { retry404: 2 },
+    )
+    return normalizeArrayResponse<Classroom>(response, ['classrooms'])
   },
 
   async get(id: string): Promise<Classroom> {
@@ -26,18 +50,33 @@ export const classroomsService = {
   },
 
   async getStats(schoolYearId?: string): Promise<ClassroomStats[]> {
-    return gasRequest<ClassroomStats[]>('classrooms.getStats', { schoolYearId }, { retry404: 2 })
+    const response = await gasRequest<unknown>(
+      'classrooms.getStats',
+      { schoolYearId },
+      { retry404: 2 },
+    )
+    return normalizeArrayResponse<ClassroomStats>(response, ['stats'])
   },
 
   /** Kelas yang diampu guru tertentu */
   async getByTeacher(teacherId: string): Promise<Classroom[]> {
-    return gasRequest<Classroom[]>('classrooms.getByTeacher', { teacherId }, { retry404: 2 })
+    const response = await gasRequest<unknown>(
+      'classrooms.getByTeacher',
+      { teacherId },
+      { retry404: 2 },
+    )
+    return normalizeArrayResponse<Classroom>(response, ['classrooms'])
   },
 
   // ── Grades ───────────────────────────────────────────────────
 
   async listGrades(): Promise<Grade[]> {
-    return gasRequest<Grade[]>('grades.list', undefined, { retry404: 2 })
+    const response = await gasRequest<unknown>(
+      'grades.list',
+      undefined,
+      { retry404: 2 },
+    )
+    return normalizeArrayResponse<Grade>(response, ['grades'])
   },
 
   async createGrade(data: { name: string; level: number }): Promise<Grade> {
@@ -55,7 +94,12 @@ export const classroomsService = {
   // ── School Years ─────────────────────────────────────────────
 
   async listSchoolYears(): Promise<SchoolYear[]> {
-    return gasRequest<SchoolYear[]>('schoolYears.list', undefined, { retry404: 2 })
+    const response = await gasRequest<unknown>(
+      'schoolYears.list',
+      undefined,
+      { retry404: 2 },
+    )
+    return normalizeArrayResponse<SchoolYear>(response, ['schoolYears'])
   },
 
   async createSchoolYear(data: SchoolYearFormData): Promise<SchoolYear> {
