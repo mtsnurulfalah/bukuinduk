@@ -261,12 +261,19 @@ export const studentsService = {
   // ── Education history ────────────────────────────────────────
 
   async getEducationHistory(studentId: string): Promise<StudentEducationHistory[]> {
-    const history = await gasRequest<StudentEducationHistory[]>(
+    const history = await gasRequest<StudentEducationHistory[] | StudentEducationHistory>(
       'students.getEducationHistory',
       { studentId },
       { retry404: 2 },
     )
-    return Array.isArray(history) ? history.map(normalizeEducationHistory) : []
+
+    const items = Array.isArray(history)
+      ? history
+      : history && typeof history === 'object'
+        ? [history]
+        : []
+
+    return items.map(normalizeEducationHistory)
   },
 
   // ── Enrollment ───────────────────────────────────────────────
