@@ -647,16 +647,34 @@ var StudentHandler = {
 
     var normalizedNis = normalizeIdentifier(payload.nis);
     var normalizedNisn = normalizeIdentifier(payload.nisn);
+    var normalizedNik = normalizeIdentifier(payload.nik);
+    var normalizedGender = normalizeIdentifier(payload.gender).toUpperCase();
+    var normalizedBirthPlace = normalizeIdentifier(payload.birthPlace);
+    var normalizedBirthDate = normalizeIdentifier(payload.birthDate);
+    var normalizedReligion = normalizeIdentifier(payload.religion);
+    var normalizedEntryDate = normalizeIdentifier(payload.entryDate);
 
     if (payload.classroomId || payload.schoolYearId) {
       if (!payload.classroomId || !payload.schoolYearId) return errorResponse(400, 'Kelas dan tahun pelajaran harus diisi bersama.');
       this._validateEnrollmentTarget('', payload.classroomId, payload.schoolYearId);
     }
 
-    if (!payload.fullName) return errorResponse(400, 'Nama lengkap wajib diisi.');
-    if (!normalizedNis)    return errorResponse(400, 'NIS wajib diisi.');
-    if (!normalizedNisn)   return errorResponse(400, 'NISN wajib diisi.');
+    if (!normalizeIdentifier(payload.fullName)) return errorResponse(400, 'Nama lengkap wajib diisi.');
+    if (!normalizedNis) return errorResponse(400, 'NIS wajib diisi.');
+    if (!normalizedNisn) return errorResponse(400, 'NISN wajib diisi.');
     if (!/^\d{10}$/.test(normalizedNisn)) return errorResponse(400, 'NISN harus 10 digit angka.');
+    if (normalizedNik && !/^\d{16}$/.test(normalizedNik)) return errorResponse(400, 'NIK harus 16 digit angka.');
+    if (!normalizedGender || ['L', 'P'].indexOf(normalizedGender) === -1) {
+      return errorResponse(400, 'Jenis kelamin wajib dipilih.');
+    }
+    if (!normalizedBirthPlace) return errorResponse(400, 'Tempat lahir wajib diisi.');
+    if (!normalizedBirthDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedBirthDate)) {
+      return errorResponse(400, 'Tanggal lahir harus berformat YYYY-MM-DD.');
+    }
+    if (!normalizedReligion) return errorResponse(400, 'Agama wajib dipilih.');
+    if (!normalizedEntryDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedEntryDate)) {
+      return errorResponse(400, 'Tanggal masuk harus berformat YYYY-MM-DD.');
+    }
 
     // Cek duplikat NIS/NISN setelah normalisasi tipe dan whitespace.
     var all = this._getAll();
@@ -675,6 +693,12 @@ var StudentHandler = {
     student.id        = id;
     student.nis       = normalizedNis;
     student.nisn      = normalizedNisn;
+    student.nik       = normalizedNik;
+    student.gender    = normalizedGender;
+    student.birthPlace = normalizedBirthPlace;
+    student.birthDate = normalizedBirthDate;
+    student.religion  = normalizedReligion;
+    student.entryDate = normalizedEntryDate;
     student.status    = payload.status || 'active';
     student.createdAt = ts;
     student.updatedAt = ts;
