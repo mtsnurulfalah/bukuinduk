@@ -190,7 +190,14 @@ export const studentsService = {
    * Update data siswa.
    */
   async update(id: string, data: Partial<StudentFormData>): Promise<Student> {
-    const student = await gasRequest<Student>('students.update', { id, ...data })
+    const targetId = String(id ?? '').trim()
+    if (!targetId) throw new Error('ID siswa diperlukan untuk proses edit.')
+
+    // ID route adalah identitas target update dan tidak boleh ditimpa oleh payload form.
+    const student = await gasRequest<Student>('students.update', {
+      ...data,
+      id: targetId,
+    })
     return normalizeStudent(student)
   },
 
