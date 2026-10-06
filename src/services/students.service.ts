@@ -126,7 +126,11 @@ function normalizeStudent(student: Student): Student {
     entryDate: optionalString(student.entryDate),
     exitDate: optionalString(student.exitDate),
     exitReason: optionalString(student.exitReason),
-    photoUrl: optionalString(student.photoUrl),
+    photoUrl: optionalString(
+      (student as Student & Record<string, unknown>).photoUrl ??
+      (student as Student & Record<string, unknown>).photoURL ??
+      (student as Student & Record<string, unknown>).photo_url,
+    ),
     notes: optionalString(student.notes),
     createdAt: requiredString(student.createdAt),
     updatedAt: requiredString(student.updatedAt),
