@@ -244,7 +244,9 @@ function _valueForHeader(obj, header) {
     addres: 'address',
     endryDate: 'entryDate',
     HealthNotes: 'healthNotes',
-    studentID: 'studentId'
+    studentID: 'studentId',
+    photoURL: 'photoUrl',
+    photo_url: 'photoUrl'
   };
   var canonical = preferred[header];
   if (canonical && obj && obj[canonical] !== undefined) return obj[canonical];
@@ -258,7 +260,10 @@ function _valueForHeader(obj, header) {
     healthNotes: ['HealthNotes'],
     HealthNotes: ['healthNotes'],
     studentId: ['studentID'],
-    studentID: ['studentId']
+    studentID: ['studentId'],
+    photoUrl: ['photoURL', 'photo_url'],
+    photoURL: ['photoUrl', 'photo_url'],
+    photo_url: ['photoUrl', 'photoURL']
   };
   var candidates = aliases[header] || [];
   for (var i = 0; i < candidates.length; i++) {
