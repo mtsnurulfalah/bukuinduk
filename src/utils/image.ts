@@ -3,7 +3,7 @@
  * Mendukung URL Drive lama maupun URL thumbnail yang digunakan aplikasi.
  */
 
-export function extractGoogleDriveFileId(value: string | null | undefined): string {
+export function extractGoogleDriveFileId(value: unknown): string {
   const src = String(value ?? '').trim()
   if (!src) return ''
 
@@ -14,7 +14,7 @@ export function extractGoogleDriveFileId(value: string | null | undefined): stri
   )
 }
 
-export function normalizePhotoUrl(value: string | null | undefined): string {
+export function normalizePhotoUrl(value: unknown): string {
   const src = String(value ?? '').trim()
   if (!src) return ''
 
@@ -28,7 +28,7 @@ export function normalizePhotoUrl(value: string | null | undefined): string {
   return src
 }
 
-export function getPhotoUrlCandidates(value: string | null | undefined): string[] {
+export function getPhotoUrlCandidates(value: unknown): string[] {
   const src = String(value ?? '').trim()
   if (!src) return []
 
