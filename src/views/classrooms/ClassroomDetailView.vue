@@ -69,7 +69,7 @@
             class="flex items-center gap-3 py-2.5 hover:bg-slate-50 transition-colors -mx-5 px-5 group"
           >
             <span class="text-xs text-slate-400 w-6 text-right shrink-0">{{ i + 1 }}</span>
-            <BaseAvatar :name="s.fullName" size="sm" color="blue" />
+            <BaseAvatar :name="s.fullName" :src="s.photoUrl" size="sm" color="blue" />
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium text-slate-800 truncate group-hover:text-primary-700">{{ s.fullName }}</p>
               <p class="text-xs text-slate-400">{{ s.nis }}</p>
