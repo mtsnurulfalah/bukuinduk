@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5">
+  <div class="min-w-0 space-y-5 pb-8">
 
     <!-- ── Page Header ──────────────────────────────────────────── -->
     <PageHeader
@@ -146,10 +146,10 @@
           <div class="flex border-b border-slate-200 overflow-x-auto scrollbar-thin pb-px mb-4">
             <template v-for="tab in tabs" :key="tab.key">
               <button
-                v-if="tab.key !== 'admin' || can(PERMISSIONS.STUDENT_VIEW_SENSITIVE)"
+                v-if="tab.key !== 'admin' || canAccessAdminTab"
               type="button"
               :class="[
-                'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap',
+                'flex min-h-10 items-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap sm:px-4',
                 'border-b-2 -mb-px transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-1',
                 activeTab === tab.key
@@ -345,7 +345,7 @@
               </div>
 
               <!-- ── Tab: Administrasi ──────────────────────── -->
-              <div v-else-if="activeTab === 'admin'">
+              <div v-else-if="activeTab === 'admin' && canAccessAdminTab">
                 <StudentAdministrationPanel
                   :key="student.id"
                   :student-id="student.id"
@@ -517,9 +517,11 @@ const ParentCard = defineComponent({
       return String(val)
     }
 
-    function normalizeIsAlive(val: unknown): boolean {
-      if (val === false || val === 'FALSE' || val === 'false' || val === 0) return false
-      return true
+    function formatLifeStatus(val: unknown): string | undefined {
+      if (val == null || val === '') return undefined
+      if (val === false || val === 'FALSE' || val === 'false' || val === 0) return 'Almarhum/ah'
+      if (val === true || val === 'TRUE' || val === 'true' || val === 1) return 'Masih Hidup'
+      return undefined
     }
 
     return () => {
@@ -539,7 +541,7 @@ const ParentCard = defineComponent({
         h(InfoRow, { label: 'Pekerjaan', value: toStr(parent?.occupation) }),
         h(InfoRow, {
           label: 'Status',
-          value: normalizeIsAlive(parent?.isAlive) ? 'Masih Hidup' : 'Almarhum/ah',
+          value: formatLifeStatus(parent?.isAlive),
         }),
       ]
 
@@ -609,6 +611,7 @@ const tabs = [
   { key: 'admin',      label: 'Administrasi',  icon: ClipboardCheck  },
 ]
 const activeTab = ref('identity')
+const canAccessAdminTab = computed(() => can(PERMISSIONS.STUDENT_VIEW_SENSITIVE))
 const tabSkeletonWidths = ['w-20', 'w-24', 'w-24', 'w-24', 'w-28', 'w-28']
 
 // Definisi parent relation sebagai data (bukan object yang di-iterate)
