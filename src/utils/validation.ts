@@ -105,6 +105,24 @@ export const studentSchema = yup.object({
     .required('Tanggal lahir wajib diisi')
     .test('date-only', 'Tanggal lahir harus valid dan berformat YYYY-MM-DD', v => Boolean(v && isValidDateOnly(v))),
   religion: yup.string().required('Agama wajib dipilih'),
+  childOrder: yup
+    .number()
+    .transform((value, originalValue) => (
+      originalValue === '' || originalValue == null ? undefined : value
+    ))
+    .optional()
+    .integer('Anak ke- harus berupa angka bulat')
+    .min(1, 'Anak ke- minimal 1')
+    .max(20, 'Anak ke- maksimal 20'),
+  siblingsCount: yup
+    .number()
+    .transform((value, originalValue) => (
+      originalValue === '' || originalValue == null ? undefined : value
+    ))
+    .optional()
+    .integer('Jumlah saudara harus berupa angka bulat')
+    .min(0, 'Jumlah saudara minimal 0')
+    .max(20, 'Jumlah saudara maksimal 20'),
   entryDate: yup
     .string()
     .required('Tanggal masuk wajib diisi')
@@ -124,6 +142,84 @@ export const studentSchema = yup.object({
     .optional()
     .trim()
     .test('email', 'Format email tidak valid', v => !v || isValidEmail(v)),
+
+  educationHistory: yup
+    .object({
+      schoolName: yup.string().optional(),
+      level: yup.string().optional(),
+      certificateNumber: yup.string().optional(),
+      graduationYear: yup
+        .number()
+        .transform((value, originalValue) => (
+          originalValue === '' || originalValue == null ? undefined : value
+        ))
+        .optional()
+        .integer('Tahun lulus harus berupa angka bulat')
+        .min(1990, 'Tahun lulus minimal 1990')
+        .max(new Date().getFullYear(), 'Tahun lulus tidak boleh melebihi tahun ini'),
+    })
+    .optional(),
+
+  father: yup
+    .object({
+      fullName: yup.string().optional(),
+      nik: yup.string().optional().trim()
+        .test('nik', 'NIK ayah harus 16 digit angka', v => !v || /^\d{16}$/.test(v)),
+      birthDate: yup.string().optional()
+        .test('date-only', 'Tanggal lahir ayah harus valid dan berformat YYYY-MM-DD', v => !v || isValidDateOnly(v)),
+      phone: yup.string().optional().trim()
+        .test('phone', 'Nomor HP ayah tidak valid', v => !v || isValidPhone(v)),
+    })
+    .optional(),
+
+  mother: yup
+    .object({
+      fullName: yup.string().optional(),
+      nik: yup.string().optional().trim()
+        .test('nik', 'NIK ibu harus 16 digit angka', v => !v || /^\d{16}$/.test(v)),
+      birthDate: yup.string().optional()
+        .test('date-only', 'Tanggal lahir ibu harus valid dan berformat YYYY-MM-DD', v => !v || isValidDateOnly(v)),
+      phone: yup.string().optional().trim()
+        .test('phone', 'Nomor HP ibu tidak valid', v => !v || isValidPhone(v)),
+    })
+    .optional(),
+
+  guardian: yup
+    .object({
+      fullName: yup.string().optional(),
+      nik: yup.string().optional().trim()
+        .test('nik', 'NIK wali harus 16 digit angka', v => !v || /^\d{16}$/.test(v)),
+      birthDate: yup.string().optional()
+        .test('date-only', 'Tanggal lahir wali harus valid dan berformat YYYY-MM-DD', v => !v || isValidDateOnly(v)),
+      phone: yup.string().optional().trim()
+        .test('phone', 'Nomor HP wali tidak valid', v => !v || isValidPhone(v)),
+    })
+    .optional(),
+
+  health: yup
+    .object({
+      bloodType: yup.string().optional(),
+      heightCm: yup
+        .number()
+        .transform((value, originalValue) => (
+          originalValue === '' || originalValue == null ? undefined : value
+        ))
+        .optional()
+        .min(50, 'Tinggi badan minimal 50 cm')
+        .max(250, 'Tinggi badan maksimal 250 cm'),
+      weightKg: yup
+        .number()
+        .transform((value, originalValue) => (
+          originalValue === '' || originalValue == null ? undefined : value
+        ))
+        .optional()
+        .min(5, 'Berat badan minimal 5 kg')
+        .max(200, 'Berat badan maksimal 200 kg'),
+      specialNeeds: yup.string().optional(),
+      healthNotes: yup.string().optional(),
+      allergies: yup.string().optional(),
+    })
+    .optional(),
 })
 
 export const loginSchema = yup.object({
