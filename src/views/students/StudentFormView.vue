@@ -495,7 +495,7 @@
             @click="prevStep"
           >
             <ChevronLeft class="h-4 w-4" />
-            <span class="hidden xs:inline">Sebelumnya</span>
+            <span class="hidden sm:inline">Sebelumnya</span>
           </BaseButton>
           <div v-else />
 
@@ -582,6 +582,7 @@ const photoUploadData = ref('')
 const photoMimeType = ref<'image/jpeg' | 'image/png'>('image/jpeg')
 const photoError = ref('')
 const photoDeleteRequested = ref(false)
+const photoProcessVersion = ref(0)
 
 // BUG-3 FIX: errors menggunakan Record<string,string> — path Yup yang nested
 // seperti 'educationHistory.schoolName' disimpan dengan key yang sama.
@@ -632,15 +633,20 @@ async function handlePhotoChange(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
+
+  const currentVersion = photoProcessVersion.value + 1
+  photoProcessVersion.value = currentVersion
   photoError.value = ''
+
   try {
     const result = await compressImage(file)
+    if (currentVersion !== photoProcessVersion.value) return
+
     photoUploadData.value = result.base64
     photoMimeType.value = result.mimeType
-    const reader = new FileReader()
-    reader.onload = () => { photoPreview.value = String(reader.result || '') }
-    reader.readAsDataURL(file)
+    photoPreview.value = 'data:' + result.mimeType + ';base64,' + result.base64
   } catch (e: unknown) {
+    if (currentVersion !== photoProcessVersion.value) return
     photoUploadData.value = ''
     photoError.value = e instanceof Error ? e.message : 'Gagal memproses foto.'
   } finally {
@@ -819,32 +825,31 @@ function prevStep() {
  * BUG-6 FIX: errorMsg di-clear saat berhasil lanjut.
  */
 async function nextStep() {
-  // Jika step 0 (Identitas), partial-validate field wajib dulu
-  if (currentStep.value === 0) {
-    const partialErrors: string[] = []
-    if (!form.fullName?.trim()) partialErrors.push('Nama lengkap wajib diisi')
-    if (!form.nis?.trim())      partialErrors.push('NIS wajib diisi')
-    if (!form.nisn?.trim())     partialErrors.push('NISN wajib diisi')
-    if (!form.gender)           partialErrors.push('Jenis kelamin wajib dipilih')
-    if (!form.birthDate)        partialErrors.push('Tanggal lahir wajib diisi')
-    if (!form.religion)         partialErrors.push('Agama wajib dipilih')
+  const fieldsByStep: Record<number, string[]> = {
+    0: ['fullName', 'nis', 'nisn', 'gender', 'birthPlace', 'birthDate', 'religion'],
+    2: ['entryDate'],
+  }
+  const fields = fieldsByStep[currentStep.value] ?? []
 
-    if (partialErrors.length > 0) {
-      // Trigger Yup agar errors reactive terisi
+  if (fields.length) {
+    let hasError = false
+
+    for (const path of fields) {
       try {
-        await studentSchema.validate(form, { abortEarly: false })
+        await studentSchema.validateAt(path, form)
+        delete errors[path]
       } catch (err: unknown) {
-        if (err && typeof err === 'object' && 'inner' in err) {
-          const inner = (err as { inner: { path: string; message: string }[] }).inner
-          inner.forEach(e => { errors[e.path] = e.message })
-        }
+        hasError = true
+        const message = err && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'Field ini perlu diperbaiki.'
+        errors[path] = message
       }
-      errorMsg.value = 'Lengkapi field yang wajib diisi terlebih dahulu.'
-      return
     }
-    // Clear errors step 0 jika valid
-    for (const key of Object.keys(fieldToStep).filter(k => fieldToStep[k] === 0)) {
-      delete errors[key]
+
+    if (hasError) {
+      errorMsg.value = 'Lengkapi field wajib pada langkah ini terlebih dahulu.'
+      return
     }
   }
 
@@ -857,33 +862,31 @@ async function nextStep() {
 // Submit
 // ─────────────────────────────────────────────────────────────────
 async function handleSubmit() {
+  if (isSaving.value) return
+
+  isSaving.value = true
   // BUG-6 FIX: Reset error state di awal setiap submit.
   Object.keys(errors).forEach(k => delete errors[k])
   errorMsg.value = ''
 
   try {
-    await studentSchema.validate(form, { abortEarly: false })
-  } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'inner' in err) {
-      const inner = (err as { inner: { path: string; message: string }[] }).inner
+    try {
+      await studentSchema.validate(form, { abortEarly: false })
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'inner' in err) {
+        const inner = (err as { inner: { path: string; message: string }[] }).inner
 
-      // BUG-3 FIX: Map semua path Yup (termasuk nested) langsung ke errors object.
-      // Template menggunakan :error-message="errors['entryDate']" atau
-      // :error-message="errors['health.bloodType']" dsb.
-      inner.forEach(e => { errors[e.path] = e.message })
+        // BUG-3 FIX: Map semua path Yup (termasuk nested) langsung ke errors object.
+        inner.forEach(e => { errors[e.path] = e.message })
 
-      // BUG-2/5 FIX: Pindah ke step PERTAMA yang mengandung error, bukan selalu step 0.
-      const errorPaths = inner.map(e => e.path)
-      currentStep.value = firstStepWithError(errorPaths)
-
-      // Pesan ringkas jumlah error
-      errorMsg.value = `Terdapat ${inner.length} field yang perlu diperbaiki.`
+        const errorPaths = inner.map(e => e.path)
+        currentStep.value = firstStepWithError(errorPaths)
+        errorMsg.value = `Terdapat ${inner.length} field yang perlu diperbaiki.`
+      }
+      return
     }
-    return
-  }
 
-  isSaving.value = true
-  try {
+    try {
     let savedStudent
     if (isEdit.value) {
       savedStudent = await studentsService.update(
@@ -920,12 +923,13 @@ async function handleSubmit() {
       }
     }
 
-    photoDeleteRequested.value = false
-    studentsStore.updateInList(savedStudent)
-    toast.success(isEdit.value ? 'Data siswa berhasil diperbarui.' : 'Siswa baru berhasil ditambahkan.')
-    router.push('/students')
-  } catch (e: unknown) {
-    errorMsg.value = e instanceof Error ? e.message : 'Gagal menyimpan data.'
+      photoDeleteRequested.value = false
+      studentsStore.updateInList(savedStudent)
+      toast.success(isEdit.value ? 'Data siswa berhasil diperbarui.' : 'Siswa baru berhasil ditambahkan.')
+      void router.push('/students')
+    } catch (e: unknown) {
+      errorMsg.value = e instanceof Error ? e.message : 'Gagal menyimpan data.'
+    }
   } finally {
     isSaving.value = false
   }
