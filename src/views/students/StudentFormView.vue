@@ -779,7 +779,9 @@ const fieldToStep: Record<string, number> = {
   'educationHistory.schoolName': 2, 'educationHistory.level': 2,
   'educationHistory.certificateNumber': 2, 'educationHistory.graduationYear': 2,
   // step 3
-  'father.fullName': 3, 'mother.fullName': 3, 'guardian.fullName': 3,
+  'father.fullName': 3, 'father.nik': 3, 'father.birthDate': 3, 'father.phone': 3,
+  'mother.fullName': 3, 'mother.nik': 3, 'mother.birthDate': 3, 'mother.phone': 3,
+  'guardian.fullName': 3, 'guardian.nik': 3, 'guardian.birthDate': 3, 'guardian.phone': 3,
   // step 4
   'health.bloodType': 4, 'health.heightCm': 4, 'health.weightKg': 4,
   'health.specialNeeds': 4, 'health.healthNotes': 4, 'health.allergies': 4,
