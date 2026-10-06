@@ -1,4 +1,5 @@
 import { gasRequest } from './api'
+import { normalizePhotoUrl } from '@/utils'
 import type {
   Student, StudentFormData, StudentFilters, StudentVerification, StudentDocument,
   StudentParent, StudentHealth, StudentEducationHistory,
@@ -126,11 +127,11 @@ function normalizeStudent(student: Student): Student {
     entryDate: optionalString(student.entryDate),
     exitDate: optionalString(student.exitDate),
     exitReason: optionalString(student.exitReason),
-    photoUrl: optionalString(
+    photoUrl: normalizePhotoUrl(
       (student as Student & Record<string, unknown>).photoUrl ??
       (student as Student & Record<string, unknown>).photoURL ??
       (student as Student & Record<string, unknown>).photo_url,
-    ),
+    ) || undefined,
     notes: optionalString(student.notes),
     createdAt: requiredString(student.createdAt),
     updatedAt: requiredString(student.updatedAt),
@@ -214,6 +215,20 @@ export const studentsService = {
       studentId, base64, mimeType,
     }, { timeout: 60_000 })
     return normalizeStudent(student)
+  },
+
+  async getPhotoData(studentId: string): Promise<{ dataUrl: string; mimeType: string }> {
+    const response = await gasRequest<{ dataUrl: string; mimeType: string }>(
+      'students.getPhotoData',
+      { studentId },
+      { timeout: 60_000 },
+    )
+
+    if (!response?.dataUrl) {
+      throw new Error('Data foto siswa tidak tersedia.')
+    }
+
+    return response
   },
 
   async deletePhoto(studentId: string): Promise<Student> {
