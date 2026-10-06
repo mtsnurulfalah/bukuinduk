@@ -10,9 +10,11 @@
          Saat gambar 404/gagal, imgError=true → fallback ke initials ditampilkan. -->
     <img
       v-if="showImage"
-      :src="src!"
+      :src="resolvedSrc"
       :alt="name ?? 'Avatar'"
       class="h-full w-full object-cover"
+      referrerpolicy="no-referrer"
+      decoding="async"
       @error="imgError = true"
     />
     <span
@@ -42,12 +44,37 @@ const props = withDefaults(defineProps<Props>(), {
 
 const imgError = ref(false)
 
-// BUG-14 FIX: showImage hanya true jika src ada DAN belum error.
-// Sebelumnya: v-if="src" tidak berubah saat imgError=true — tetap render <img> broken.
-const showImage = computed(() => Boolean(props.src) && !imgError.value)
+/**
+ * Normalisasi URL foto siswa sebelum diberikan ke <img>.
+ * Data lama dapat menyimpan URL Drive dalam beberapa bentuk; thumbnail
+ * lebih konsisten untuk hotlink gambar dari Google Drive.
+ */
+function normalizeImageSrc(value: string | null | undefined): string {
+  const src = String(value ?? '').trim()
+  if (!src) return ''
 
-// Reset imgError saat src prop berubah ke URL baru
-watch(() => props.src, () => { imgError.value = false })
+  if (/^(data:image\/|blob:)/i.test(src)) return src
+
+  if (/^https?:\/\/drive\.google\.com\//i.test(src)) {
+    const fileId =
+      src.match(/\/file\/d\/([A-Za-z0-9_-]+)/i)?.[1] ??
+      src.match(/[?&]id=([A-Za-z0-9_-]+)/i)?.[1]
+
+    if (fileId) {
+      return `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w1000`
+    }
+  }
+
+  return src
+}
+
+const resolvedSrc = computed(() => normalizeImageSrc(props.src))
+
+// BUG-14 FIX: showImage hanya true jika src valid dan belum gagal dimuat.
+const showImage = computed(() => Boolean(resolvedSrc.value) && !imgError.value)
+
+// Reset imgError saat sumber foto berubah.
+watch(resolvedSrc, () => { imgError.value = false })
 
 const sizeClass = computed(() => ({
   xs: 'h-6 w-6',
