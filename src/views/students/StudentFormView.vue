@@ -907,15 +907,16 @@ async function handleSubmit() {
       let savedStudent
 
       if (isEdit.value) {
-        const editPayload = { ...form } as unknown as Partial<StudentFormData>
+        const currentNis = String(form.nis ?? '').trim()
+        const currentNisn = String(form.nisn ?? '').trim()
 
-        // NIS/NISN yang tetap sama adalah milik record yang sedang diedit.
-        // Jangan kirim ulang ke backend sebagai kandidat identifier baru.
-        if (String(editPayload.nis ?? '').trim() === originalEditIdentifiers.nis) {
-          delete editPayload.nis
-        }
-        if (String(editPayload.nisn ?? '').trim() === originalEditIdentifiers.nisn) {
-          delete editPayload.nisn
+        // Bangun payload tanpa NIS/NISN terlebih dahulu. Keduanya hanya
+        // dikirim bila nilainya benar-benar berubah dari record awal.
+        const { nis: _nis, nisn: _nisn, ...baseEditPayload } = form
+        const editPayload: Partial<StudentFormData> = {
+          ...baseEditPayload,
+          ...(currentNis !== originalEditIdentifiers.nis ? { nis: currentNis } : {}),
+          ...(currentNisn !== originalEditIdentifiers.nisn ? { nisn: currentNisn } : {}),
         }
 
         const editId = String(route.params.id ?? '').trim()
