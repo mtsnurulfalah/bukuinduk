@@ -907,7 +907,7 @@ async function handleSubmit() {
       let savedStudent
 
       if (isEdit.value) {
-        const editPayload = { ...form } as unknown as StudentFormData
+        const editPayload = { ...form } as unknown as Partial<StudentFormData>
 
         // NIS/NISN yang tetap sama adalah milik record yang sedang diedit.
         // Jangan kirim ulang ke backend sebagai kandidat identifier baru.
