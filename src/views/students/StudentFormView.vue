@@ -575,7 +575,9 @@ const schoolYearStore   = useSchoolYearStore()
 // ─────────────────────────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────────────────────────
-const isEdit       = computed(() => Boolean(route.params.id))
+// Mode form harus mengikuti route secara eksplisit.
+// Kehadiran parameter :id saja tidak cukup untuk menentukan create/edit.
+const isEdit       = computed(() => route.name === 'students.edit')
 const isSaving     = ref(false)
 const isLoadingForm = ref(false)   // BUG-10 FIX: loading saat edit mode fetch
 const errorMsg     = ref('')
@@ -590,6 +592,14 @@ const photoError = ref('')
 const photoDeleteRequested = ref(false)
 const photoProcessVersion = ref(0)
 let formLoadVersion = 0
+
+// Snapshot identifier saat data edit pertama kali dimuat.
+// Digunakan agar NIS/NISN yang tidak berubah tidak dikirim ulang sebagai
+// identifier "baru", sehingga tetap kompatibel dengan backend GAS versi lama.
+const originalEditIdentifiers = reactive({
+  nis: '',
+  nisn: '',
+})
 
 // BUG-3 FIX: errors menggunakan Record<string,string> — path Yup yang nested
 // seperti 'educationHistory.schoolName' disimpan dengan key yang sama.
@@ -894,13 +904,25 @@ async function handleSubmit() {
     }
 
     try {
-    let savedStudent
-    if (isEdit.value) {
-      savedStudent = await studentsService.update(
-        route.params.id as string,
-        form as unknown as StudentFormData,
-      )
-    } else {
+      let savedStudent
+
+      if (isEdit.value) {
+        const editPayload = { ...form } as unknown as StudentFormData
+
+        // NIS/NISN yang tetap sama adalah milik record yang sedang diedit.
+        // Jangan kirim ulang ke backend sebagai kandidat identifier baru.
+        if (String(editPayload.nis ?? '').trim() === originalEditIdentifiers.nis) {
+          delete editPayload.nis
+        }
+        if (String(editPayload.nisn ?? '').trim() === originalEditIdentifiers.nisn) {
+          delete editPayload.nisn
+        }
+
+        const editId = String(route.params.id ?? '').trim()
+        if (!editId) throw new Error('ID siswa tidak valid untuk proses edit.')
+
+        savedStudent = await studentsService.update(editId, editPayload)
+      } else {
       savedStudent = await studentsService.create(form as unknown as StudentFormData)
     }
 
@@ -1029,6 +1051,8 @@ function resetFormState(): void {
   })
 
   Object.keys(errors).forEach(key => delete errors[key])
+  originalEditIdentifiers.nis = ''
+  originalEditIdentifiers.nisn = ''
   photoPreview.value = ''
   photoUploadData.value = ''
   photoMimeType.value = 'image/jpeg'
@@ -1096,6 +1120,9 @@ async function loadEditStudent(rawId: unknown): Promise<void> {
       classroomId:   student.currentEnrollment?.classroomId   ?? '',
       schoolYearId:  student.currentEnrollment?.schoolYearId  ?? '',
     })
+
+    originalEditIdentifiers.nis = String(student.nis ?? '').trim()
+    originalEditIdentifiers.nisn = String(student.nisn ?? '').trim()
 
     photoPreview.value = student.photoUrl ?? ''
     photoDeleteRequested.value = false
