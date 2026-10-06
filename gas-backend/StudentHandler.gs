@@ -741,25 +741,34 @@ var StudentHandler = {
     }
     try {
     checkPermission(user, 'student:update');
-    var id = payload.id;
-    if (!id) return errorResponse(400, 'ID siswa diperlukan.');
 
-    if (payload.classroomId || payload.schoolYearId) {
-      if (!payload.classroomId || !payload.schoolYearId) return errorResponse(400, 'Kelas dan tahun pelajaran harus diisi bersama.');
-      this._validateEnrollmentTarget(id, payload.classroomId, payload.schoolYearId);
-    }
+    // ID adalah identitas target edit dan harus selalu berasal dari route/request,
+    // bukan dari field form yang dapat berubah.
+    var id = normalizeIdentifier(payload.id);
+    if (!id) return errorResponse(400, 'ID siswa diperlukan.');
 
     var sheet   = getSheet(CONFIG.SHEETS.STUDENTS);
     var headers = getHeaders(sheet);
     var rowIdx  = findRowById(sheet, id);
     if (rowIdx < 0) return errorResponse(404, 'Siswa tidak ditemukan.');
 
+    // Pastikan record target benar-benar ada sebelum validasi field lain.
     var all = this._getAll();
-    var old = all.find(function(s) { return String(s.id) === String(id); });
+    var old = all.find(function(s) {
+      return normalizeIdentifier(s.id) === id;
+    });
     if (!old) return errorResponse(404, 'Siswa tidak ditemukan.');
+
+    if (payload.classroomId || payload.schoolYearId) {
+      if (!payload.classroomId || !payload.schoolYearId) {
+        return errorResponse(400, 'Kelas dan tahun pelajaran harus diisi bersama.');
+      }
+      this._validateEnrollmentTarget(id, payload.classroomId, payload.schoolYearId);
+    }
 
     var normalizedNis = payload.nis !== undefined ? normalizeIdentifier(payload.nis) : undefined;
     var normalizedNisn = payload.nisn !== undefined ? normalizeIdentifier(payload.nisn) : undefined;
+    var normalizedNik = payload.nik !== undefined ? normalizeIdentifier(payload.nik) : undefined;
 
     if (normalizedNis !== undefined && !/^[A-Za-z0-9]{3,20}$/.test(normalizedNis)) {
       return errorResponse(400, 'NIS harus 3–20 karakter alfanumerik.');
@@ -772,7 +781,6 @@ var StudentHandler = {
     }
 
     var normalizedFullName = payload.fullName !== undefined ? normalizeIdentifier(payload.fullName) : undefined;
-    var normalizedNik = payload.nik !== undefined ? normalizeIdentifier(payload.nik) : undefined;
     var normalizedGender = payload.gender !== undefined ? normalizeIdentifier(payload.gender).toUpperCase() : undefined;
     var normalizedBirthPlace = payload.birthPlace !== undefined ? normalizeIdentifier(payload.birthPlace) : undefined;
     var normalizedBirthDate = payload.birthDate !== undefined ? normalizeIdentifier(payload.birthDate) : undefined;
@@ -800,15 +808,18 @@ var StudentHandler = {
       return errorResponse(400, 'Tanggal masuk harus tanggal kalender valid berformat YYYY-MM-DD.');
     }
 
+    // Identifier unik hanya dibandingkan dengan SISWA LAIN.
+    // Record yang sedang diedit wajib dikecualikan, sehingga menyimpan data
+    // tanpa mengubah NIS/NISN tidak pernah dianggap sebagai duplikat.
     if (normalizedNis !== undefined && all.some(function(s) {
-      return String(s.id) !== String(id) &&
+      return normalizeIdentifier(s.id) !== id &&
         normalizeIdentifier(s.nis) === normalizedNis;
     })) {
       return errorResponse(409, 'NIS "' + normalizedNis + '" sudah digunakan.');
     }
 
     if (normalizedNisn !== undefined && all.some(function(s) {
-      return String(s.id) !== String(id) &&
+      return normalizeIdentifier(s.id) !== id &&
         normalizeIdentifier(s.nisn) === normalizedNisn;
     })) {
       return errorResponse(409, 'NISN "' + normalizedNisn + '" sudah digunakan.');
@@ -846,7 +857,7 @@ var StudentHandler = {
       this._saveParents(id, payload, user);
     }
     if (payload.health) this._saveHealth(id, payload.health);
-    if (payload.educationHistory) this._saveEducationHistory(id, payload.educationHistory);
+    if (payload.educationHistory) this._saveEducationHistory(id, payload.educationHistory, user);
 
     // Step Pendidikan & Kelas dapat mengubah rombel siswa. Jalankan enrollment
     // hanya saat kedua ID dikirim dan classroom tidak kosong; field opsional yang
