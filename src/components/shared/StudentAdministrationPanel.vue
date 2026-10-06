@@ -30,7 +30,7 @@
               <p v-if="item.notes" class="text-xs text-slate-500 mt-1">{{ item.notes }}</p>
             </div>
 
-            <div class="flex items-center gap-1.5 shrink-0">
+            <div class="flex flex-wrap items-center justify-start gap-1.5 shrink-0">
               <button
                 v-for="option in verificationOptions"
                 :key="option.value"
@@ -118,7 +118,7 @@
               <p v-if="document.notes" class="text-xs text-slate-500 mt-1">{{ document.notes }}</p>
             </div>
 
-            <div class="flex items-center gap-1.5 shrink-0">
+            <div class="flex w-full flex-wrap items-center justify-end gap-1.5 lg:w-auto">
               <a
                 v-if="document.fileUrl"
                 :href="document.fileUrl"
@@ -204,9 +204,9 @@
       </form>
 
       <template #footer>
-        <div class="flex items-center justify-end gap-2">
-          <BaseButton variant="outline" size="sm" @click="showDocumentModal = false">Batal</BaseButton>
-          <BaseButton size="sm" :loading="isSavingDocument" loading-text="Menyimpan..." @click="saveDocument">
+        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <BaseButton variant="outline" size="sm" class="w-full sm:w-auto" @click="showDocumentModal = false">Batal</BaseButton>
+          <BaseButton size="sm" class="w-full sm:w-auto" :loading="isSavingDocument" loading-text="Menyimpan..." @click="saveDocument">
             <Save class="h-4 w-4" />
             Simpan
           </BaseButton>
