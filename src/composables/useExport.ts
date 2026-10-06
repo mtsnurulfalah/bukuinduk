@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { formatDate, formatGender } from '@/utils'
-import { studentsService } from '@/services'
+import { studentsService } from '@/services/students.service'
 import type { AppSettings, Student, StudentEnrollment } from '@/types'
 
 /**
