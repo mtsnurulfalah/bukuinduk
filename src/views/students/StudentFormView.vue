@@ -934,6 +934,9 @@ async function handleSubmit() {
           photoUploadData.value,
           photoMimeType.value,
         )
+        // Sinkronkan state form dengan URL foto final dari backend.
+        form.photoUrl = savedStudent.photoUrl ?? ''
+        photoPreview.value = savedStudent.photoUrl ?? photoPreview.value
       } catch (photoErr: unknown) {
         toast.warning(
           photoErr instanceof Error
@@ -944,6 +947,8 @@ async function handleSubmit() {
     } else if (photoDeleteRequested.value && savedStudent?.id) {
       try {
         savedStudent = await studentsService.deletePhoto(savedStudent.id)
+        form.photoUrl = ''
+        photoPreview.value = ''
       } catch (photoErr: unknown) {
         toast.warning(
           photoErr instanceof Error
