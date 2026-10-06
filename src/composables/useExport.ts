@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { formatDate, formatGender } from '@/utils'
+import { studentsService } from '@/services'
 import type { AppSettings, Student, StudentEnrollment } from '@/types'
 
 /**
@@ -189,28 +190,52 @@ export function useExport() {
       const rowsFor = (items: Array<[string, string]>) =>
         items.map(([label, value]) => [label, value])
 
-      async function imageUrlToDataUrl(url?: string): Promise<string | null> {
-        if (!url) return null
-        try {
-          const response = await fetch(url)
-          if (!response.ok) return null
-          const blob = await response.blob()
-          if (!blob.type.startsWith('image/')) return null
-          return await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(String(reader.result || ''))
-            reader.onerror = reject
-            reader.readAsDataURL(blob)
-          })
-        } catch {
-          return null
+      async function imageUrlToDataUrl(
+        url?: string,
+        studentId?: string,
+      ): Promise<string | null> {
+        // Prioritaskan endpoint GAS karena fetch() ke Google Drive dari browser
+        // dapat diblokir oleh CORS meskipun URL fotonya valid untuk <img>.
+        if (studentId) {
+          try {
+            const response = await studentsService.getPhotoData(studentId)
+            if (response.dataUrl) return response.dataUrl
+          } catch {
+            // Lanjutkan ke fallback URL langsung.
+          }
         }
+
+        if (!url) return null
+
+        const candidates = [
+          url,
+          url.replace(/^https?:\/\/drive\.google\.com\/thumbnail\?id=([^&]+).*$/i, 'https://drive.google.com/uc?export=view&id=$1'),
+        ]
+
+        for (const candidate of candidates) {
+          try {
+            const response = await fetch(candidate, { cache: 'no-store' })
+            if (!response.ok) continue
+            const blob = await response.blob()
+            if (!blob.type.startsWith('image/')) continue
+            return await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(String(reader.result || ''))
+              reader.onerror = reject
+              reader.readAsDataURL(blob)
+            })
+          } catch {
+            // Coba kandidat berikutnya.
+          }
+        }
+
+        return null
       }
 
       section('Identitas Siswa')
       let photoDataUrl: string | null = null
       if (student.photoUrl) {
-        photoDataUrl = await imageUrlToDataUrl(student.photoUrl)
+        photoDataUrl = await imageUrlToDataUrl(student.photoUrl, student.id)
         if (photoDataUrl) {
           const photoW = 34
           const photoH = 43
