@@ -767,8 +767,12 @@ var StudentHandler = {
     if (normalizedNisn !== undefined && !/^\d{10}$/.test(normalizedNisn)) {
       return errorResponse(400, 'NISN harus 10 digit angka.');
     }
+    if (normalizedNik !== undefined && normalizedNik && !/^\d{16}$/.test(normalizedNik)) {
+      return errorResponse(400, 'NIK harus 16 digit angka.');
+    }
 
     var normalizedFullName = payload.fullName !== undefined ? normalizeIdentifier(payload.fullName) : undefined;
+    var normalizedNik = payload.nik !== undefined ? normalizeIdentifier(payload.nik) : undefined;
     var normalizedGender = payload.gender !== undefined ? normalizeIdentifier(payload.gender).toUpperCase() : undefined;
     var normalizedBirthPlace = payload.birthPlace !== undefined ? normalizeIdentifier(payload.birthPlace) : undefined;
     var normalizedBirthDate = payload.birthDate !== undefined ? normalizeIdentifier(payload.birthDate) : undefined;
@@ -817,7 +821,7 @@ var StudentHandler = {
       if (h === 'fullName' && normalizedFullName !== undefined) value = normalizedFullName;
       if (h === 'nis' && normalizedNis !== undefined) value = normalizedNis;
       if (h === 'nisn' && normalizedNisn !== undefined) value = normalizedNisn;
-      if (h === 'nik' && payload.nik !== undefined) value = normalizeIdentifier(payload.nik);
+      if (h === 'nik' && normalizedNik !== undefined) value = normalizedNik;
       if (h === 'gender' && normalizedGender !== undefined) value = normalizedGender;
       if (h === 'birthPlace' && normalizedBirthPlace !== undefined) value = normalizedBirthPlace;
       if (h === 'birthDate' && normalizedBirthDate !== undefined) value = normalizedBirthDate;
