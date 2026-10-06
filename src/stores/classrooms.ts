@@ -9,21 +9,26 @@ export const useClassroomsStore = defineStore('classrooms', () => {
   const initialized = ref(false)
   const currentSchoolYearId = ref<string>('')
 
+  // Defensive guard: response API yang tidak sesuai kontrak tidak boleh
+  // menjatuhkan seluruh halaman karena operasi .filter/.map.
+  const safeList = computed<Classroom[]>(() =>
+    Array.isArray(list.value) ? list.value : []
+  )
+
   // Opsi untuk dropdown — seluruh kelas yang sudah di-fetch (tanpa filter schoolYear).
-  // Digunakan oleh filter di StudentListView yang memang ingin tampilkan semua kelas.
   const classroomOptions = computed(() =>
-    list.value.map(c => ({ value: c.id, label: c.name }))
+    safeList.value.map(c => ({ value: c.id, label: c.name }))
   )
 
   // Opsi kelas aktif saja — digunakan di form yang butuh pilihan kelas aktif.
   const activeClassroomOptions = computed(() =>
-    list.value
+    safeList.value
       .filter(c => c.isActive)
       .map(c => ({ value: c.id, label: c.name }))
   )
 
   const activeClassrooms = computed(() =>
-    list.value.filter(c => c.isActive)
+    safeList.value.filter(c => c.isActive)
   )
 
   /**
@@ -75,7 +80,7 @@ export const useClassroomsStore = defineStore('classrooms', () => {
    */
   function getOptionsForYear(schoolYearId: string): { value: string; label: string }[] {
     if (!schoolYearId) return classroomOptions.value
-    return list.value
+    return safeList.value
       .filter(c => String(c.schoolYearId) === String(schoolYearId))
       .map(c => ({ value: c.id, label: c.name }))
   }
