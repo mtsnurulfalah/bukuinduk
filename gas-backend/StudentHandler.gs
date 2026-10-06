@@ -659,8 +659,15 @@ var StudentHandler = {
       this._validateEnrollmentTarget('', payload.classroomId, payload.schoolYearId);
     }
 
-    if (!normalizeIdentifier(payload.fullName)) return errorResponse(400, 'Nama lengkap wajib diisi.');
+    var normalizedFullName = normalizeIdentifier(payload.fullName);
+    if (!normalizedFullName) return errorResponse(400, 'Nama lengkap wajib diisi.');
+    if (normalizedFullName.length < 3 || normalizedFullName.length > 255) {
+      return errorResponse(400, 'Nama lengkap harus 3–255 karakter.');
+    }
     if (!normalizedNis) return errorResponse(400, 'NIS wajib diisi.');
+    if (!/^[A-Za-z0-9]{3,20}$/.test(normalizedNis)) {
+      return errorResponse(400, 'NIS harus 3–20 karakter alfanumerik.');
+    }
     if (!normalizedNisn) return errorResponse(400, 'NISN wajib diisi.');
     if (!/^\d{10}$/.test(normalizedNisn)) return errorResponse(400, 'NISN harus 10 digit angka.');
     if (normalizedNik && !/^\d{16}$/.test(normalizedNik)) return errorResponse(400, 'NIK harus 16 digit angka.');
@@ -668,12 +675,12 @@ var StudentHandler = {
       return errorResponse(400, 'Jenis kelamin wajib dipilih.');
     }
     if (!normalizedBirthPlace) return errorResponse(400, 'Tempat lahir wajib diisi.');
-    if (!normalizedBirthDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedBirthDate)) {
-      return errorResponse(400, 'Tanggal lahir harus berformat YYYY-MM-DD.');
+    if (!normalizedBirthDate || !this._isValidDateOnly(normalizedBirthDate)) {
+      return errorResponse(400, 'Tanggal lahir harus tanggal kalender valid berformat YYYY-MM-DD.');
     }
     if (!normalizedReligion) return errorResponse(400, 'Agama wajib dipilih.');
-    if (!normalizedEntryDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedEntryDate)) {
-      return errorResponse(400, 'Tanggal masuk harus berformat YYYY-MM-DD.');
+    if (!normalizedEntryDate || !this._isValidDateOnly(normalizedEntryDate)) {
+      return errorResponse(400, 'Tanggal masuk harus tanggal kalender valid berformat YYYY-MM-DD.');
     }
 
     // Cek duplikat NIS/NISN setelah normalisasi tipe dan whitespace.
@@ -690,8 +697,9 @@ var StudentHandler = {
 
     var student = {};
     headers.forEach(function(h) { student[h] = _valueForHeader(payload, h); });
-    student.id        = id;
-    student.nis       = normalizedNis;
+    student.id         = id;
+    student.fullName    = normalizedFullName;
+    student.nis         = normalizedNis;
     student.nisn      = normalizedNisn;
     student.nik       = normalizedNik;
     student.gender    = normalizedGender;
@@ -753,8 +761,39 @@ var StudentHandler = {
     var normalizedNis = payload.nis !== undefined ? normalizeIdentifier(payload.nis) : undefined;
     var normalizedNisn = payload.nisn !== undefined ? normalizeIdentifier(payload.nisn) : undefined;
 
+    if (normalizedNis !== undefined && !/^[A-Za-z0-9]{3,20}$/.test(normalizedNis)) {
+      return errorResponse(400, 'NIS harus 3–20 karakter alfanumerik.');
+    }
     if (normalizedNisn !== undefined && !/^\d{10}$/.test(normalizedNisn)) {
       return errorResponse(400, 'NISN harus 10 digit angka.');
+    }
+
+    var normalizedFullName = payload.fullName !== undefined ? normalizeIdentifier(payload.fullName) : undefined;
+    var normalizedGender = payload.gender !== undefined ? normalizeIdentifier(payload.gender).toUpperCase() : undefined;
+    var normalizedBirthPlace = payload.birthPlace !== undefined ? normalizeIdentifier(payload.birthPlace) : undefined;
+    var normalizedBirthDate = payload.birthDate !== undefined ? normalizeIdentifier(payload.birthDate) : undefined;
+    var normalizedReligion = payload.religion !== undefined ? normalizeIdentifier(payload.religion) : undefined;
+    var normalizedEntryDate = payload.entryDate !== undefined ? normalizeIdentifier(payload.entryDate) : undefined;
+
+    if (normalizedFullName !== undefined &&
+        (normalizedFullName.length < 3 || normalizedFullName.length > 255)) {
+      return errorResponse(400, 'Nama lengkap harus 3–255 karakter.');
+    }
+    if (normalizedGender !== undefined && ['L', 'P'].indexOf(normalizedGender) === -1) {
+      return errorResponse(400, 'Jenis kelamin harus L/P.');
+    }
+    if (normalizedBirthPlace !== undefined &&
+        (normalizedBirthPlace.length < 2 || normalizedBirthPlace.length > 100)) {
+      return errorResponse(400, 'Tempat lahir harus 2–100 karakter.');
+    }
+    if (normalizedBirthDate !== undefined && !this._isValidDateOnly(normalizedBirthDate)) {
+      return errorResponse(400, 'Tanggal lahir harus tanggal kalender valid berformat YYYY-MM-DD.');
+    }
+    if (normalizedReligion !== undefined && !normalizedReligion) {
+      return errorResponse(400, 'Agama wajib dipilih.');
+    }
+    if (normalizedEntryDate !== undefined && !this._isValidDateOnly(normalizedEntryDate)) {
+      return errorResponse(400, 'Tanggal masuk harus tanggal kalender valid berformat YYYY-MM-DD.');
     }
 
     if (normalizedNis !== undefined && all.some(function(s) {
@@ -775,8 +814,15 @@ var StudentHandler = {
     headers.forEach(function(h) {
       if (h === 'id' || h === 'createdAt' || h === 'createdBy') return;
       var value = _valueForHeader(payload, h);
+      if (h === 'fullName' && normalizedFullName !== undefined) value = normalizedFullName;
       if (h === 'nis' && normalizedNis !== undefined) value = normalizedNis;
       if (h === 'nisn' && normalizedNisn !== undefined) value = normalizedNisn;
+      if (h === 'nik' && payload.nik !== undefined) value = normalizeIdentifier(payload.nik);
+      if (h === 'gender' && normalizedGender !== undefined) value = normalizedGender;
+      if (h === 'birthPlace' && normalizedBirthPlace !== undefined) value = normalizedBirthPlace;
+      if (h === 'birthDate' && normalizedBirthDate !== undefined) value = normalizedBirthDate;
+      if (h === 'religion' && normalizedReligion !== undefined) value = normalizedReligion;
+      if (h === 'entryDate' && normalizedEntryDate !== undefined) value = normalizedEntryDate;
       // Alias kosong tidak boleh menimpa nilai lama; update hanya field yang dikirim.
       var hasExact = payload[h] !== undefined;
       var aliasNames = {
@@ -1288,6 +1334,20 @@ var StudentHandler = {
   },
 
   // ── Private helpers ──────────────────────────────────────────
+  _isValidDateOnly: function(value) {
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+    if (!match) return false;
+
+    var year = Number(match[1]);
+    var month = Number(match[2]);
+    var day = Number(match[3]);
+    var date = new Date(Date.UTC(year, month - 1, day));
+
+    return date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day;
+  },
+
   _saveParents: function(studentId, payload, user) {
     var sheet   = getSheet(CONFIG.SHEETS.PARENTS);
     var headers = getHeaders(sheet);
