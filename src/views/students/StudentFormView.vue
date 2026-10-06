@@ -560,7 +560,7 @@ import {
   PREVIOUS_SCHOOL_LEVEL_OPTIONS, PROVINCES_ID,
 } from '@/constants'
 import { studentSchema } from '@/utils/validation'
-import { normalizePhotoUrl } from '@/utils'
+import { normalizePhotoUrl } from '@/utils/image'
 import { toast } from 'vue-sonner'
 import type { StudentFormData } from '@/types'
 
