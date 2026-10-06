@@ -38,7 +38,15 @@ var StudentHandler = {
     var cacheKey = 'students_all';
     var cached = cacheGet(cacheKey);
     if (cached) return cached;
-    var data = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
+    var data = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS)).map(function(s) {
+      var student = Object.assign({}, s);
+      if (student.photoUrl == null || student.photoUrl === '') {
+        student.photoUrl = student.photoURL != null
+          ? student.photoURL
+          : (student.photo_url != null ? student.photo_url : null);
+      }
+      return student;
+    });
     cacheSet(cacheKey, data, 120);
     return data;
   },
@@ -584,7 +592,9 @@ var StudentHandler = {
       return errorResponse(500, 'Foto tersimpan tetapi akses tampilannya ditolak oleh kebijakan Google Drive. Periksa izin berbagi folder.');
     }
 
-    var photoUrl = 'https://drive.google.com/uc?export=view&id=' + file.getId();
+    // Gunakan endpoint thumbnail karena lebih konsisten untuk <img> lintas browser.
+    var photoUrl = 'https://drive.google.com/thumbnail?id=' +
+      encodeURIComponent(file.getId()) + '&sz=w1000';
 
     // Hapus foto lama jika merupakan file Drive yang dikelola aplikasi.
     if (student.photoUrl) {
