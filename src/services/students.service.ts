@@ -1,5 +1,5 @@
 import { gasRequest } from './api'
-import { normalizePhotoUrl } from '@/utils'
+import { normalizePhotoUrl } from '@/utils/image'
 import type {
   Student, StudentFormData, StudentFilters, StudentVerification, StudentDocument,
   StudentParent, StudentHealth, StudentEducationHistory,
