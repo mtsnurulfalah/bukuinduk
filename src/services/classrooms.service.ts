@@ -1,7 +1,5 @@
 import { gasRequest } from './api'
 import type { Classroom, ClassroomFormData, Grade, SchoolYear, SchoolYearFormData } from '@/types'
-import { gasRequest } from './api'
-import type { Classroom, ClassroomFormData, Grade, SchoolYear, SchoolYearFormData } from '@/types'
 import type { ClassroomStats } from '@/types'
 
 function normalizeArrayResponse<T>(
