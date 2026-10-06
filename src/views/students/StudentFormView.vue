@@ -560,6 +560,7 @@ import {
   PREVIOUS_SCHOOL_LEVEL_OPTIONS, PROVINCES_ID,
 } from '@/constants'
 import { studentSchema } from '@/utils/validation'
+import { normalizePhotoUrl } from '@/utils'
 import { toast } from 'vue-sonner'
 import type { StudentFormData } from '@/types'
 
@@ -936,7 +937,9 @@ async function handleSubmit() {
         )
         // Sinkronkan state form dengan URL foto final dari backend.
         form.photoUrl = savedStudent.photoUrl ?? ''
-        photoPreview.value = savedStudent.photoUrl ?? photoPreview.value
+        photoPreview.value = photoUploadData.value
+          ? `data:${photoMimeType.value};base64,${photoUploadData.value}`
+          : normalizePhotoUrl(savedStudent.photoUrl)
       } catch (photoErr: unknown) {
         toast.warning(
           photoErr instanceof Error
@@ -1130,8 +1133,25 @@ async function loadEditStudent(rawId: unknown): Promise<void> {
     originalEditIdentifiers.nis = String(student.nis ?? '').trim()
     originalEditIdentifiers.nisn = String(student.nisn ?? '').trim()
 
-    photoPreview.value = student.photoUrl ?? ''
+    photoPreview.value = normalizePhotoUrl(student.photoUrl) 
     photoDeleteRequested.value = false
+
+    // URL Drive dapat gagal ditampilkan langsung pada browser. Untuk form edit,
+    // ambil data foto melalui GAS sebagai fallback yang tidak bergantung pada CORS.
+    if (student.photoUrl) {
+      try {
+        const photoResponse = await studentsService.getPhotoData(id)
+        if (
+          requestVersion === formLoadVersion &&
+          String(route.params.id ?? '') === id &&
+          photoResponse.dataUrl
+        ) {
+          photoPreview.value = photoResponse.dataUrl
+        }
+      } catch {
+        // Preview URL normal tetap dipakai bila endpoint data foto gagal.
+      }
+    }
 
     if (student.parents) {
       for (const p of student.parents) {
