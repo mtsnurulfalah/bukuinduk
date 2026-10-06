@@ -1138,8 +1138,35 @@ async function loadEditStudent(rawId: unknown): Promise<void> {
     if (student.health) {
       Object.assign(form.health, student.health)
     }
-    if (student.educationHistory?.[0]) {
-      Object.assign(form.educationHistory, student.educationHistory[0])
+    // Riwayat pendidikan harus selalu dipetakan ke record milik siswa yang
+    // sedang diedit. Jangan hanya bergantung pada index [0], karena response
+    // backend dapat berubah urutan atau berbentuk array kosong.
+    let educationHistory = Array.isArray(student.educationHistory)
+      ? student.educationHistory
+      : []
+
+    if (educationHistory.length === 0) {
+      // Fallback ke endpoint khusus agar form tetap terisi walaupun getFull
+      // dikembalikan tanpa relasi educationHistory oleh versi GAS yang berbeda.
+      try {
+        educationHistory = await studentsService.getEducationHistory(id)
+      } catch {
+        educationHistory = []
+      }
+    }
+
+    const education = educationHistory.find(item =>
+      String(item.studentId ?? '').trim() === id
+    ) ?? educationHistory[0]
+
+    if (education) {
+      Object.assign(form.educationHistory, {
+        id: education.id ?? '',
+        schoolName: education.schoolName ?? '',
+        level: education.level ?? '',
+        certificateNumber: education.certificateNumber ?? '',
+        graduationYear: education.graduationYear,
+      })
     }
 
     maxVisitedStep.value = steps.length - 1
