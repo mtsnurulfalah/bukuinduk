@@ -10,12 +10,12 @@
          Saat gambar 404/gagal, imgError=true → fallback ke initials ditampilkan. -->
     <img
       v-if="showImage"
-      :src="resolvedSrc"
+      :src="currentSrc"
       :alt="name ?? 'Avatar'"
       class="h-full w-full object-cover"
       referrerpolicy="no-referrer"
       decoding="async"
-      @error="imgError = true"
+      @error="handleImageError"
     />
     <span
       v-else
@@ -28,7 +28,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { initials } from '@/utils'
+import { initials, getPhotoUrlCandidates } from '@/utils'
 
 interface Props {
   name?: string | null
@@ -43,6 +43,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const imgError = ref(false)
+const candidateIndex = ref(0)
 
 /**
  * Normalisasi URL foto siswa sebelum diberikan ke <img>.
@@ -69,12 +70,26 @@ function normalizeImageSrc(value: string | null | undefined): string {
 }
 
 const resolvedSrc = computed(() => normalizeImageSrc(props.src))
+const photoCandidates = computed(() => getPhotoUrlCandidates(props.src).length
+  ? getPhotoUrlCandidates(props.src)
+  : (resolvedSrc.value ? [resolvedSrc.value] : []))
 
-// BUG-14 FIX: showImage hanya true jika src valid dan belum gagal dimuat.
-const showImage = computed(() => Boolean(resolvedSrc.value) && !imgError.value)
+const currentSrc = computed(() => photoCandidates.value[candidateIndex.value] ?? '')
+const showImage = computed(() => Boolean(currentSrc.value) && !imgError.value)
 
-// Reset imgError saat sumber foto berubah.
-watch(resolvedSrc, () => { imgError.value = false })
+function handleImageError() {
+  if (candidateIndex.value < photoCandidates.value.length - 1) {
+    candidateIndex.value += 1
+    return
+  }
+  imgError.value = true
+}
+
+// Reset fallback chain saat sumber foto berubah.
+watch(() => props.src, () => {
+  candidateIndex.value = 0
+  imgError.value = false
+})
 
 const sizeClass = computed(() => ({
   xs: 'h-6 w-6',
