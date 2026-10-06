@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5 pb-8">
+  <div class="min-w-0 space-y-5 pb-8">
     <!-- ── Page Header ────────────────────────────────────────── -->
     <PageHeader
       :title="isEdit ? 'Edit Data Siswa' : 'Tambah Siswa Baru'"
@@ -946,7 +946,11 @@ async function loadDropdownData(): Promise<void> {
       classroomsStore.fetch(),
       schoolYearStore.fetch(),
     ])
-  } catch (e: unknown) {
+
+    if (!classroomsStore.initialized || !schoolYearStore.initialized) {
+      throw new Error('Dropdown belum berhasil dimuat.')
+    }
+  } catch {
     initError.value = 'Gagal memuat data dropdown. Pilihan tahun pelajaran/kelas mungkin kosong.'
   }
 }
