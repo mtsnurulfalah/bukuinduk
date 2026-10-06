@@ -24,6 +24,7 @@ var StudentHandler = {
       case 'getStats':       return this.getStats(payload, user);
       case 'uploadPhoto':     return this.uploadPhoto(payload, user);
       case 'deletePhoto':     return this.deletePhoto(payload, user);
+      case 'getPhotoData':    return this.getPhotoData(payload, user);
       case 'getVerifications': return this.getVerifications(payload, user);
       case 'updateVerification': return this.updateVerification(payload, user);
       case 'getDocuments':    return this.getDocuments(payload, user);
@@ -617,6 +618,36 @@ var StudentHandler = {
     AuditService.log(user.id, 'UPDATE', 'student_photo', String(payload.studentId),
       { photoUrl: student.photoUrl || '' }, { photoUrl: photoUrl }, 'Perbarui foto siswa');
     return successResponse(updated);
+  },
+
+  getPhotoData: function(payload, user) {
+    if (!payload.studentId) return errorResponse(400, 'ID siswa diperlukan.');
+    var student = this._getViewableStudent(payload.studentId, user);
+    if (!student) return errorResponse(404, 'Siswa tidak ditemukan.');
+    if (!student.photoUrl) return errorResponse(404, 'Foto siswa belum tersedia.');
+
+    var match = String(student.photoUrl).match(/[?&]id=([^&]+)/);
+    var fileId = match && match[1] ? match[1] : '';
+    if (!fileId) {
+      var pathMatch = String(student.photoUrl).match(/\/file\/d\/([A-Za-z0-9_-]+)/);
+      fileId = pathMatch && pathMatch[1] ? pathMatch[1] : '';
+    }
+    if (!fileId) return errorResponse(400, 'URL foto siswa tidak valid.');
+
+    try {
+      var file = DriveApp.getFileById(fileId);
+      var blob = file.getBlob();
+      var contentType = String(blob.getContentType() || '').toLowerCase();
+      if (contentType.indexOf('image/') !== 0) {
+        return errorResponse(400, 'Berkas foto siswa bukan gambar.');
+      }
+      return successResponse({
+        dataUrl: 'data:' + contentType + ';base64,' + Utilities.base64Encode(blob.getBytes()),
+        mimeType: contentType,
+      });
+    } catch (e) {
+      return errorResponse(404, 'Berkas foto siswa tidak dapat diakses.');
+    }
   },
 
   deletePhoto: function(payload, user) {
