@@ -77,6 +77,8 @@
             type="button"
             :disabled="i > maxVisitedStep"
             :aria-current="currentStep === i ? 'step' : undefined"
+            :aria-label="`Langkah ${i + 1}: ${step.label}`"
+            :title="step.label"
             :class="[
               'flex flex-col items-center gap-1 transition-all focus:outline-none',
               'disabled:opacity-40 disabled:cursor-not-allowed',
@@ -486,22 +488,24 @@
           Kiri: Sebelumnya | Kanan: Batal + Berikutnya/Simpan
           BUG-19 FIX: clearMsg() dipanggil di setiap navigasi step.
         -->
-        <div class="flex items-center justify-between gap-3 pt-3">
+        <div class="flex flex-col gap-2 pt-3 sm:flex-row sm:items-center sm:justify-between">
           <!-- Kiri: Sebelumnya -->
           <BaseButton
             v-if="currentStep > 0"
+            class="w-full sm:w-auto"
             variant="outline"
             type="button"
             @click="prevStep"
           >
             <ChevronLeft class="h-4 w-4" />
-            <span class="hidden sm:inline">Sebelumnya</span>
+            <span>Sebelumnya</span>
           </BaseButton>
-          <div v-else />
+          <div v-else class="hidden sm:block" />
 
           <!-- Kanan: Batal + Berikutnya/Simpan -->
-          <div class="flex items-center gap-2">
+          <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
             <BaseButton
+              class="w-full sm:w-auto"
               variant="ghost"
               type="button"
               size="sm"
@@ -512,6 +516,7 @@
 
             <BaseButton
               v-if="currentStep < steps.length - 1"
+              class="w-full sm:w-auto"
               type="button"
               @click="nextStep"
             >
@@ -521,6 +526,7 @@
 
             <BaseButton
               v-else
+              class="col-span-1 w-full sm:w-auto"
               type="submit"
               :loading="isSaving"
               loading-text="Menyimpan..."
@@ -536,7 +542,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CheckCircle, ChevronRight, ChevronLeft, Save, ImagePlus, Trash2 } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
@@ -583,6 +589,7 @@ const photoMimeType = ref<'image/jpeg' | 'image/png'>('image/jpeg')
 const photoError = ref('')
 const photoDeleteRequested = ref(false)
 const photoProcessVersion = ref(0)
+let formLoadVersion = 0
 
 // BUG-3 FIX: errors menggunakan Record<string,string> — path Yup yang nested
 // seperti 'educationHistory.schoolName' disimpan dengan key yang sama.
@@ -655,6 +662,7 @@ async function handlePhotoChange(event: Event) {
 }
 
 function clearPhoto() {
+  photoProcessVersion.value++
   photoUploadData.value = ''
   photoError.value = ''
   photoDeleteRequested.value = Boolean(isEdit.value && form.photoUrl)
@@ -795,10 +803,7 @@ function firstStepWithError(errorPaths: string[]): number {
  */
 function clearMsg() {
   errorMsg.value = ''
-  // Hanya clear errors untuk step yang sedang ditinggalkan,
-  // agar error step lain tetap terlihat jika user kembali.
-  // Namun untuk simplisitas, clear semua saat navigasi maju — errors
-  // akan kembali muncul saat submit final.
+  Object.keys(errors).forEach(key => delete errors[key])
 }
 
 /**
@@ -963,12 +968,198 @@ async function retryInit() {
   }
 }
 
+function resetFormState(): void {
+  Object.assign(form, {
+    fullName: '',
+    nickname: '',
+    nis: '',
+    nisn: '',
+    nik: '',
+    gender: '',
+    birthPlace: '',
+    birthDate: '',
+    religion: '',
+    nationality: 'Indonesia',
+    familyStatus: '',
+    childOrder: undefined,
+    siblingsCount: undefined,
+    photoUrl: '',
+    address: '',
+    rtRw: '',
+    village: '',
+    district: '',
+    city: '',
+    province: '',
+    postalCode: '',
+    phone: '',
+    email: '',
+    entryDate: '',
+    schoolYearId: '',
+    classroomId: '',
+    notes: '',
+  })
+  Object.assign(form.educationHistory, {
+    id: '',
+    schoolName: '',
+    level: '',
+    certificateNumber: '',
+    graduationYear: undefined,
+  })
+  Object.assign(form.father, {
+    fullName: '', nik: '', birthDate: '', education: '',
+    occupation: '', incomeRange: '', phone: '',
+  })
+  Object.assign(form.mother, {
+    fullName: '', nik: '', birthDate: '', education: '',
+    occupation: '', incomeRange: '', phone: '',
+  })
+  Object.assign(form.guardian, {
+    fullName: '', nik: '', birthDate: '', education: '',
+    occupation: '', incomeRange: '', phone: '',
+  })
+  Object.assign(form.health, {
+    bloodType: '',
+    heightCm: undefined,
+    weightKg: undefined,
+    specialNeeds: '',
+    healthNotes: '',
+    allergies: '',
+  })
+
+  Object.keys(errors).forEach(key => delete errors[key])
+  photoPreview.value = ''
+  photoUploadData.value = ''
+  photoMimeType.value = 'image/jpeg'
+  photoError.value = ''
+  photoDeleteRequested.value = false
+  currentStep.value = 0
+  maxVisitedStep.value = 0
+}
+
+async function loadEditStudent(rawId: unknown): Promise<void> {
+  const id = String(rawId ?? '').trim()
+  const requestVersion = ++formLoadVersion
+
+  if (!id || id === 'undefined' || id === 'null') {
+    errorMsg.value = 'ID siswa tidak valid.'
+    isLoadingForm.value = false
+    return
+  }
+
+  isLoadingForm.value = true
+  errorMsg.value = ''
+  resetFormState()
+  studentsStore.clearCurrent()
+
+  try {
+    const student = await studentsStore.fetchDetail(id)
+
+    if (
+      requestVersion !== formLoadVersion ||
+      String(route.params.id ?? '') !== id
+    ) {
+      return
+    }
+
+    if (!student) {
+      throw new Error('Siswa tidak ditemukan.')
+    }
+
+    Object.assign(form, {
+      fullName:      student.fullName,
+      nickname:      student.nickname      ?? '',
+      nis:           student.nis,
+      nisn:          student.nisn,
+      nik:           student.nik           ?? '',
+      gender:        student.gender,
+      birthPlace:    student.birthPlace    ?? '',
+      birthDate:     student.birthDate     ?? '',
+      religion:      student.religion      ?? '',
+      nationality:   student.nationality   ?? 'Indonesia',
+      familyStatus:  student.familyStatus  ?? '',
+      childOrder:    student.childOrder,
+      siblingsCount: student.siblingsCount,
+      address:       student.address       ?? '',
+      rtRw:          student.rtRw           ?? '',
+      village:       student.village       ?? '',
+      district:      student.district      ?? '',
+      city:          student.city          ?? '',
+      province:      student.province      ?? '',
+      postalCode:    student.postalCode    ?? '',
+      phone:         student.phone         ?? '',
+      email:         student.email         ?? '',
+      entryDate:     student.entryDate     ?? '',
+      notes:         student.notes         ?? '',
+      photoUrl:      student.photoUrl      ?? '',
+      classroomId:   student.currentEnrollment?.classroomId   ?? '',
+      schoolYearId:  student.currentEnrollment?.schoolYearId  ?? '',
+    })
+
+    photoPreview.value = student.photoUrl ?? ''
+    photoDeleteRequested.value = false
+
+    if (student.parents) {
+      for (const p of student.parents) {
+        if (p.relationship === 'father') Object.assign(form.father, p)
+        if (p.relationship === 'mother') Object.assign(form.mother, p)
+        if (p.relationship === 'guardian') Object.assign(form.guardian, p)
+      }
+    }
+    if (student.health) {
+      Object.assign(form.health, student.health)
+    }
+    if (student.educationHistory?.[0]) {
+      Object.assign(form.educationHistory, student.educationHistory[0])
+    }
+
+    maxVisitedStep.value = steps.length - 1
+  } catch (e: unknown) {
+    if (
+      requestVersion !== formLoadVersion ||
+      String(route.params.id ?? '') !== id
+    ) {
+      return
+    }
+    errorMsg.value = e instanceof Error
+      ? e.message
+      : 'Gagal memuat data siswa. Silakan coba lagi.'
+  } finally {
+    if (requestVersion === formLoadVersion) {
+      isLoadingForm.value = false
+    }
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Lifecycle
 // BUG-7  FIX: Tambahkan try/catch di seluruh blok onMounted isEdit.
 // BUG-10 FIX: isLoadingForm untuk loading state saat fetch edit data.
 // ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
+  await loadDropdownData()
+
+  if (!isEdit.value) {
+    // Create mode: default schoolYearId ke tahun aktif
+    if (!form.schoolYearId) {
+      form.schoolYearId = schoolYearStore.activeSchoolYear?.id ?? ''
+    }
+    // Setelah set schoolYearId, update maxVisitedStep sehingga step 0 sudah di-track
+    maxVisitedStep.value = 0
+    return
+  }
+
+  await loadEditStudent(route.params.id)
+})
+
+watch(() => route.params.id, (newId, oldId) => {
+  if (newId === oldId || !isEdit.value) return
+  void loadEditStudent(newId)
+})
+
+onUnmounted(() => {
+  formLoadVersion++
+  photoProcessVersion.value++
+}) {
   await loadDropdownData()
 
   if (!isEdit.value) {
