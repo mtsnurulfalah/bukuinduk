@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5">
+  <div class="min-w-0 space-y-5">
     <PageHeader
       :title="classroom?.name ?? 'Detail Kelas'"
       :subtitle="classroom?.schoolYearName"
@@ -7,7 +7,7 @@
       :breadcrumbs="[{ label: 'Kelas & Rombel', to: '/classrooms' }, { label: classroom?.name ?? '...' }]"
     >
       <template v-if="classroom && can(PERMISSIONS.CLASSROOM_MANAGE)" #actions>
-        <BaseButton variant="outline" size="sm" @click="$router.push(`/classrooms/${classroom.id}/edit`)">
+        <BaseButton variant="outline" size="sm" @click="goEdit">
           <Pencil class="h-4 w-4" /> Edit
         </BaseButton>
       </template>
@@ -66,10 +66,10 @@
             v-for="(s, i) in filtered"
             :key="s.id"
             :to="`/students/${s.id}`"
-            class="flex items-center gap-3 py-2.5 hover:bg-slate-50 transition-colors -mx-5 px-5 group"
+            class="flex min-w-0 items-center gap-3 py-2.5 hover:bg-slate-50 transition-colors -mx-5 px-2 sm:px-5 group"
           >
             <span class="text-xs text-slate-400 w-6 text-right shrink-0">{{ i + 1 }}</span>
-            <BaseAvatar :name="s.fullName" size="sm" color="blue" />
+            <BaseAvatar :name="s.fullName" :src="s.photoUrl" size="sm" color="blue" />
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium text-slate-800 truncate group-hover:text-primary-700">{{ s.fullName }}</p>
               <p class="text-xs text-slate-400">{{ s.nis }}</p>
@@ -85,8 +85,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Users, User, School, Pencil } from 'lucide-vue-next'
 import { PageHeader, SearchFilter, StatCard } from '@/components/shared'
 import { BaseCard, BaseButton, BaseRetry, BaseAvatar, BaseSkeleton, BaseEmpty, BaseBadge } from '@/components/ui'
@@ -96,6 +96,7 @@ import { PERMISSIONS } from '@/constants'
 import type { Classroom, Student } from '@/types'
 
 const route = useRoute()
+const router = useRouter()
 const { can } = usePermission()
 const classroom = ref<Classroom | null>(null)
 const students = ref<Student[]>([])
@@ -104,18 +105,23 @@ const isLoadingStudents = ref(true)
 const error = ref('')
 const studentsError = ref('')
 const search = ref('')
+let classroomRequestVersion = 0
+let studentsRequestVersion = 0
+let isMounted = false
 
 const filtered = computed(() => {
   if (!search.value.trim()) return students.value
-  const q = search.value.toLowerCase()
+  const q = search.value.trim().toLowerCase()
   return students.value.filter(s =>
-    s.fullName.toLowerCase().includes(q) || s.nis.toLowerCase().includes(q)
+    String(s.fullName ?? '').toLowerCase().includes(q) ||
+    String(s.nis ?? '').toLowerCase().includes(q)
   )
 })
 
 async function loadClassroom() {
-  const id = String(route.params.id ?? '')
-  if (!id) {
+  const id = String(route.params.id ?? '').trim()
+  const requestVersion = ++classroomRequestVersion
+  if (!id || id === 'undefined' || id === 'null') {
     error.value = 'ID kelas tidak valid.'
     isLoading.value = false
     return
@@ -124,17 +130,22 @@ async function loadClassroom() {
   isLoading.value = true
   error.value = ''
   try {
-    classroom.value = await classroomsService.get(id)
+    const data = await classroomsService.get(id)
+    if (!isMounted || requestVersion !== classroomRequestVersion) return
+    classroom.value = data
+    await loadStudents(data.schoolYearId)
   } catch (e: unknown) {
+    if (!isMounted || requestVersion !== classroomRequestVersion) return
     error.value = e instanceof Error ? e.message : 'Gagal memuat data kelas.'
   } finally {
-    isLoading.value = false
+    if (isMounted && requestVersion === classroomRequestVersion) isLoading.value = false
   }
 }
 
-async function loadStudents() {
-  const id = String(route.params.id ?? '')
-  if (!id) {
+async function loadStudents(schoolYearId = classroom.value?.schoolYearId) {
+  const id = String(route.params.id ?? '').trim()
+  const requestVersion = ++studentsRequestVersion
+  if (!id || id === 'undefined' || id === 'null') {
     studentsError.value = 'ID kelas tidak valid.'
     isLoadingStudents.value = false
     return
@@ -143,17 +154,45 @@ async function loadStudents() {
   isLoadingStudents.value = true
   studentsError.value = ''
   try {
-    const { items } = await studentsService.list({ classroomId: id, limit: 500 })
-    students.value = items
+    const response = await studentsService.list({
+      classroomId: id,
+      schoolYearId,
+      status: 'active',
+      limit: 500,
+    })
+    if (!isMounted || requestVersion !== studentsRequestVersion) return
+    students.value = Array.isArray(response.items) ? response.items : []
   } catch (e: unknown) {
+    if (!isMounted || requestVersion !== studentsRequestVersion) return
     studentsError.value = e instanceof Error ? e.message : 'Gagal memuat daftar siswa.'
   } finally {
-    isLoadingStudents.value = false
+    if (isMounted && requestVersion === studentsRequestVersion) isLoadingStudents.value = false
   }
 }
 
-onMounted(() => {
+function goEdit() {
+  if (!classroom.value) return
+  void router.push(`/classrooms/${classroom.value.id}/edit`)
+}
+
+watch(() => route.params.id, () => {
+  if (!isMounted) return
+  ++classroomRequestVersion
+  ++studentsRequestVersion
+  classroom.value = null
+  students.value = []
+  search.value = ''
   void loadClassroom()
-  void loadStudents()
+})
+
+onMounted(() => {
+  isMounted = true
+  void loadClassroom()
+})
+
+onUnmounted(() => {
+  isMounted = false
+  ++classroomRequestVersion
+  ++studentsRequestVersion
 })
 </script>
