@@ -152,7 +152,7 @@
     <BaseConfirmDialog
       v-model="confirmDialog.isOpen.value"
       title="Hapus Tingkat Kelas"
-      :message="\`Hapus tingkat '\${confirmDialog.options.value.message}'? Penghapusan akan ditolak jika masih dipakai oleh kelas.\`"
+      :message="`Hapus tingkat '${confirmDialog.options.value.message}'? Penghapusan akan ditolak jika masih dipakai oleh kelas.`"
       type="danger"
       confirm-text="Ya, Hapus"
       :loading="confirmDialog.isLoading.value"
@@ -334,7 +334,7 @@ async function loadData() {
   }
 
   if (errorsFound.length) {
-    error.value = \`Gagal memuat \${errorsFound.join(' dan ')}. Coba lagi.\`
+    error.value = `Gagal memuat ${errorsFound.join(' dan ')}. Coba lagi.`
   }
 
   isLoading.value = false
