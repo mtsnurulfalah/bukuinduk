@@ -399,6 +399,7 @@ import {
 import { toast } from 'vue-sonner'
 import type {
   Classroom,
+  GradeFormData,
   Student,
   StudentGrade,
   Subject,
@@ -1004,7 +1005,7 @@ function saveAll() {
     return
   }
 
-  const changed = []
+  const changed: GradeFormData[] = []
 
   for (const key of changedKeys) {
     const [studentId, subjectId] =
