@@ -1,37 +1,51 @@
 <template>
-  <div class="w-full min-w-0 max-w-3xl">
-
-    <PageHeader title="Tingkat Kelas" subtitle="Kelola tingkatan kelas (Kelas 7, 8, 9, dll.)">
+  <div class="w-full min-w-0 max-w-3xl space-y-5 pb-6">
+    <PageHeader
+      title="Tingkat Kelas"
+      subtitle="Kelola tingkatan kelas seperti Kelas 7, Kelas 8, dan Kelas 9."
+    >
       <template #actions>
         <BaseButton
           v-if="can(PERMISSIONS.CLASSROOM_MANAGE)"
           size="sm"
+          class="w-full sm:w-auto"
           @click="openCreate"
         >
-          <Plus class="h-4 w-4" /> Tambah Tingkat
+          <Plus class="h-4 w-4" />
+          <span>Tambah Tingkat</span>
         </BaseButton>
       </template>
     </PageHeader>
 
-    <!-- Loading skeleton -->
-    <BaseCard v-if="isLoading" :padding="false">
+    <BaseRetry
+      v-if="loadError"
+      title="Data tingkat kelas gagal dimuat"
+      :message="loadError"
+      :loading="isRetrying"
+      @retry="retryLoad"
+    />
+
+    <BaseCard v-else-if="isLoading" :padding="false">
       <div class="divide-y divide-slate-100">
-        <div v-for="i in 4" :key="i" class="flex items-center gap-4 px-5 py-4">
-          <BaseSkeleton height="h-10" class="w-10 rounded-xl" />
-          <div class="flex-1 space-y-1.5">
-            <BaseSkeleton height="h-4" class="w-32" />
-            <BaseSkeleton height="h-3" class="w-48" />
+        <div
+          v-for="i in 5"
+          :key="i"
+          class="flex min-w-0 items-center gap-3 px-4 py-4 sm:gap-4 sm:px-5"
+        >
+          <BaseSkeleton height="h-10" width="w-10" class="rounded-xl" />
+          <div class="min-w-0 flex-1 space-y-1.5">
+            <BaseSkeleton height="h-4" width="w-32" />
+            <BaseSkeleton height="h-3" width="w-48" />
           </div>
-          <BaseSkeleton height="h-8" class="w-20 rounded-lg" />
+          <BaseSkeleton height="h-10" width="w-20" class="rounded-lg" />
         </div>
       </div>
     </BaseCard>
 
-    <!-- Empty state -->
     <BaseCard v-else-if="!grades.length" :padding="true">
       <BaseEmpty
         title="Belum ada tingkat kelas"
-        description="Tambahkan tingkat kelas seperti Kelas 7, Kelas 8, atau Kelas 9."
+        description="Tambahkan tingkat kelas seperti Kelas 7, Kelas 8, atau Kelas 9 untuk digunakan pada data kelas."
         type="data"
       >
         <template #action>
@@ -39,57 +53,69 @@
             v-if="can(PERMISSIONS.CLASSROOM_MANAGE)"
             @click="openCreate"
           >
-            <Plus class="h-4 w-4" /> Tambah Tingkat
+            <Plus class="h-4 w-4" />
+            Tambah Tingkat
           </BaseButton>
         </template>
       </BaseEmpty>
     </BaseCard>
 
-    <!-- Daftar tingkat kelas -->
     <BaseCard v-else :padding="false">
       <ul class="divide-y divide-slate-100">
         <li
           v-for="grade in grades"
           :key="grade.id"
-          class="flex min-w-0 items-center gap-3 px-4 py-4 hover:bg-slate-50 transition-colors sm:gap-4 sm:px-5"
+          class="flex min-w-0 items-center gap-3 px-4 py-4 transition-colors hover:bg-slate-50 sm:gap-4 sm:px-5"
         >
-          <!-- Badge level -->
-          <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-primary-50 text-primary-700 font-bold text-base shrink-0">
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-base font-bold text-primary-700"
+          >
             {{ grade.level }}
           </div>
 
-          <!-- Info -->
-          <div class="flex-1 min-w-0">
-            <p class="font-semibold text-slate-800 leading-snug">{{ grade.name }}</p>
-            <p v-if="grade.description" class="text-sm text-slate-400 truncate mt-0.5">
+          <div class="min-w-0 flex-1">
+            <p class="break-words font-semibold leading-snug text-slate-800">
+              {{ grade.name }}
+            </p>
+            <p
+              v-if="grade.description"
+              class="mt-0.5 break-words text-sm text-slate-400"
+            >
               {{ grade.description }}
             </p>
-            <p v-else class="text-sm text-slate-300 mt-0.5">Tidak ada deskripsi</p>
+            <p v-else class="mt-0.5 text-sm text-slate-300">
+              Tidak ada deskripsi
+            </p>
           </div>
 
-          <!-- Jumlah kelas yang pakai tingkat ini -->
-          <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
+          <span
+            class="hidden shrink-0 items-center gap-1.5 text-xs text-slate-400 sm:inline-flex"
+          >
             <School class="h-3.5 w-3.5" />
             {{ classroomCountFor(grade.id) }} kelas
           </span>
 
-          <!-- Aksi -->
           <div
             v-if="can(PERMISSIONS.CLASSROOM_MANAGE)"
-            class="flex items-center gap-1 shrink-0"
+            class="flex shrink-0 items-center gap-1"
           >
             <button
               type="button"
-              class="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-200"
-              title="Edit"
+              class="flex min-h-10 min-w-10 items-center justify-center rounded-lg p-2 text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200"
+              title="Edit tingkat"
+              aria-label="Edit tingkat kelas"
+              :disabled="isSaving"
               @click="openEdit(grade)"
             >
               <Pencil class="h-4 w-4" />
             </button>
+
             <button
               type="button"
-              class="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-200"
-              title="Hapus"
+              class="flex min-h-10 min-w-10 items-center justify-center rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200"
+              title="Hapus tingkat"
+              aria-label="Hapus tingkat kelas"
+              :disabled="isSaving || confirmDialog.isLoading.value"
               @click="handleDelete(grade)"
             >
               <Trash2 class="h-4 w-4" />
@@ -99,16 +125,18 @@
       </ul>
     </BaseCard>
 
-    <!-- ── Modal Form Tambah / Edit ─────────────────────────── -->
     <BaseModal
       v-model="modalOpen"
       :title="editTarget ? 'Edit Tingkat Kelas' : 'Tambah Tingkat Kelas'"
+      subtitle="Atur nama dan level untuk digunakan pada data kelas."
       size="sm"
+      :show-close="!isSaving"
+      :close-on-backdrop="!isSaving"
     >
       <form
         id="grade-form"
-        novalidate
         class="space-y-4"
+        novalidate
         @submit.prevent="handleSubmit"
       >
         <BaseInput
@@ -116,37 +144,54 @@
           label="Nama Tingkat"
           placeholder="Contoh: Kelas 7"
           required
+          autocomplete="off"
+          :disabled="isSaving"
           :error-message="errors.name"
           autofocus
         />
+
         <BaseInput
           v-model.number="form.level"
           label="Urutan Level"
           type="number"
           min="1"
           max="99"
+          step="1"
+          inputmode="numeric"
           placeholder="7"
-          hint="Digunakan untuk mengurutkan tingkat kelas di dropdown."
+          hint="Gunakan angka 1–99. Nilai ini menentukan urutan pada dropdown tingkat kelas."
           required
+          :disabled="isSaving"
           :error-message="errors.level"
         />
+
         <BaseInput
           v-model="form.description"
           label="Deskripsi"
           placeholder="Opsional"
+          autocomplete="off"
+          :disabled="isSaving"
         />
       </form>
 
       <template #footer>
-        <div class="flex flex-col-reverse gap-2 justify-end sm:flex-row">
-          <BaseButton variant="outline" type="button" class="w-full sm:w-auto" @click="onModalClose">
+        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <BaseButton
+            variant="outline"
+            type="button"
+            class="w-full sm:w-auto"
+            :disabled="isSaving"
+            @click="onModalClose"
+          >
             Batal
           </BaseButton>
+
           <BaseButton
             type="submit"
             form="grade-form"
             class="w-full sm:w-auto"
             :loading="isSaving"
+            :disabled="isSaving"
             loading-text="Menyimpan..."
           >
             <Save class="h-4 w-4" />
@@ -156,33 +201,55 @@
       </template>
     </BaseModal>
 
-    <!-- ── Confirm Dialog Hapus ─────────────────────────────── -->
     <BaseConfirmDialog
       v-model="confirmDialog.isOpen.value"
       title="Hapus Tingkat Kelas"
-      :message="`Hapus tingkat '${confirmDialog.options.value.message}'? Tindakan ini tidak dapat dibatalkan.`"
+      :message="'Hapus tingkat \''
+        + confirmDialog.options.value.message
+        + '\'? Tindakan ini tidak dapat dibatalkan.'"
       type="danger"
       confirm-text="Ya, Hapus"
       :loading="confirmDialog.isLoading.value"
       @confirm="confirmDialog.onConfirm()"
       @cancel="confirmDialog.onCancel()"
     />
-
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { Plus, Pencil, Trash2, Save, School } from 'lucide-vue-next'
+import {
+  ref,
+  reactive,
+  computed,
+  watch,
+  onMounted,
+  onUnmounted,
+} from 'vue'
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Save,
+  School,
+} from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import {
-  BaseCard, BaseButton, BaseInput, BaseModal,
-  BaseEmpty, BaseSkeleton, BaseConfirmDialog,
+  BaseCard,
+  BaseButton,
+  BaseInput,
+  BaseModal,
+  BaseEmpty,
+  BaseSkeleton,
+  BaseConfirmDialog,
+  BaseRetry,
 } from '@/components/ui'
 import { useSchoolYearStore } from '@/stores/schoolYear'
 import { useClassroomsStore } from '@/stores/classrooms'
 import { classroomsService } from '@/services'
-import { usePermission, useConfirm } from '@/composables'
+import {
+  usePermission,
+  useConfirm,
+} from '@/composables'
 import { PERMISSIONS } from '@/constants'
 import { toast } from 'vue-sonner'
 import type { Grade } from '@/types'
@@ -192,26 +259,50 @@ const classroomsStore = useClassroomsStore()
 const { can } = usePermission()
 const confirmDialog = useConfirm()
 
-// ── State ─────────────────────────────────────────────────────
-const isLoading = ref(false)
-const grades = ref<Grade[]>([])
-
-// ── Modal / Form ──────────────────────────────────────────────
-const modalOpen = ref(false)
+const isLoading = ref(true)
+const isRetrying = ref(false)
 const isSaving = ref(false)
+
+const grades = ref<Grade[]>([])
+const loadError = ref('')
+
+const modalOpen = ref(false)
 const editTarget = ref<Grade | null>(null)
 
-const form = reactive({ name: '', level: undefined as number | undefined, description: '' })
-const errors = reactive<{ name?: string; level?: string }>({})
+const form = reactive({
+  name: '',
+  level: undefined as number | undefined,
+  description: '',
+})
 
-// ── Helpers ───────────────────────────────────────────────────
+const errors = reactive<{
+  name?: string
+  level?: string
+}>({})
 
-/**
- * Hitung berapa kelas yang menggunakan tingkat ini dari classroomsStore.list.
- * Digunakan untuk konfirmasi sebelum hapus dan info di baris list.
- */
+let loadVersion = 0
+let isMounted = false
+
+const hasManagePermission = computed(() =>
+  can(PERMISSIONS.CLASSROOM_MANAGE),
+)
+
+function sortGrades(items: Grade[]): Grade[] {
+  return [...items].sort((a, b) => {
+    const levelDiff = Number(a.level) - Number(b.level)
+    if (levelDiff !== 0) return levelDiff
+
+    return String(a.name ?? '').localeCompare(
+      String(b.name ?? ''),
+      'id',
+    )
+  })
+}
+
 function classroomCountFor(gradeId: string): number {
-  return classroomsStore.list.filter(c => String(c.gradeId) === String(gradeId)).length
+  return classroomsStore.list.filter(classroom =>
+    String(classroom.gradeId) === String(gradeId),
+  ).length
 }
 
 function resetForm() {
@@ -223,122 +314,306 @@ function resetForm() {
 }
 
 function openCreate() {
+  if (!hasManagePermission.value || isSaving.value) return
+
   editTarget.value = null
   resetForm()
   modalOpen.value = true
 }
 
 function openEdit(grade: Grade) {
+  if (!hasManagePermission.value || isSaving.value) return
+
   editTarget.value = grade
-  form.name = grade.name
-  form.level = grade.level
-  form.description = grade.description ?? ''
+  form.name = String(grade.name ?? '')
+  form.level = Number(grade.level)
+  form.description = String(grade.description ?? '')
   errors.name = undefined
   errors.level = undefined
   modalOpen.value = true
 }
 
 function onModalClose() {
+  if (isSaving.value) return
+
   modalOpen.value = false
   editTarget.value = null
   resetForm()
 }
 
-// ── Validasi lokal (ringan, tidak butuh Yup) ──────────────────
 function validate(): boolean {
-  let valid = true
   errors.name = undefined
   errors.level = undefined
 
-  if (!form.name.trim()) {
+  let valid = true
+  const name = String(form.name ?? '').trim()
+  const level = Number(form.level)
+
+  if (!name) {
     errors.name = 'Nama tingkat wajib diisi.'
     valid = false
+  } else if (name.length > 100) {
+    errors.name = 'Nama tingkat maksimal 100 karakter.'
+    valid = false
   }
-  if (form.level === undefined || form.level === null || form.level === ('' as unknown) || isNaN(Number(form.level))) {
+
+  if (
+    form.level === undefined ||
+    form.level === null ||
+    !Number.isFinite(level)
+  ) {
     errors.level = 'Urutan level wajib diisi.'
     valid = false
-  } else if (Number(form.level) < 1) {
-    errors.level = 'Level minimal 1.'
+  } else if (!Number.isInteger(level)) {
+    errors.level = 'Level harus berupa angka bulat.'
+    valid = false
+  } else if (level < 1 || level > 99) {
+    errors.level = 'Level harus berada antara 1 sampai 99.'
     valid = false
   }
+
   return valid
 }
 
-// ── CRUD ──────────────────────────────────────────────────────
-
 async function handleSubmit() {
+  if (
+    isSaving.value ||
+    isLoading.value ||
+    !hasManagePermission.value ||
+    !modalOpen.value
+  ) {
+    return
+  }
+
   if (!validate()) return
 
   isSaving.value = true
-  try {
-    const payload = {
-      name: form.name.trim(),
-      level: Number(form.level),
-      description: form.description.trim(),
-    }
 
+  const payload = {
+    name: String(form.name ?? '').trim(),
+    level: Number(form.level),
+    description: String(form.description ?? '').trim(),
+  }
+
+  try {
     if (editTarget.value) {
-      // Update
-      const updated = await classroomsService.updateGrade(editTarget.value.id, payload)
-      // Sinkronisasi ke store agar gradeOptions di seluruh app terupdate
+      const targetId =
+        String(editTarget.value.id ?? '').trim()
+
+      if (!targetId) {
+        throw new Error('ID tingkat kelas tidak valid.')
+      }
+
+      const updated =
+        await classroomsService.updateGrade(
+          targetId,
+          payload,
+        )
+
+      if (!isMounted) return
+
       schoolYearStore.updateGrade(updated)
-      // Update list lokal dan urutkan ulang — level bisa berubah saat edit
-      const idx = grades.value.findIndex(g => g.id === updated.id)
-      if (idx !== -1) grades.value[idx] = updated
-      grades.value.sort((a, b) => a.level - b.level)
-      toast.success('Tingkat kelas berhasil diperbarui.')
+
+      grades.value = sortGrades(
+        grades.value.map(grade =>
+          grade.id === updated.id
+            ? updated
+            : grade,
+        ),
+      )
+
+      toast.success(
+        'Tingkat kelas berhasil diperbarui.',
+      )
     } else {
-      // Create
-      const created = await classroomsService.createGrade(payload)
+      const created =
+        await classroomsService.createGrade(
+          payload,
+        )
+
+      if (!isMounted) return
+
       schoolYearStore.addGrade(created)
-      grades.value.push(created)
-      // Urutkan ulang berdasarkan level
-      grades.value.sort((a, b) => a.level - b.level)
-      toast.success('Tingkat kelas berhasil ditambahkan.')
+
+      grades.value = sortGrades([
+        ...grades.value,
+        created,
+      ])
+
+      toast.success(
+        'Tingkat kelas berhasil ditambahkan.',
+      )
     }
 
     onModalClose()
   } catch (e: unknown) {
-    toast.error(e instanceof Error ? e.message : 'Gagal menyimpan tingkat kelas.')
+    toast.error(
+      e instanceof Error
+        ? e.message
+        : 'Gagal menyimpan tingkat kelas.',
+    )
   } finally {
     isSaving.value = false
   }
 }
 
 async function handleDelete(grade: Grade) {
-  // Peringatan jika tingkat ini masih dipakai kelas
-  const count = classroomCountFor(grade.id)
-  const message = count > 0
-    ? `${grade.name} (${count} kelas masih menggunakan tingkat ini)`
-    : grade.name
+  if (
+    !hasManagePermission.value ||
+    isSaving.value ||
+    confirmDialog.isLoading.value
+  ) {
+    return
+  }
 
-  const ok = await confirmDialog.confirm({ message, type: 'danger' })
-  if (!ok) return
+  const count =
+    classroomCountFor(grade.id)
+
+  const message =
+    count > 0
+      ? grade.name +
+        ' (' +
+        count +
+        ' kelas masih menggunakan tingkat ini)'
+      : grade.name
+
+  const ok =
+    await confirmDialog.confirm({
+      message,
+      type: 'danger',
+    })
+
+  if (!ok || !isMounted) return
 
   confirmDialog.isLoading.value = true
+
   try {
-    await classroomsService.deleteGrade(grade.id)
-    schoolYearStore.removeGrade(grade.id)
-    grades.value = grades.value.filter(g => g.id !== grade.id)
-    toast.success('Tingkat kelas berhasil dihapus.')
+    await classroomsService.deleteGrade(
+      grade.id,
+    )
+
+    if (!isMounted) return
+
+    schoolYearStore.removeGrade(
+      grade.id,
+    )
+
+    grades.value = grades.value.filter(
+      item => item.id !== grade.id,
+    )
+
+    toast.success(
+      'Tingkat kelas berhasil dihapus.',
+    )
   } catch (e: unknown) {
-    toast.error(e instanceof Error ? e.message : 'Gagal menghapus tingkat kelas.')
+    toast.error(
+      e instanceof Error
+        ? e.message
+        : 'Gagal menghapus tingkat kelas.',
+    )
   } finally {
     confirmDialog.isLoading.value = false
   }
 }
 
-// ── Load ──────────────────────────────────────────────────────
-onMounted(async () => {
+async function loadData(
+  forceRefresh = false,
+) {
+  const requestVersion = ++loadVersion
   isLoading.value = true
+  loadError.value = ''
+
   try {
-    // Selalu fetch fresh — halaman ini adalah sumber kebenaran untuk grades
-    await schoolYearStore.fetchGrades()
-    grades.value = [...schoolYearStore.grades].sort((a, b) => a.level - b.level)
-    // Muat juga classrooms agar classroomCountFor() bisa menampilkan jumlah kelas
-    await classroomsStore.fetch()
+    const gradesData =
+      await classroomsService.listGrades()
+
+    if (
+      !isMounted ||
+      requestVersion !== loadVersion
+    ) {
+      return
+    }
+
+    schoolYearStore.grades =
+      sortGrades(gradesData)
+
+    grades.value =
+      sortGrades(gradesData)
+
+    if (
+      forceRefresh ||
+      !classroomsStore.initialized
+    ) {
+      await classroomsStore.fetch(
+        undefined,
+        forceRefresh,
+      )
+    }
+
+    if (
+      !isMounted ||
+      requestVersion !== loadVersion
+    ) {
+      return
+    }
+  } catch (e: unknown) {
+    if (
+      !isMounted ||
+      requestVersion !== loadVersion
+    ) {
+      return
+    }
+
+    loadError.value =
+      e instanceof Error
+        ? e.message
+        : 'Gagal memuat data tingkat kelas.'
   } finally {
-    isLoading.value = false
+    if (
+      isMounted &&
+      requestVersion === loadVersion
+    ) {
+      isLoading.value = false
+    }
   }
+}
+
+async function retryLoad() {
+  if (
+    isRetrying.value ||
+    isSaving.value
+  ) {
+    return
+  }
+
+  isRetrying.value = true
+
+  try {
+    await loadData(true)
+  } finally {
+    if (isMounted) {
+      isRetrying.value = false
+    }
+  }
+}
+
+watch(
+  modalOpen,
+  value => {
+    if (!value && !isSaving.value) {
+      editTarget.value = null
+      resetForm()
+    }
+  },
+)
+
+onMounted(() => {
+  isMounted = true
+  void loadData()
+})
+
+onUnmounted(() => {
+  isMounted = false
+  ++loadVersion
 })
 </script>
