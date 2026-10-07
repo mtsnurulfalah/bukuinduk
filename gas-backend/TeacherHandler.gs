@@ -19,7 +19,12 @@ var TeacherHandler = {
     checkPermission(user, 'teacher:view');
     var all = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS));
 
-    if (payload.status) all = all.filter(function(t){ return t.status === payload.status; });
+    var statusFilter = normalizeIdentifier(payload.status).toLowerCase();
+    if (statusFilter) {
+      all = all.filter(function(t){
+        return normalizeIdentifier(t.status).toLowerCase() === statusFilter;
+      });
+    }
     if (payload.search) {
       all = all.filter(function(t){
         return searchInObject(t, payload.search, ['fullName','nip','nuptk','email']);
@@ -167,7 +172,7 @@ var TeacherHandler = {
   listActive: function(payload, user) {
     checkPermission(user, 'teacher:view');
     var all = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS))
-      .filter(function(t){ return t.status === 'active'; })
+      .filter(function(t){ return normalizeIdentifier(t.status).toLowerCase() === 'active'; })
       .map(function(t){ return { id: t.id, fullName: t.fullName }; });
     all.sort(function(a,b){ return (a.fullName||'').localeCompare(b.fullName||''); });
     return successResponse(all);
