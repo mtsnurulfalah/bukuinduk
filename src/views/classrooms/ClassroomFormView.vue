@@ -67,7 +67,7 @@
     </template>
 
     <BaseCard
-      v-else
+      v-else-if="!loadError"
       title="Informasi Kelas"
       subtitle="Isi data kelas dengan benar. Field bertanda (*) wajib diisi."
     >
@@ -202,7 +202,10 @@ const router = useRouter()
 const schoolYearStore = useSchoolYearStore()
 const classroomsStore = useClassroomsStore()
 
-const editId = computed(() => String(route.params.id ?? '').trim())
+const editId = computed(() => {
+  const id = String(route.params.id ?? '').trim()
+  return id === 'undefined' || id === 'null' ? '' : id
+})
 const isEdit = computed(() => Boolean(editId.value))
 
 const isLoadingForm = ref(true)
@@ -313,10 +316,28 @@ function applyClassroomData(cls: {
   gradeId: string
   schoolYearId: string
   homeroomTeacherId?: string
+  homeroomTeacherName?: string
   capacity?: number
   isActive: boolean
 }) {
   const capacity = Number(cls.capacity)
+  const teacherId = String(cls.homeroomTeacherId ?? '').trim()
+  const teacherName = String(cls.homeroomTeacherName ?? '').trim()
+
+  // Pertahankan wali kelas yang tersimpan meskipun guru tersebut sudah
+  // tidak lagi berstatus aktif sehingga tidak muncul dari listActive().
+  if (
+    teacherId &&
+    !teacherOptions.value.some(option => option.value === teacherId)
+  ) {
+    teacherOptions.value = [
+      ...teacherOptions.value,
+      {
+        value: teacherId,
+        label: teacherName || 'Wali kelas saat ini',
+      },
+    ].sort((a, b) => a.label.localeCompare(b.label, 'id'))
+  }
 
   Object.assign(form, {
     name: String(cls.name ?? '').trim(),
