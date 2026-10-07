@@ -170,7 +170,7 @@
         v-else-if="!filteredStudents.length"
         class="px-5 py-12 text-center"
       >
-        <SearchX class="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" />
+        <Search class="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" />
         <p class="mt-3 text-sm font-medium text-slate-600">
           Siswa tidak ditemukan.
         </p>
@@ -373,7 +373,6 @@ import {
   RefreshCw,
   Save,
   Search,
-  SearchX,
   Users,
 } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
