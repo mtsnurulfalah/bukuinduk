@@ -266,7 +266,10 @@ function collectDependencyIssues(teacherResult: PromiseSettledResult<Array<{ id:
   return issues
 }
 
-async function loadDependencies(forceRefresh = false): Promise<string[]> {
+async function loadDependencies(
+  forceRefresh = false,
+  requestVersion = formLoadVersion,
+): Promise<string[]> {
   if (forceRefresh) {
     await schoolYearStore.refresh()
   } else {
@@ -277,18 +280,27 @@ async function loadDependencies(forceRefresh = false): Promise<string[]> {
     ? Promise.resolve()
     : schoolYearStore.fetchGrades()
 
-  isLoadingTeachers.value = true
+  if (isMounted && requestVersion === formLoadVersion) {
+    isLoadingTeachers.value = true
+  }
+
   const [gradesResult, teacherResult] = await Promise.allSettled([
     gradesTask,
     teachersService.listActive(),
   ])
-  isLoadingTeachers.value = false
+
+  const requestIsCurrent =
+    isMounted && requestVersion === formLoadVersion
+
+  if (requestIsCurrent) {
+    isLoadingTeachers.value = false
+  }
 
   if (gradesResult.status === 'rejected') {
     // fetchGrades currently swallows errors, so this is defensive only.
   }
 
-  if (teacherResult.status === 'fulfilled') {
+  if (requestIsCurrent && teacherResult.status === 'fulfilled') {
     teacherOptions.value = Array.isArray(teacherResult.value)
       ? teacherResult.value
           .filter(teacher => teacher && teacher.id)
@@ -298,7 +310,7 @@ async function loadDependencies(forceRefresh = false): Promise<string[]> {
           }))
           .sort((a, b) => a.label.localeCompare(b.label, 'id'))
       : []
-  } else {
+  } else if (requestIsCurrent) {
     teacherOptions.value = []
   }
 
@@ -361,7 +373,7 @@ async function loadCurrentForm() {
   }
 
   try {
-    const issues = await loadDependencies()
+    const issues = await loadDependencies(false, requestVersion)
 
     if (!isMounted || requestVersion !== formLoadVersion) return
 
@@ -398,7 +410,7 @@ async function retryDependencies() {
   initWarning.value = ''
 
   try {
-    const issues = await loadDependencies(true)
+    const issues = await loadDependencies(true, requestVersion)
 
     if (!isMounted || requestVersion !== formLoadVersion) return
 
