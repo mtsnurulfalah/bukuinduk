@@ -262,9 +262,24 @@ export const userSchema = yup.object({
 })
 
 export const classroomSchema = yup.object({
-  name: yup.string().required('Nama kelas wajib diisi').min(2, 'Nama minimal 2 karakter'),
+  name: yup
+    .string()
+    .required('Nama kelas wajib diisi')
+    .trim()
+    .min(2, 'Nama minimal 2 karakter')
+    .max(100, 'Nama maksimal 100 karakter'),
   gradeId: yup.string().required('Tingkat kelas wajib dipilih'),
   schoolYearId: yup.string().required('Tahun pelajaran wajib dipilih'),
+  homeroomTeacherId: yup.string().optional(),
+  capacity: yup
+    .number()
+    .transform((value, originalValue) => (
+      originalValue === '' || originalValue == null ? 30 : value
+    ))
+    .integer('Kapasitas harus berupa angka bulat')
+    .min(1, 'Kapasitas minimal 1 siswa')
+    .max(50, 'Kapasitas maksimal 50 siswa'),
+  isActive: yup.boolean().required(),
 })
 
 export const schoolYearSchema = yup.object({
