@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5 max-w-2xl">
+  <div class="w-full min-w-0 max-w-2xl space-y-5">
     <PageHeader
       :title="isEdit ? 'Edit Kelas' : 'Tambah Kelas Baru'"
       show-back
@@ -20,8 +20,8 @@
           <label for="isActive" class="text-sm font-medium text-slate-700">Kelas Aktif</label>
         </div>
 
-        <div class="flex gap-3 justify-end pt-2">
-          <BaseButton variant="outline" type="button" @click="$router.back()">Batal</BaseButton>
+        <div class="flex flex-col-reverse gap-2 justify-end pt-2 sm:flex-row">
+          <BaseButton variant="outline" type="button" class="w-full sm:w-auto" :disabled="isSaving" @click="router.push('/classrooms')">Batal</BaseButton>
           <BaseButton type="submit" :loading="isSaving" loading-text="Menyimpan...">
             <Save class="h-4 w-4" /> {{ isEdit ? 'Simpan Perubahan' : 'Tambah Kelas' }}
           </BaseButton>
@@ -47,7 +47,7 @@ const route = useRoute()
 const router = useRouter()
 const schoolYearStore = useSchoolYearStore()
 const classroomsStore = useClassroomsStore()
-const isEdit = computed(() => Boolean(route.params.id))
+const isEdit = computed(() => Boolean(String(route.params.id ?? '').trim()))
 const isSaving = ref(false)
 const errorMsg = ref('')
 const errors = reactive<Record<string, string>>({})
@@ -56,6 +56,7 @@ const teacherOptions = ref<{ value: string; label: string }[]>([])
 const form = reactive({ name: '', gradeId: '', schoolYearId: '', homeroomTeacherId: '', capacity: 30, isActive: true })
 
 async function handleSubmit() {
+  if (isSaving.value) return
   Object.keys(errors).forEach(k => delete errors[k])
   errorMsg.value = ''
   try {
@@ -70,7 +71,9 @@ async function handleSubmit() {
   isSaving.value = true
   try {
     if (isEdit.value) {
-      const updated = await classroomsService.update(route.params.id as string, form)
+      const id = String(route.params.id ?? '').trim()
+      if (!id) throw new Error('ID kelas tidak valid.')
+      const updated = await classroomsService.update(id, form)
       classroomsStore.updateClassroom(updated)
       toast.success('Kelas berhasil diperbarui.')
     } else {
@@ -78,7 +81,7 @@ async function handleSubmit() {
       classroomsStore.addClassroom(created)
       toast.success('Kelas berhasil ditambahkan.')
     }
-    router.push('/classrooms')
+    await router.push('/classrooms')
   } catch (e: unknown) {
     errorMsg.value = e instanceof Error ? e.message : 'Gagal menyimpan kelas.'
   } finally { isSaving.value = false }
