@@ -75,7 +75,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { Pencil } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import {
-  BaseAlert,
   BaseAvatar,
   BaseBadge,
   BaseButton,
