@@ -261,6 +261,82 @@ export const userSchema = yup.object({
   }),
 })
 
+export const teacherSchema = yup.object({
+  fullName: yup
+    .string()
+    .required('Nama lengkap wajib diisi')
+    .trim()
+    .min(3, 'Nama minimal 3 karakter')
+    .max(255, 'Nama maksimal 255 karakter'),
+  nip: yup
+    .string()
+    .optional()
+    .trim()
+    .max(50, 'NIP maksimal 50 karakter'),
+  nuptk: yup
+    .string()
+    .optional()
+    .trim()
+    .max(50, 'NUPTK maksimal 50 karakter'),
+  gender: yup
+    .string()
+    .optional()
+    .oneOf(['', 'L', 'P'], 'Jenis kelamin tidak valid'),
+  birthPlace: yup
+    .string()
+    .optional()
+    .trim()
+    .max(100, 'Tempat lahir maksimal 100 karakter'),
+  birthDate: yup
+    .string()
+    .optional()
+    .test(
+      'date-only',
+      'Tanggal lahir harus valid dan berformat YYYY-MM-DD',
+      v => !v || isValidDateOnly(v),
+    ),
+  religion: yup
+    .string()
+    .optional()
+    .max(50, 'Agama maksimal 50 karakter'),
+  educationLevel: yup
+    .string()
+    .optional()
+    .max(100, 'Pendidikan terakhir maksimal 100 karakter'),
+  major: yup
+    .string()
+    .optional()
+    .trim()
+    .max(150, 'Jurusan/bidang studi maksimal 150 karakter'),
+  joinDate: yup
+    .string()
+    .optional()
+    .test(
+      'date-only',
+      'Tanggal bergabung harus valid dan berformat YYYY-MM-DD',
+      v => !v || isValidDateOnly(v),
+    ),
+  phone: yup
+    .string()
+    .optional()
+    .trim()
+    .test('phone', 'Nomor HP tidak valid', v => !v || isValidPhone(v)),
+  email: yup
+    .string()
+    .optional()
+    .trim()
+    .test('email', 'Format email tidak valid', v => !v || isValidEmail(v)),
+  address: yup
+    .string()
+    .optional()
+    .trim()
+    .max(1000, 'Alamat maksimal 1000 karakter'),
+  status: yup
+    .string()
+    .required('Status wajib dipilih')
+    .oneOf(['active', 'inactive'], 'Status guru tidak valid'),
+})
+
 export const classroomSchema = yup.object({
   name: yup
     .string()
