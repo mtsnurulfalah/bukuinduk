@@ -51,7 +51,7 @@ const isLoading = ref(false)
 const isYearLoading = ref(false)
 const error = ref('')
 const search = ref('')
-const statusFilter = ref<'all' | 'active' | 'inactive'>('all')
+const statusFilter = ref('all')
 const selectedSchoolYearId = ref('')
 const deletingId = ref('')
 
