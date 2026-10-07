@@ -350,8 +350,11 @@ var ScoreHandler = {
   },
 
   _upsert: function(sheet, headers, payload, user) {
-    this._canManage(payload.studentId, user, payload.schoolYearId);
+    if (!payload.studentId) return errorResponse(400, 'ID siswa wajib diisi.');
     if (!payload.schoolYearId) return errorResponse(400, 'Tahun pelajaran wajib diisi.');
+
+    this._canManage(payload.studentId, user, payload.schoolYearId);
+
     var semester = Number(payload.semester);
     if (semester !== 1 && semester !== 2) return errorResponse(400, 'Semester harus 1 atau 2.');
     if (!payload.subjectId) return errorResponse(400, 'Mata pelajaran wajib dipilih.');
@@ -449,15 +452,18 @@ var ScoreHandler = {
     // dapat memiliki enrollment berbeda pada tahun pelajaran yang berbeda.
     var studentYearPairs = {};
     rows.forEach(function(row) {
-      if (row.studentId && row.schoolYearId) {
-        studentYearPairs[String(row.studentId) + '|' + String(row.schoolYearId)] = {
-          studentId: String(row.studentId),
-          schoolYearId: String(row.schoolYearId),
+      var studentId = String(row.studentId || '').trim();
+      var schoolYearId = String(row.schoolYearId || '').trim();
+      if (studentId && schoolYearId) {
+        studentYearPairs[studentId + '|' + schoolYearId] = {
+          studentId: studentId,
+          schoolYearId: schoolYearId,
         };
       }
     });
+
     var pairList = Object.keys(studentYearPairs);
-    if (!pairList.length) return errorResponse(400, 'ID siswa dan tahun pelajaran diperlukan.');
+    if (!pairList.length) return errorResponse(400, 'Setiap nilai harus memiliki ID siswa dan tahun pelajaran.');
     pairList.forEach(function(key) {
       var pair = studentYearPairs[key];
       this._canManage(pair.studentId, user, pair.schoolYearId);
@@ -505,10 +511,14 @@ var ScoreHandler = {
     Object.keys(pending).forEach(function(key) {
       var row = pending[key];
       try {
+        var studentId = String(row.studentId || '').trim();
+        var schoolYearId = String(row.schoolYearId || '').trim();
+        if (!studentId) throw new Error('ID siswa wajib diisi');
+        if (!schoolYearId) throw new Error('Tahun pelajaran wajib diisi');
+
         var semester = Number(row.semester);
-        if (!row.schoolYearId) throw new Error('Tahun pelajaran wajib diisi');
         if (semester !== 1 && semester !== 2) throw new Error('Semester harus 1 atau 2');
-        var subjectKey = String(row.subjectId || '') + '|' + String(row.schoolYearId);
+        var subjectKey = String(row.subjectId || '') + '|' + schoolYearId;
         if (!row.subjectId || !subjectKeys[subjectKey]) {
           throw new Error('Mata pelajaran tidak aktif/tidak sesuai tahun pelajaran');
         }
@@ -529,8 +539,8 @@ var ScoreHandler = {
         }
 
         var updated = Object.assign({}, existing || {}, {
-          studentId: row.studentId,
-          schoolYearId: row.schoolYearId,
+          studentId: studentId,
+          schoolYearId: schoolYearId,
           semester: semester,
           subjectId: row.subjectId,
           score: score,
@@ -597,7 +607,7 @@ var ScoreHandler = {
     if (!existing) return errorResponse(404, 'Nilai tidak ditemukan.');
     // Otorisasi berdasarkan studentId yang benar-benar dimiliki oleh nilai.
     // Jangan mempercayai studentId dari payload sebelum target row ditemukan.
-    this._canManage(existing.studentId, user);
+    this._canManage(existing.studentId, user, existing.schoolYearId);
     if (payload.studentId && String(payload.studentId) !== String(existing.studentId)) {
       return errorResponse(400, 'ID siswa tidak cocok dengan data nilai.');
     }
