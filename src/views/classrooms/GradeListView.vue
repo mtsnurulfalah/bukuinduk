@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5 max-w-3xl">
+  <div class="w-full min-w-0 max-w-3xl">
 
     <PageHeader title="Tingkat Kelas" subtitle="Kelola tingkatan kelas (Kelas 7, 8, 9, dll.)">
       <template #actions>
@@ -51,7 +51,7 @@
         <li
           v-for="grade in grades"
           :key="grade.id"
-          class="flex items-center gap-4 px-5 py-4 group hover:bg-slate-50 transition-colors"
+          class="flex min-w-0 items-center gap-3 px-4 py-4 hover:bg-slate-50 transition-colors sm:gap-4 sm:px-5"
         >
           <!-- Badge level -->
           <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-primary-50 text-primary-700 font-bold text-base shrink-0">
@@ -76,7 +76,7 @@
           <!-- Aksi -->
           <div
             v-if="can(PERMISSIONS.CLASSROOM_MANAGE)"
-            class="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            class="flex items-center gap-1 shrink-0"
           >
             <button
               type="button"
@@ -104,7 +104,6 @@
       v-model="modalOpen"
       :title="editTarget ? 'Edit Tingkat Kelas' : 'Tambah Tingkat Kelas'"
       size="sm"
-      @update:model-value="onModalClose"
     >
       <form
         id="grade-form"
@@ -139,13 +138,14 @@
       </form>
 
       <template #footer>
-        <div class="flex gap-3 justify-end">
-          <BaseButton variant="outline" type="button" @click="onModalClose">
+        <div class="flex flex-col-reverse gap-2 justify-end sm:flex-row">
+          <BaseButton variant="outline" type="button" class="w-full sm:w-auto" @click="onModalClose">
             Batal
           </BaseButton>
           <BaseButton
             type="submit"
             form="grade-form"
+            class="w-full sm:w-auto"
             :loading="isSaving"
             loading-text="Menyimpan..."
           >
