@@ -1095,7 +1095,7 @@ function saveAll() {
             : 'Periksa kembali data yang bermasalah.'
         )
 
-      toast.warning(
+      toast.info(
         'Sebagian nilai gagal disimpan. Perubahan yang gagal tetap dipertahankan agar dapat diperbaiki dan disimpan ulang.',
       )
     } catch (e: unknown) {
