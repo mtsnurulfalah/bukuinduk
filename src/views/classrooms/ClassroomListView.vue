@@ -333,6 +333,7 @@ async function loadClassrooms() {
     const data = await classroomsService.list(schoolYearId)
     if (!isMounted || requestVersion !== loadVersion) return
     classrooms.value = Array.isArray(data) ? data : []
+    classroomsStore.list = [...classrooms.value]
     classroomsStore.currentSchoolYearId = selectedSchoolYearId.value
     classroomsStore.initialized = true
   } catch (e: unknown) {
