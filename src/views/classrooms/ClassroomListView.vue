@@ -1,37 +1,107 @@
 <template>
-  <div class="min-w-0 space-y-5">
-    <PageHeader
-      title="Kelas & Rombel"
-      :subtitle="`${filteredClassrooms.length} dari ${classrooms.length} kelas`"
-    >
+  <div class="space-y-5">
+    <PageHeader title="Kelas & Rombel" :subtitle="`${classrooms.length} kelas ditemukan`">
       <template #actions>
-        <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-          <BaseSelect
-            v-model="selectedSchoolYearId"
-            :options="schoolYearStore.schoolYearOptions"
-            placeholder="Pilih Tahun Pelajaran"
-            class="w-full sm:w-52"
-            :disabled="isYearLoading"
-            @update:model-value="handleSchoolYearChange"
-          />
-          <BaseButton
-            v-if="can(PERMISSIONS.CLASSROOM_MANAGE)"
-            size="sm"
-            class="w-full sm:w-auto"
-            @click="goCreate"
-          >
-            <Plus class="h-4 w-4" />
-            Tambah Kelas
+        <BaseSelect
+          v-model="selectedSchoolYearId"
+          :options="schoolYearStore.schoolYearOptions"
+          placeholder="Pilih Tahun Pelajaran"
+          class="w-44"
+          @update:model-value="loadClassrooms"
+        />
+        <BaseButton v-if="can(PERMISSIONS.CLASSROOM_MANAGE)" size="sm" @click="$router.push('/classrooms/create')">
+          <Plus class="h-4 w-4" /> Tambah Kelas
+        </BaseButton>
+      </template>
+    </PageHeader>
+
+    <div v-if="isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <BaseSkeleton v-for="i in 6" :key="i" height="h-32" />
+    </div>
+
+    <BaseRetry
+      v-else-if="error"
+      title="Data kelas gagal dimuat"
+      :message="error"
+      @retry="loadClassrooms"
+    />
+
+    <BaseEmpty v-else-if="!classrooms.length" title="Belum ada kelas" description="Tambah kelas untuk tahun pelajaran ini." type="data">
+      <template #action>
+        <BaseButton v-if="can(PERMISSIONS.CLASSROOM_MANAGE)" @click="$router.push('/classrooms/create')">
+          <Plus class="h-4 w-4" /> Tambah Kelas
+        </BaseButton>
+      </template>
+    </BaseEmpty>
+
+    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div
+        v-for="cls in classrooms"
+        :key="cls.id"
+        class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:border-primary-200 hover:shadow-md transition-all group cursor-pointer"
+        @click="$router.push(`/classrooms/${cls.id}`)"
+      >
+        <div class="flex items-start justify-between mb-3">
+          <div class="p-2.5 bg-primary-100 rounded-xl">
+            <School class="h-5 w-5 text-primary-600" />
+          </div>
+          <div class="flex gap-1.5">
+            <BaseBadge :color="cls.isActive ? 'green' : 'slate'" dot>
+              {{ cls.isActive ? 'Aktif' : 'Nonaktif' }}
+            </BaseBadge>
+          </div>
+        </div>
+
+        <h3 class="font-bold text-lg text-slate-800 group-hover:text-primary-700 transition-colors">
+          {{ cls.name }}
+        </h3>
+        <p class="text-sm text-slate-500">{{ cls.gradeName }}</p>
+
+        <div class="flex items-center justify-between mt-4 pt-3 border-t border-slate-100">
+          <div class="flex items-center gap-1.5 text-sm text-slate-600">
+            <Users class="h-4 w-4 text-slate-400" />
+            <span class="font-semibold">{{ cls.studentCount ?? 0 }}</span>
+            <span class="text-slate-400">/ {{ cls.capacity ?? '–' }}</span>
+          </div>
+          <div class="flex items-center gap-1 text-xs text-slate-400">
+            <GraduationCap class="h-3.5 w-3.5" />
+            {{ cls.homeroomTeacherName ?? 'Belum ada wali kelas' }}
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div
+          v-if="can(PERMISSIONS.CLASSROOM_MANAGE)"
+          class="flex gap-1 mt-3 pt-3 border-t border-slate-100"
+          @click.stop
+        >
+          <BaseButton variant="ghost" size="xs" @click="$router.push(`/classrooms/${cls.id}/edit`)">
+            <Pencil class="h-3.5 w-3.5" /> Edit
+          </BaseButton>
+          <BaseButton variant="ghost" size="xs" @click="handleDelete(cls.id, cls.name)">
+            <Trash2 class="h-3.5 w-3.5 text-red-400" />
           </BaseButton>
         </div>
-      </template>
+      </div>
+    </div>
+
+    <BaseConfirmDialog
+      v-model="confirm.isOpen.value"
+      title="Hapus Kelas"
+      :message="`Hapus kelas '${confirm.options.value.message}'? Tindakan ini tidak dapat dibatalkan.`"
+      type="danger"
+      confirm-text="Ya, Hapus"
+      :loading="confirm.isLoading.value"
+      @confirm="confirmDelete"
+    />
+  </div>
+</template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
-import { Plus, School, Users, Pencil, Trash2 } from 'lucide-vue-next'
-import { PageHeader, SearchFilter } from '@/components/shared'
-import { BaseButton, BaseSelect, BaseBadge, BaseSkeleton, BaseEmpty, BaseRetry, BaseCard, BaseConfirmDialog } from '@/components/ui'
+import { ref, computed, onMounted, watch } from 'vue'
+import { Plus, School, Users, GraduationCap, Pencil, Trash2 } from 'lucide-vue-next'
+import { PageHeader } from '@/components/shared'
+import { BaseButton, BaseSelect, BaseBadge, BaseSkeleton, BaseEmpty, BaseRetry, BaseConfirmDialog } from '@/components/ui'
 import { useClassroomsStore } from '@/stores/classrooms'
 import { useSchoolYearStore } from '@/stores/schoolYear'
 import { usePermission, useConfirm } from '@/composables'
@@ -40,153 +110,66 @@ import { PERMISSIONS } from '@/constants'
 import { toast } from 'vue-sonner'
 import type { Classroom } from '@/types'
 
-const router = useRouter()
 const classroomsStore = useClassroomsStore()
 const schoolYearStore = useSchoolYearStore()
 const { can } = usePermission()
 const confirm = useConfirm()
 
 const classrooms = ref<Classroom[]>([])
-const isLoading = ref(false)
-const isYearLoading = ref(false)
+const isLoading = ref(true)
 const error = ref('')
-const search = ref('')
-const statusFilter = ref('all')
-const selectedSchoolYearId = ref('')
-const deletingId = ref('')
 
-const statusOptions = [
-  { value: 'all', label: 'Semua Status' },
-  { value: 'active', label: 'Aktif' },
-  { value: 'inactive', label: 'Nonaktif' },
-]
+// BUG-61 FIX: Gunakan computed agar selectedSchoolYearId reaktif terhadap
+// perubahan activeSchoolYear. Sebelumnya ref() hanya di-set sekali saat
+// komponen mount, tidak berubah jika admin mengubah tahun aktif.
+const selectedSchoolYearId = computed({
+  get: () => _selectedId.value || schoolYearStore.activeSchoolYear?.id || '',
+  set: (v: string) => { _selectedId.value = v },
+})
+const _selectedId = ref('')
 
-let loadVersion = 0
-let isMounted = false
-let manualYearSelection = false
 let deleteTargetId = ''
 
-const activeCount = computed(() => classrooms.value.filter(c => c.isActive).length)
-const inactiveCount = computed(() => classrooms.value.length - activeCount.value)
-
-const filteredClassrooms = computed(() => {
-  const q = search.value.trim().toLowerCase()
-  return classrooms.value.filter(cls => {
-    const matchesStatus =
-      statusFilter.value === 'all' ||
-      (statusFilter.value === 'active' && cls.isActive) ||
-      (statusFilter.value === 'inactive' && !cls.isActive)
-
-    if (!matchesStatus) return false
-    if (!q) return true
-
-    return [
-      cls.name,
-      cls.gradeName,
-      cls.homeroomTeacherName,
-      cls.schoolYearName,
-    ].some(value => String(value ?? '').toLowerCase().includes(q))
-  })
-})
-
-function resetFilters() {
-  search.value = ''
-  statusFilter.value = 'all'
-}
-
-function goCreate() {
-  void router.push('/classrooms/create')
-}
-
-function goEdit(id: string) {
-  void router.push(`/classrooms/${id}/edit`)
-}
-
 async function loadClassrooms() {
-  const requestVersion = ++loadVersion
-  const schoolYearId = selectedSchoolYearId.value || undefined
   isLoading.value = true
   error.value = ''
-
   try {
-    const data = await classroomsService.list(schoolYearId)
-    if (!isMounted || requestVersion !== loadVersion) return
-    classrooms.value = Array.isArray(data) ? data : []
-    classroomsStore.list = [...classrooms.value]
-    classroomsStore.currentSchoolYearId = selectedSchoolYearId.value
-    classroomsStore.initialized = true
+    classrooms.value = await classroomsService.list(selectedSchoolYearId.value || undefined)
   } catch (e: unknown) {
-    if (!isMounted || requestVersion !== loadVersion) return
     error.value = e instanceof Error ? e.message : 'Gagal memuat data kelas.'
   } finally {
-    if (isMounted && requestVersion === loadVersion) {
-      isLoading.value = false
-    }
+    isLoading.value = false
   }
 }
 
-function handleSchoolYearChange(value: string) {
-  manualYearSelection = true
-  selectedSchoolYearId.value = value
-  void loadClassrooms()
-}
+// BUG-61 FIX: Watch selectedSchoolYearId agar reload otomatis saat tahun pelajaran
+// aktif berubah (misalnya admin mengubah di tab Settings).
+watch(selectedSchoolYearId, () => {
+  loadClassrooms()
+})
 
 function handleDelete(id: string, name: string) {
   deleteTargetId = id
-  void confirm.confirm({ message: name, type: 'danger' })
+  confirm.options.value.message = name
+  confirm.isOpen.value = true
 }
 
 async function confirmDelete() {
-  if (!deleteTargetId || deletingId.value) return
-
-  deletingId.value = deleteTargetId
   confirm.isLoading.value = true
-
   try {
     await classroomsService.delete(deleteTargetId)
     classrooms.value = classrooms.value.filter(c => c.id !== deleteTargetId)
     classroomsStore.removeClassroom(deleteTargetId)
     toast.success('Kelas berhasil dihapus.')
     confirm.isOpen.value = false
-    confirm.onConfirm()
   } catch (e: unknown) {
     toast.error(e instanceof Error ? e.message : 'Gagal menghapus kelas.')
-  } finally {
-    confirm.isLoading.value = false
-    deletingId.value = ''
-    deleteTargetId = ''
-  }
+  } finally { confirm.isLoading.value = false }
 }
 
-watch(
-  () => schoolYearStore.activeSchoolYear?.id,
-  nextId => {
-    if (!manualYearSelection && nextId && selectedSchoolYearId.value !== nextId) {
-      selectedSchoolYearId.value = nextId
-      void loadClassrooms()
-    }
-  },
-)
-
 onMounted(async () => {
-  isMounted = true
-  isYearLoading.value = true
-
-  try {
-    await schoolYearStore.fetch()
-    if (!selectedSchoolYearId.value) {
-      selectedSchoolYearId.value = schoolYearStore.activeSchoolYear?.id ?? ''
-    }
-    await loadClassrooms()
-  } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Gagal memuat tahun pelajaran.'
-  } finally {
-    if (isMounted) isYearLoading.value = false
-  }
-})
-
-onUnmounted(() => {
-  isMounted = false
-  ++loadVersion
+  await schoolYearStore.fetch()
+  // selectedSchoolYearId computed sudah mengambil activeSchoolYear dari store
+  await loadClassrooms()
 })
 </script>
