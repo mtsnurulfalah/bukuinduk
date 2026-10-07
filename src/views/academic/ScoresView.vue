@@ -2,7 +2,7 @@
   <div class="w-full min-w-0 space-y-5 pb-6">
     <PageHeader
       title="Nilai Siswa"
-      subtitle="Input dan kelola nilai berdasarkan tahun pelajaran, kelas, semester, dan mata pelajaran."
+      subtitle="Input nilai per siswa, mata pelajaran, semester, dan tahun pelajaran."
       :breadcrumbs="[{ label: 'Akademik' }, { label: 'Nilai Siswa' }]"
     />
 
@@ -13,7 +13,7 @@
           label="Tahun Pelajaran"
           :options="schoolYearStore.schoolYearOptions"
           required
-          :disabled="isMutating || schoolYearStore.isLoading"
+          :disabled="isSaving || isRetrying || isLoading"
           @update:model-value="reloadContext"
         />
 
@@ -22,7 +22,7 @@
           label="Semester"
           :options="semesterOptions"
           required
-          :disabled="isMutating || isLoading"
+          :disabled="isSaving || isRetrying || isLoading"
           @update:model-value="loadScores"
         />
 
@@ -32,7 +32,7 @@
           :options="classroomOptions"
           clearable
           placeholder="Semua kelas"
-          :disabled="isMutating || isLoading || !schoolYearId"
+          :disabled="isSaving || isRetrying || isLoading || !schoolYearId"
           @update:model-value="loadStudentsAndScores"
         />
 
@@ -41,7 +41,7 @@
             class="w-full"
             :loading="isLoading"
             loading-text="Memuat..."
-            :disabled="isMutating || !schoolYearId"
+            :disabled="isSaving || isRetrying || !schoolYearId"
             @click="loadStudentsAndScores"
           >
             <RefreshCw class="h-4 w-4" />
@@ -61,39 +61,42 @@
 
     <BaseCard
       v-else
+      title="Daftar Nilai"
       :padding="false"
       class="overflow-hidden"
     >
       <div class="border-b border-slate-100 px-4 py-4 sm:px-5">
         <div class="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div class="min-w-0">
-            <div class="flex min-w-0 flex-wrap items-center gap-2">
-              <p class="text-sm font-semibold text-slate-800">
-                {{ filteredStudents.length }} siswa
-              </p>
-              <BaseBadge v-if="changedCount" color="amber" dot>
-                {{ changedCount }} perubahan belum disimpan
-              </BaseBadge>
-            </div>
+            <p class="text-sm font-semibold text-slate-700">
+              {{ filteredStudents.length }} siswa · {{ subjects.length }} mata pelajaran
+            </p>
             <p class="mt-0.5 text-xs leading-relaxed text-slate-400">
-              {{ subjects.length }} mata pelajaran aktif · Semester {{ semester }} ·
-              {{ selectedClassroomLabel }}
+              {{ selectedClassroomLabel }} · Semester {{ semester }}
+              <span v-if="changedCount"> · {{ changedCount }} perubahan belum disimpan</span>
             </p>
           </div>
 
-          <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-            <BaseInput
-              v-model="studentSearch"
-              class="w-full sm:min-w-[18rem] lg:w-72"
-              placeholder="Cari nama, NIS, atau NISN..."
-              :prefix-icon="Search"
-              :disabled="isMutating || isLoading"
-              aria-label="Cari siswa"
-            />
+          <div class="flex w-full min-w-0 flex-col gap-2 sm:flex-row lg:w-auto">
+            <div class="relative min-w-0 flex-1 sm:min-w-[18rem] lg:w-72 lg:flex-none">
+              <Search
+                class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                aria-hidden="true"
+              />
+              <input
+                v-model="studentSearch"
+                type="search"
+                placeholder="Cari nama, NIS, atau NISN..."
+                aria-label="Cari siswa"
+                :disabled="isSaving || isRetrying || isLoading"
+                class="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition-colors focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-50"
+              />
+            </div>
+
             <BaseButton
               :loading="isSaving"
               loading-text="Menyimpan..."
-              :disabled="!changedCount || isMutating || isLoading"
+              :disabled="!changedCount || isSaving || isRetrying || isLoading"
               class="w-full sm:w-auto"
               @click="saveAll"
             >
@@ -104,16 +107,18 @@
           </div>
         </div>
 
-        <BaseAlert
+        <p
           v-if="saveFeedback"
-          class="mt-3"
-          :type="saveFeedbackType"
-          :title="saveFeedbackType === 'error' ? 'Penyimpanan gagal' : 'Perhatian'"
-          dismissible
-          @dismiss="saveFeedback = ''"
+          :class="[
+            'mt-3 rounded-lg border px-3 py-2 text-xs leading-relaxed',
+            saveFeedbackIsError
+              ? 'border-red-200 bg-red-50 text-red-700'
+              : 'border-amber-200 bg-amber-50 text-amber-700',
+          ]"
+          role="status"
         >
           {{ saveFeedback }}
-        </BaseAlert>
+        </p>
       </div>
 
       <div
@@ -122,7 +127,7 @@
         aria-live="polite"
         aria-busy="true"
       >
-        <BaseSkeleton v-for="i in 7" :key="i" height="h-12" />
+        <BaseSkeleton v-for="i in 6" :key="i" height="h-12" />
       </div>
 
       <div
@@ -136,18 +141,16 @@
         v-else-if="!subjects.length"
         class="px-5 py-12 text-center"
       >
-        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50">
-          <BookOpen class="h-6 w-6 text-slate-300" aria-hidden="true" />
-        </div>
-        <p class="mt-4 text-sm font-medium text-slate-600">
+        <BookOpen class="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" />
+        <p class="mt-3 text-sm font-medium text-slate-600">
           Belum ada mata pelajaran aktif.
         </p>
         <p class="mx-auto mt-1 max-w-md text-xs leading-relaxed text-slate-400">
-          Aktifkan atau tambahkan mata pelajaran pada tahun pelajaran ini sebelum memasukkan nilai.
+          Tambahkan atau aktifkan mata pelajaran pada tahun pelajaran ini sebelum memasukkan nilai.
         </p>
         <RouterLink
           to="/subjects"
-          class="mt-4 inline-flex items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold text-primary-600 hover:bg-primary-50"
+          class="mt-3 inline-flex rounded-lg px-3 py-2 text-xs font-semibold text-primary-600 hover:bg-primary-50"
         >
           Kelola mata pelajaran
         </RouterLink>
@@ -155,107 +158,44 @@
 
       <div
         v-else-if="!students.length"
-        class="px-5 py-12 text-center"
+        class="px-5 py-12 text-center text-sm text-slate-400"
       >
-        <Users class="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" />
-        <p class="mt-3 text-sm font-medium text-slate-600">
-          Tidak ada siswa pada kelas yang dipilih.
-        </p>
-        <p class="mt-1 text-xs text-slate-400">
-          Coba pilih kelas lain atau gunakan filter "Semua Kelas".
-        </p>
+        Tidak ada siswa pada kelas yang dipilih.
       </div>
 
       <div
         v-else-if="!filteredStudents.length"
-        class="px-5 py-12 text-center"
+        class="px-5 py-12 text-center text-sm text-slate-400"
       >
-        <SearchX class="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" />
-        <p class="mt-3 text-sm font-medium text-slate-600">
-          Siswa tidak ditemukan.
-        </p>
-        <p class="mt-1 text-xs text-slate-400">
-          Tidak ada siswa yang cocok dengan pencarian "{{ studentSearch }}".
-        </p>
+        Siswa tidak ditemukan. Coba ubah kata kunci pencarian.
       </div>
 
       <template v-else>
-        <!-- Mobile / tablet: kartu siswa agar tidak memaksa viewport melakukan horizontal scroll. -->
-        <div class="divide-y divide-slate-100 lg:hidden">
-          <article
-            v-for="student in pagedStudents"
-            :key="student.id"
-            class="min-w-0 p-4 sm:p-5"
-          >
-            <div class="flex min-w-0 items-start gap-3">
-              <div class="flex min-h-10 min-w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-sm font-bold text-primary-700">
-                {{ initials(student.fullName) }}
-              </div>
-
-              <div class="min-w-0 flex-1">
-                <p class="break-words font-semibold leading-snug text-slate-800">
-                  {{ student.fullName }}
-                </p>
-                <div class="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-400">
-                  <span class="font-mono">{{ student.nis || 'Tanpa NIS' }}</span>
-                  <span>{{ student.classroomName || 'Tanpa kelas' }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="mt-4 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
-              <div
-                v-for="subject in subjects"
-                :key="subject.id"
-                class="min-w-0 rounded-xl border border-slate-100 bg-slate-50/70 p-3"
-              >
-                <div class="mb-2 min-w-0">
-                  <p class="break-words text-xs font-semibold leading-snug text-slate-700">
-                    {{ subject.shortName || subject.name }}
-                  </p>
-                  <p v-if="subject.code" class="mt-0.5 break-all font-mono text-[10px] text-slate-400">
-                    {{ subject.code }}
-                  </p>
-                </div>
-
-                <div class="flex min-w-0 items-center gap-2">
-                  <input
-                    v-model="scoreMap[scoreKey(student.id, subject.id)]"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    inputmode="decimal"
-                    class="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-center text-sm font-semibold tabular-nums text-slate-800 outline-none transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-                    :aria-label="'Nilai ' + student.fullName + ' - ' + subject.name"
-                    @input="normalizeScoreInput(student.id, subject.id)"
-                  />
-                  <BaseBadge
-                    :color="predicateColor(scoreMap[scoreKey(student.id, subject.id)])"
-                    class="shrink-0"
-                  >
-                    {{ predicateFor(scoreMap[scoreKey(student.id, subject.id)]) }}
-                  </BaseBadge>
-                </div>
-              </div>
-            </div>
-          </article>
+        <div
+          class="border-b border-slate-100 px-4 py-2 text-[11px] text-slate-400 lg:hidden"
+          aria-hidden="true"
+        >
+          Geser tabel ke samping untuk melihat semua mata pelajaran.
         </div>
 
-        <!-- Desktop: matriks nilai tetap dipertahankan untuk input cepat banyak siswa. -->
-        <div class="hidden max-w-full overflow-x-auto overscroll-x-contain lg:block">
+        <div class="max-w-full overflow-x-auto overscroll-x-contain">
           <table class="w-full min-w-[760px] table-fixed text-sm">
             <thead>
-              <tr class="border-y border-slate-100 bg-slate-50 text-xs text-slate-500">
-                <th class="sticky left-0 z-20 w-60 bg-slate-50 px-4 py-3 text-left font-semibold">
+              <tr class="border-b border-slate-100 bg-slate-50 text-xs text-slate-500">
+                <th
+                  scope="col"
+                  class="sticky left-0 z-20 w-60 border-r border-slate-100 bg-slate-50 px-4 py-3 text-left font-semibold"
+                >
                   Siswa
                 </th>
+
                 <th
                   v-for="subject in subjects"
                   :key="subject.id"
-                  class="w-[7.5rem] px-2 py-3 text-center"
+                  scope="col"
+                  class="w-[7.5rem] px-2 py-3 text-center font-medium"
                 >
-                  <span class="block break-words font-semibold leading-snug text-slate-700">
+                  <span class="block break-words leading-snug text-slate-700">
                     {{ subject.shortName || subject.name }}
                   </span>
                   <span
@@ -274,17 +214,20 @@
                 :key="student.id"
                 class="align-top transition-colors hover:bg-slate-50"
               >
-                <td class="sticky left-0 z-10 w-60 bg-white px-4 py-3">
+                <th
+                  scope="row"
+                  class="sticky left-0 z-10 w-60 border-r border-slate-100 bg-white px-4 py-3 text-left"
+                >
                   <p class="break-words font-medium leading-snug text-slate-800">
                     {{ student.fullName }}
                   </p>
-                  <p class="mt-0.5 text-xs font-mono text-slate-400">
+                  <p class="mt-0.5 font-mono text-xs text-slate-400">
                     {{ student.nis || 'Tanpa NIS' }}
                   </p>
                   <p class="mt-0.5 break-words text-[11px] text-slate-400">
                     {{ student.classroomName || '—' }}
                   </p>
-                </td>
+                </th>
 
                 <td
                   v-for="subject in subjects"
@@ -298,14 +241,11 @@
                     max="100"
                     step="0.01"
                     inputmode="decimal"
-                    class="mx-auto block w-full max-w-24 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-center text-sm font-semibold tabular-nums text-slate-800 outline-none transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                    class="mx-auto block w-full max-w-24 rounded-lg border border-slate-200 bg-white px-2.5 py-2.5 text-center text-sm font-semibold tabular-nums text-slate-800 outline-none transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
                     :aria-label="'Nilai ' + student.fullName + ' - ' + subject.name"
                     @input="normalizeScoreInput(student.id, subject.id)"
                   />
-                  <p
-                    class="mt-1 text-center text-[10px] font-medium text-slate-400"
-                    aria-hidden="true"
-                  >
+                  <p class="mt-1 text-center text-[10px] font-medium text-slate-400">
                     {{ predicateFor(scoreMap[scoreKey(student.id, subject.id)]) }}
                   </p>
                 </td>
@@ -319,36 +259,34 @@
           class="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"
         >
           <p class="text-xs text-slate-400">
-            Menampilkan
-            {{ pageStartIndex + 1 }}–{{ pageEndIndex }}
-            dari {{ filteredStudents.length }} siswa
+            Menampilkan {{ pageStartIndex + 1 }}–{{ pageEndIndex }} dari {{ filteredStudents.length }} siswa
           </p>
 
           <div class="flex items-center justify-between gap-2 sm:justify-end">
             <BaseButton
               variant="outline"
               size="sm"
-              :disabled="studentPage <= 1 || isMutating"
+              :disabled="currentStudentPage <= 1 || isSaving || isRetrying"
               aria-label="Halaman sebelumnya"
-              @click="goToStudentPage(studentPage - 1)"
+              @click="goToStudentPage(currentStudentPage - 1)"
             >
-              <ChevronLeft class="h-4 w-4" />
+              <span aria-hidden="true">‹</span>
               <span class="hidden sm:inline">Sebelumnya</span>
             </BaseButton>
 
             <span class="min-w-20 text-center text-xs font-medium text-slate-600">
-              Halaman {{ studentPage }} / {{ totalStudentPages }}
+              {{ currentStudentPage }} / {{ totalStudentPages }}
             </span>
 
             <BaseButton
               variant="outline"
               size="sm"
-              :disabled="studentPage >= totalStudentPages || isMutating"
+              :disabled="currentStudentPage >= totalStudentPages || isSaving || isRetrying"
               aria-label="Halaman berikutnya"
-              @click="goToStudentPage(studentPage + 1)"
+              @click="goToStudentPage(currentStudentPage + 1)"
             >
               <span class="hidden sm:inline">Berikutnya</span>
-              <ChevronRight class="h-4 w-4" />
+              <span aria-hidden="true">›</span>
             </BaseButton>
           </div>
         </div>
@@ -368,22 +306,15 @@ import {
 } from 'vue'
 import {
   BookOpen,
-  ChevronLeft,
-  ChevronRight,
   RefreshCw,
   Save,
   Search,
-  SearchX,
-  Users,
 } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { PageHeader } from '@/components/shared'
 import {
-  BaseAlert,
-  BaseBadge,
   BaseButton,
   BaseCard,
-  BaseInput,
   BaseRetry,
   BaseSelect,
   BaseSkeleton,
@@ -399,11 +330,18 @@ import {
 import { toast } from 'vue-sonner'
 import type {
   Classroom,
-  GradeFormData,
   Student,
   StudentGrade,
   Subject,
 } from '@/types'
+
+type ScoreBatchRow = {
+  studentId: string
+  schoolYearId: string
+  semester: 1 | 2
+  subjectId: string
+  score?: number
+}
 
 const schoolYearStore = useSchoolYearStore()
 const authStore = useAuthStore()
@@ -420,17 +358,17 @@ const scoreMap = reactive<Record<string, string>>({})
 const originalMap = reactive<Record<string, string>>({})
 
 const isLoading = ref(false)
-const isRetrying = ref(false)
 const isSaving = ref(false)
+const isRetrying = ref(false)
 const error = ref('')
 const saveFeedback = ref('')
-const saveFeedbackType = ref<'error' | 'warning'>('error')
+const saveFeedbackIsError = ref(false)
 const studentSearch = ref('')
 const studentPage = ref(1)
 
-const isMutating = computed(
-  () => isSaving.value || isRetrying.value,
-)
+const studentPageSize = 20
+let loadVersion = 0
+let isMounted = false
 
 const semesterOptions = [
   { value: '1', label: 'Semester 1 (Ganjil)' },
@@ -439,37 +377,23 @@ const semesterOptions = [
 
 const classroomOptions = computed(() => [
   { value: '', label: 'Semua Kelas' },
-  ...classrooms.value.map(c => ({
-    value: c.id,
-    label: c.name,
+  ...classrooms.value.map(classroom => ({
+    value: classroom.id,
+    label: classroom.name,
   })),
 ])
 
 const selectedClassroomLabel = computed(() => {
   if (!classroomId.value) return 'Semua kelas'
 
-  return (
-    classrooms.value.find(
-      classroom =>
-        String(classroom.id) ===
-        String(classroomId.value),
-    )?.name ?? 'Kelas terpilih'
-  )
+  return classrooms.value.find(
+    classroom =>
+      String(classroom.id) === String(classroomId.value),
+  )?.name ?? 'Kelas terpilih'
 })
 
-const changedCount = computed(
-  () =>
-    Object.keys(scoreMap).filter(
-      key =>
-        (scoreMap[key] ?? '') !==
-        (originalMap[key] ?? ''),
-    ).length,
-)
-
 const filteredStudents = computed(() => {
-  const query = studentSearch.value
-    .trim()
-    .toLocaleLowerCase()
+  const query = studentSearch.value.trim().toLocaleLowerCase()
 
   if (!query) return students.value
 
@@ -482,14 +406,10 @@ const filteredStudents = computed(() => {
     ]
       .filter(Boolean)
       .some(value =>
-        String(value)
-          .toLocaleLowerCase()
-          .includes(query),
+        String(value).toLocaleLowerCase().includes(query),
       ),
   )
 })
-
-const studentPageSize = 20
 
 const totalStudentPages = computed(() =>
   Math.max(
@@ -501,7 +421,7 @@ const totalStudentPages = computed(() =>
   ),
 )
 
-const visibleStudentPage = computed(() =>
+const currentStudentPage = computed(() =>
   Math.min(
     Math.max(1, studentPage.value),
     totalStudentPages.value,
@@ -510,7 +430,7 @@ const visibleStudentPage = computed(() =>
 
 const pagedStudents = computed(() => {
   const start =
-    (visibleStudentPage.value - 1) *
+    (currentStudentPage.value - 1) *
     studentPageSize
 
   return filteredStudents.value.slice(
@@ -521,7 +441,7 @@ const pagedStudents = computed(() => {
 
 const pageStartIndex = computed(() =>
   filteredStudents.value.length
-    ? (visibleStudentPage.value - 1) *
+    ? (currentStudentPage.value - 1) *
         studentPageSize
     : 0,
 )
@@ -534,6 +454,14 @@ const pageEndIndex = computed(() =>
   ),
 )
 
+const changedCount = computed(() =>
+  Object.keys(scoreMap).filter(
+    key =>
+      (scoreMap[key] ?? '') !==
+      (originalMap[key] ?? ''),
+  ).length,
+)
+
 watch(studentSearch, () => {
   studentPage.value = 1
 })
@@ -541,12 +469,8 @@ watch(studentSearch, () => {
 function scoreKey(
   studentId: string,
   subjectId: string,
-) {
-  return (
-    String(studentId) +
-    ':' +
-    String(subjectId)
-  )
+): string {
+  return String(studentId) + ':' + String(subjectId)
 }
 
 function initials(name: string): string {
@@ -559,57 +483,33 @@ function initials(name: string): string {
 
   return parts
     .slice(0, 2)
-    .map(part => part.charAt(0).toUpperCase())
+    .map(part =>
+      part.charAt(0).toUpperCase(),
+    )
     .join('')
 }
 
 function predicateFor(
   value: string | number | undefined,
 ): string {
-  if (value === undefined || value === '') {
-    return '—'
-  }
+  if (value === undefined || value === '') return '—'
 
   const score = Number(value)
-
   if (!Number.isFinite(score)) return '—'
   if (score >= 90) return 'A'
   if (score >= 80) return 'B'
   if (score >= 70) return 'C'
-
   return 'D'
-}
-
-function predicateColor(
-  value: string | number | undefined,
-): 'green' | 'blue' | 'amber' | 'red' | 'slate' {
-  if (value === undefined || value === '') {
-    return 'slate'
-  }
-
-  const score = Number(value)
-
-  if (!Number.isFinite(score)) return 'slate'
-  if (score >= 90) return 'green'
-  if (score >= 80) return 'blue'
-  if (score >= 70) return 'amber'
-
-  return 'red'
 }
 
 function normalizeScoreInput(
   studentId: string,
   subjectId: string,
 ) {
-  const key = scoreKey(
-    studentId,
-    subjectId,
-  )
+  const key = scoreKey(studentId, subjectId)
   const value = scoreMap[key]
 
-  if (value === undefined || value === '') {
-    return
-  }
+  if (value === undefined || value === '') return
 
   const numeric = Number(value)
 
@@ -623,12 +523,16 @@ function normalizeScoreInput(
 }
 
 function resetMaps() {
-  Object.keys(scoreMap).forEach(key =>
-    delete scoreMap[key],
-  )
-  Object.keys(originalMap).forEach(key =>
-    delete originalMap[key],
-  )
+  Object.keys(scoreMap).forEach(key => delete scoreMap[key])
+  Object.keys(originalMap).forEach(key => delete originalMap[key])
+}
+
+function resetData() {
+  classrooms.value = []
+  subjects.value = []
+  students.value = []
+  grades.value = []
+  resetMaps()
 }
 
 function goToStudentPage(page: number) {
@@ -641,7 +545,7 @@ function goToStudentPage(page: number) {
 async function loadClassroomsForYear(
   yearId: string,
   requestVersion: number,
-): Promise<void> {
+): Promise<boolean> {
   let result: Classroom[]
 
   if (authStore.user?.role === 'teacher') {
@@ -655,29 +559,20 @@ async function loadClassroomsForYear(
       )
     }
 
-    result = await classroomsService.getByTeacher(
-      teacherId,
-    )
+    result = await classroomsService.getByTeacher(teacherId)
     result = result.filter(
       classroom =>
-        String(classroom.schoolYearId) ===
-        String(yearId),
+        String(classroom.schoolYearId) === String(yearId),
     )
   } else {
-    result =
-      await classroomsService.list(yearId)
+    result = await classroomsService.list(yearId)
   }
 
-  if (
-    !isMounted ||
-    requestVersion !== loadVersion
-  ) {
-    return
+  if (!isMounted || requestVersion !== loadVersion) {
+    return false
   }
 
-  classrooms.value = Array.isArray(result)
-    ? result
-    : []
+  classrooms.value = Array.isArray(result) ? result : []
 
   if (
     classroomId.value &&
@@ -689,124 +584,129 @@ async function loadClassroomsForYear(
   ) {
     classroomId.value = ''
   }
+
+  return true
 }
 
 async function loadScoreData(
   requestVersion: number,
-): Promise<void> {
-  const yearId = String(
-    schoolYearId.value || '',
-  ).trim()
+): Promise<boolean> {
+  const yearId = String(schoolYearId.value || '').trim()
+
+  if (!yearId) return false
 
   const currentClassroomId =
     String(classroomId.value || '').trim()
 
-  const semesterValue =
+  const currentSemester =
     Number(semester.value) as 1 | 2
 
-  const [subjectResult, studentResult, gradeResult] =
-    await Promise.allSettled([
-      subjectsService.list(
+  let subjectData: Subject[]
+  let studentData: { items: Student[] }
+  let gradeData: StudentGrade[]
+
+  try {
+    subjectData =
+      await subjectsService.list(
         yearId,
         true,
-      ),
-      studentsService.list({
+      )
+  } catch (e: unknown) {
+    if (
+      isMounted &&
+      requestVersion === loadVersion
+    ) {
+      resetData()
+      error.value =
+        e instanceof Error
+          ? 'Mata pelajaran: ' + e.message
+          : 'Gagal memuat mata pelajaran.'
+    }
+    return false
+  }
+
+  try {
+    studentData =
+      await studentsService.list({
         schoolYearId: yearId,
         classroomId:
-          currentClassroomId || undefined,
+          currentClassroomId ||
+          undefined,
         page: 1,
         limit: 1000,
-      }),
-      gradesService.list({
+      })
+  } catch (e: unknown) {
+    if (
+      isMounted &&
+      requestVersion === loadVersion
+    ) {
+      resetData()
+      error.value =
+        e instanceof Error
+          ? 'Siswa: ' + e.message
+          : 'Gagal memuat daftar siswa.'
+    }
+    return false
+  }
+
+  try {
+    gradeData =
+      await gradesService.list({
         schoolYearId: yearId,
-        semester: semesterValue,
+        semester: currentSemester,
         classroomId:
-          currentClassroomId || undefined,
-      }),
-    ])
+          currentClassroomId ||
+          undefined,
+      })
+  } catch (e: unknown) {
+    if (
+      isMounted &&
+      requestVersion === loadVersion
+    ) {
+      resetData()
+      error.value =
+        e instanceof Error
+          ? 'Nilai: ' + e.message
+          : 'Gagal memuat data nilai.'
+    }
+    return false
+  }
 
   if (
     !isMounted ||
     requestVersion !== loadVersion
   ) {
-    return
+    return false
   }
 
-  const errors: string[] = []
+  subjects.value =
+    Array.isArray(subjectData)
+      ? [...subjectData].sort(
+          (a, b) =>
+            (Number(a.sortOrder) || 0) -
+              (Number(b.sortOrder) || 0) ||
+            String(a.name || '').localeCompare(
+              String(b.name || ''),
+            ),
+        )
+      : []
 
-  if (subjectResult.status === 'rejected') {
-    errors.push(
-      'Mata pelajaran: ' +
-        (subjectResult.reason instanceof Error
-          ? subjectResult.reason.message
-          : 'Gagal memuat mata pelajaran.'),
+  students.value =
+    Array.isArray(studentData.items)
+      ? studentData.items
+      : []
+
+  grades.value =
+    Array.isArray(gradeData)
+      ? gradeData
+      : []
+
+  const activeStudentIds =
+    new Set(
+      students.value.map(student =>
+        String(student.id),
+      ),
     )
-  }
-
-  if (studentResult.status === 'rejected') {
-    errors.push(
-      'Siswa: ' +
-        (studentResult.reason instanceof Error
-          ? studentResult.reason.message
-          : 'Gagal memuat daftar siswa.'),
-    )
-  }
-
-  if (gradeResult.status === 'rejected') {
-    errors.push(
-      'Nilai: ' +
-        (gradeResult.reason instanceof Error
-          ? gradeResult.reason.message
-          : 'Gagal memuat data nilai.'),
-    )
-  }
-
-  if (errors.length) {
-    subjects.value = []
-    students.value = []
-    grades.value = []
-    resetMaps()
-    error.value = errors.join(' · ')
-    return
-  }
-
-  const subjectData =
-    subjectResult.value
-  const studentData =
-    studentResult.value
-  const gradeData =
-    gradeResult.value
-
-  subjects.value = Array.isArray(
-    subjectData,
-  )
-    ? [...subjectData].sort(
-        (a, b) =>
-          (Number(a.sortOrder) || 0) -
-            (Number(b.sortOrder) || 0) ||
-          String(a.name || '').localeCompare(
-            String(b.name || ''),
-          ),
-      )
-    : []
-
-  students.value = Array.isArray(
-    studentData.items,
-  )
-    ? studentData.items
-    : []
-
-  grades.value = Array.isArray(
-    gradeData,
-  )
-    ? gradeData
-    : []
-
-  const activeStudentIds = new Set(
-    students.value.map(student =>
-      String(student.id),
-    ),
-  )
 
   resetMaps()
 
@@ -828,6 +728,7 @@ async function loadScoreData(
       studentId,
       subjectId,
     )
+
     const value =
       grade.score == null
         ? ''
@@ -836,24 +737,24 @@ async function loadScoreData(
     scoreMap[key] = value
     originalMap[key] = value
   })
+
+  return true
 }
 
-async function loadStudentsAndScores() {
+async function loadScoresData(
+  reloadClassrooms: boolean,
+): Promise<void> {
+  const requestVersion = ++loadVersion
+  studentPage.value = 1
+  saveFeedback.value = ''
+  error.value = ''
+
   const yearId = String(
     schoolYearId.value || '',
   ).trim()
 
-  const requestVersion = ++loadVersion
-
-  studentPage.value = 1
-  saveFeedback.value = ''
-
   if (!yearId) {
-    subjects.value = []
-    students.value = []
-    grades.value = []
-    classrooms.value = []
-    resetMaps()
+    resetData()
     isLoading.value = false
     error.value =
       'Pilih tahun pelajaran terlebih dahulu.'
@@ -861,10 +762,26 @@ async function loadStudentsAndScores() {
   }
 
   isLoading.value = true
-  error.value = ''
   resetMaps()
 
   try {
+    if (reloadClassrooms) {
+      const classroomLoaded =
+        await loadClassroomsForYear(
+          yearId,
+          requestVersion,
+        )
+
+      if (!classroomLoaded) return
+    }
+
+    if (
+      !isMounted ||
+      requestVersion !== loadVersion
+    ) {
+      return
+    }
+
     await loadScoreData(
       requestVersion,
     )
@@ -876,243 +793,198 @@ async function loadStudentsAndScores() {
       return
     }
 
-    subjects.value = []
-    students.value = []
-    grades.value = []
-    resetMaps()
+    resetData()
     error.value =
       e instanceof Error
         ? e.message
         : 'Gagal memuat data nilai.'
   } finally {
-    if (requestVersion === loadVersion) {
+    if (
+      requestVersion === loadVersion
+    ) {
       isLoading.value = false
     }
   }
 }
 
-async function reloadContext() {
-  const yearId = String(
-    schoolYearId.value || '',
-  ).trim()
-
-  const requestVersion = ++loadVersion
-
-  classroomId.value = ''
-  studentPage.value = 1
-  saveFeedback.value = ''
-  error.value = ''
-  resetMaps()
-
-  if (!yearId) {
-    classrooms.value = []
-    subjects.value = []
-    students.value = []
-    grades.value = []
-    isLoading.value = false
-    error.value =
-      'Pilih tahun pelajaran terlebih dahulu.'
+function loadStudentsAndScores() {
+  if (
+    isSaving.value ||
+    isRetrying.value ||
+    isLoading.value
+  ) {
     return
   }
 
-  isLoading.value = true
+  void loadScoresData(false)
+}
 
-  try {
-    await loadClassroomsForYear(
-      yearId,
-      requestVersion,
-    )
-
-    if (
-      !isMounted ||
-      requestVersion !== loadVersion
-    ) {
-      return
-    }
-
-    await loadScoreData(
-      requestVersion,
-    )
-  } catch (e: unknown) {
-    if (
-      !isMounted ||
-      requestVersion !== loadVersion
-    ) {
-      return
-    }
-
-    classrooms.value = []
-    subjects.value = []
-    students.value = []
-    grades.value = []
-    resetMaps()
-    error.value =
-      e instanceof Error
-        ? e.message
-        : 'Gagal menyiapkan konteks data nilai.'
-  } finally {
-    if (requestVersion === loadVersion) {
-      isLoading.value = false
-    }
+function loadScores() {
+  if (
+    isSaving.value ||
+    isRetrying.value ||
+    isLoading.value
+  ) {
+    return
   }
+
+  void loadScoresData(false)
+}
+
+function reloadContext() {
+  if (
+    isSaving.value ||
+    isRetrying.value
+  ) {
+    return
+  }
+
+  classroomId.value = ''
+  void loadScoresData(true)
 }
 
 async function retryLoad() {
-  if (isRetrying.value || isSaving.value) {
+  if (
+    isRetrying.value ||
+    isSaving.value
+  ) {
     return
   }
 
   isRetrying.value = true
 
   try {
-    await reloadContext()
+    await loadScoresData(true)
   } finally {
     isRetrying.value = false
   }
 }
 
-function loadScores() {
+async function saveAll() {
   if (
     isSaving.value ||
-    isLoading.value
+    isLoading.value ||
+    !schoolYearId.value
   ) {
     return
   }
 
-  void loadStudentsAndScores()
-}
-
-function saveAll() {
-  if (
-    isSaving.value ||
-    isLoading.value
-  ) {
-    return
-  }
-
-  const changedKeys = Object.keys(
-    scoreMap,
-  ).filter(
-    key =>
-      (scoreMap[key] ?? '') !==
-      (originalMap[key] ?? ''),
-  )
+  const changedKeys =
+    Object.keys(scoreMap).filter(
+      key =>
+        (scoreMap[key] ?? '') !==
+        (originalMap[key] ?? ''),
+    )
 
   if (!changedKeys.length) {
-    toast.info(
-      'Belum ada perubahan nilai.',
-    )
+    toast.info('Belum ada perubahan nilai.')
     return
   }
 
-  const changed: GradeFormData[] = []
+  const changed: ScoreBatchRow[] = []
 
   for (const key of changedKeys) {
-    const [studentId, subjectId] =
-      key.split(':')
+    const parts = key.split(':')
+    const studentId = parts[0] || ''
+    const subjectId = parts[1] || ''
+    const rawScore = scoreMap[key] ?? ''
 
     if (!studentId || !subjectId) {
+      saveFeedbackIsError.value = true
       saveFeedback.value =
-        'Ada perubahan nilai dengan identitas data yang tidak valid. Muat ulang data sebelum menyimpan kembali.'
-      saveFeedbackType.value = 'error'
+        'Ada perubahan nilai dengan identitas data yang tidak valid. Muat ulang data sebelum menyimpan.'
       return
     }
 
-    const rawScore =
-      scoreMap[key] ?? ''
+    if (rawScore === '') {
+      changed.push({
+        studentId,
+        schoolYearId:
+          String(schoolYearId.value),
+        semester:
+          Number(semester.value) as 1 | 2,
+        subjectId,
+      })
+      continue
+    }
 
-    if (rawScore !== '') {
-      const numericScore =
-        Number(rawScore)
+    const score = Number(rawScore)
 
-      if (
-        !Number.isFinite(
-          numericScore,
-        ) ||
-        numericScore < 0 ||
-        numericScore > 100
-      ) {
-        saveFeedback.value =
-          'Nilai harus berupa angka antara 0 sampai 100.'
-        saveFeedbackType.value =
-          'error'
-        return
-      }
+    if (
+      !Number.isFinite(score) ||
+      score < 0 ||
+      score > 100
+    ) {
+      saveFeedbackIsError.value = true
+      saveFeedback.value =
+        'Nilai harus berupa angka antara 0 sampai 100.'
+      return
     }
 
     changed.push({
       studentId,
       schoolYearId:
-        schoolYearId.value,
+        String(schoolYearId.value),
       semester:
-        Number(semester.value) as
-          | 1
-          | 2,
+        Number(semester.value) as 1 | 2,
       subjectId,
-      score:
-        rawScore === ''
-          ? undefined
-          : Number(rawScore),
+      score,
     })
   }
 
   isSaving.value = true
   saveFeedback.value = ''
 
-  void (async () => {
-    try {
-      const result =
-        await gradesService.saveBatch(
-          changed,
-        )
-
-      if (
-        result.failed === 0 &&
-        result.success ===
-          changed.length
-      ) {
-        changedKeys.forEach(key => {
-          originalMap[key] =
-            scoreMap[key] ?? ''
-        })
-
-        toast.success(
-          result.success +
-            ' nilai berhasil disimpan.',
-        )
-        return
-      }
-
-      saveFeedbackType.value =
-        'warning'
-      saveFeedback.value =
-        'Sebagian nilai belum tersimpan. ' +
-        (
-          result.errors?.length
-            ? result.errors
-                .slice(0, 3)
-                .join(' | ')
-            : 'Periksa kembali data yang bermasalah.'
-        )
-
-      toast.info(
-        'Sebagian nilai gagal disimpan. Perubahan yang gagal tetap dipertahankan agar dapat diperbaiki dan disimpan ulang.',
+  try {
+    const result =
+      await gradesService.saveBatch(
+        changed,
       )
-    } catch (e: unknown) {
-      saveFeedbackType.value =
-        'error'
-      saveFeedback.value =
-        e instanceof Error
-          ? e.message
-          : 'Gagal menyimpan nilai.'
 
-      toast.error(
-        saveFeedback.value,
+    if (
+      result.failed === 0 &&
+      result.success ===
+        changed.length
+    ) {
+      changedKeys.forEach(key => {
+        originalMap[key] =
+          scoreMap[key] ?? ''
+      })
+
+      toast.success(
+        result.success +
+          ' nilai berhasil disimpan.',
       )
-    } finally {
-      isSaving.value = false
+      return
     }
-  })()
+
+    saveFeedbackIsError.value = false
+    saveFeedback.value =
+      'Sebagian nilai belum tersimpan. ' +
+      (
+        result.errors?.length
+          ? result.errors
+              .slice(0, 3)
+              .join(' | ')
+          : 'Periksa kembali data yang bermasalah.'
+      )
+
+    toast.info(
+      'Perubahan yang belum tersimpan tetap dipertahankan untuk diperbaiki.',
+    )
+  } catch (e: unknown) {
+    saveFeedbackIsError.value = true
+    saveFeedback.value =
+      e instanceof Error
+        ? e.message
+        : 'Gagal menyimpan nilai.'
+
+    toast.error(
+      saveFeedback.value,
+    )
+  } finally {
+    isSaving.value = false
+  }
 }
 
 onMounted(async () => {
@@ -1137,7 +1009,7 @@ onMounted(async () => {
       years[0]?.id ??
       ''
 
-    await reloadContext()
+    await loadScoresData(true)
   } catch (e: unknown) {
     if (!isMounted) return
 
