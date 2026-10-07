@@ -42,6 +42,11 @@ var ClassroomHandler = {
     var grades = sheetToObjects(getSheet(CONFIG.SHEETS.GRADES));
     var teachers = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS));
     var enrollments = sheetToObjects(getSheet(CONFIG.SHEETS.ENROLLMENTS));
+    var students = sheetToObjects(getSheet(CONFIG.SHEETS.STUDENTS));
+    var activeStudentById = {};
+    students.forEach(function(s) {
+      if (s && s.status === 'active') activeStudentById[String(s.id)] = true;
+    });
 
     all = all.map(function(c) {
       var grade = grades.find(function(g){ return String(g.id) === String(c.gradeId); });
@@ -50,7 +55,8 @@ var ClassroomHandler = {
       var count = enrollments.filter(function(e){
         return String(e.classroomId) === String(c.id) &&
           String(e.schoolYearId) === String(c.schoolYearId) &&
-          e.status === 'active';
+          e.status === 'active' &&
+          activeStudentById[String(e.studentId)] === true;
       }).length;
       return Object.assign({}, c, {
         gradeName: grade ? grade.name : '',
@@ -383,7 +389,7 @@ var GradeHandler = {
     var name = String(payload.name || '').trim();
     var level = Number(payload.level);
     if (!name) return errorResponse(400, 'Nama tingkat wajib diisi.');
-    if (!Number.isFinite(level) || level < 1) return errorResponse(400, 'Level tingkat tidak valid.');
+    if (!Number.isFinite(level) || level < 1 || level > 99) return errorResponse(400, 'Level tingkat harus antara 1 sampai 99.');
     var all = sheetToObjects(sheet);
     if (all.some(function(g){ return String(g.name || '').trim().toLowerCase() === name.toLowerCase(); })) return errorResponse(409, 'Nama tingkat sudah digunakan.');
     if (all.some(function(g){ return Number(g.level) === level; })) return errorResponse(409, 'Level tingkat sudah digunakan.');
@@ -413,7 +419,7 @@ var GradeHandler = {
     var name = payload.name !== undefined ? String(payload.name).trim() : String(old.name || '').trim();
     var level = payload.level !== undefined ? Number(payload.level) : Number(old.level);
     if (!name) return errorResponse(400, 'Nama tingkat wajib diisi.');
-    if (!Number.isFinite(level) || level < 1) return errorResponse(400, 'Level tingkat tidak valid.');
+    if (!Number.isFinite(level) || level < 1 || level > 99) return errorResponse(400, 'Level tingkat harus antara 1 sampai 99.');
     if (all.some(function(g){ return String(g.id) !== String(payload.id) && String(g.name || '').trim().toLowerCase() === name.toLowerCase(); })) {
       return errorResponse(409, 'Nama tingkat sudah digunakan.');
     }
