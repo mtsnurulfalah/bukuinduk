@@ -1,7 +1,12 @@
 <template>
-  <div class="mx-auto max-w-3xl space-y-5 min-w-0">
+  <div class="w-full min-w-0 max-w-3xl space-y-5 pb-6">
     <PageHeader
       :title="isEdit ? 'Edit Guru' : 'Tambah Guru'"
+      :subtitle="
+        isEdit
+          ? 'Perbarui data guru tanpa mengubah hubungan akun dan riwayat yang sudah tersimpan.'
+          : 'Lengkapi data guru. Field bertanda (*) wajib diisi.'
+      "
       show-back
       :breadcrumbs="[
         { label: 'Data Guru', to: '/teachers' },
@@ -9,154 +14,280 @@
       ]"
     />
 
+    <BaseRetry
+      v-if="isEdit && loadError"
+      title="Data guru gagal dimuat"
+      :message="loadError"
+      :loading="isLoading"
+      @retry="loadTeacher"
+    />
+
     <BaseAlert
       v-if="errorMsg"
       type="error"
+      title="Data belum tersimpan"
       dismissible
       @dismiss="errorMsg = ''"
     >
       {{ errorMsg }}
     </BaseAlert>
 
-    <BaseCard>
-      <template v-if="isEdit && isLoading">
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <BaseSkeleton class="sm:col-span-2" height="h-10" />
-          <BaseSkeleton height="h-10" />
-          <BaseSkeleton height="h-10" />
-          <BaseSkeleton height="h-10" />
-          <BaseSkeleton height="h-10" />
-          <BaseSkeleton height="h-10" />
-          <BaseSkeleton height="h-10" />
-          <BaseSkeleton height="h-10" />
-          <BaseSkeleton height="h-10" />
-          <BaseSkeleton height="h-10" />
-          <BaseSkeleton height="h-10" />
-          <BaseSkeleton class="sm:col-span-2" height="h-20" />
-          <BaseSkeleton height="h-10" />
-          <div class="flex justify-end sm:col-span-2">
-            <BaseSkeleton height="h-10" class="w-36" />
+    <template v-if="isEdit && isLoading">
+      <BaseCard>
+        <div class="space-y-6" aria-hidden="true">
+          <div class="space-y-2">
+            <BaseSkeleton height="h-5" width="w-40" />
+            <BaseSkeleton height="h-4" width="w-80" />
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <BaseSkeleton class="sm:col-span-2" height="h-10" />
+            <BaseSkeleton height="h-10" />
+            <BaseSkeleton height="h-10" />
+            <BaseSkeleton height="h-10" />
+            <BaseSkeleton height="h-10" />
+            <BaseSkeleton height="h-10" />
+            <BaseSkeleton height="h-10" />
+            <BaseSkeleton height="h-10" />
+            <BaseSkeleton height="h-10" />
+            <BaseSkeleton class="sm:col-span-2" height="h-24" />
+            <BaseSkeleton height="h-10" />
+
+            <div class="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:col-span-2 sm:flex-row sm:justify-end">
+              <BaseSkeleton height="h-10" width="w-full sm:w-24" />
+              <BaseSkeleton height="h-10" width="w-full sm:w-36" />
+            </div>
           </div>
         </div>
-      </template>
+      </BaseCard>
+    </template>
 
-      <BaseRetry
-        v-else-if="isEdit && loadError"
-        title="Data guru gagal dimuat"
-        :message="loadError"
-        @retry="loadTeacher"
-      />
-
+    <BaseCard
+      v-else-if="!isEdit || !loadError"
+      title="Informasi Guru"
+      subtitle="Pastikan data identitas, kontak, dan status guru diisi dengan benar."
+    >
       <form
-        v-else
-        class="grid grid-cols-1 gap-4 sm:grid-cols-2"
+        class="mt-1 space-y-7"
+        novalidate
+        :aria-busy="isSaving"
         @submit.prevent="handleSubmit"
       >
-        <BaseInput
-          v-model="form.fullName"
-          label="Nama Lengkap"
-          placeholder="Masukkan nama lengkap"
-          autocomplete="name"
-          required
-          class="sm:col-span-2"
-        />
-        <BaseInput
-          v-model="form.nip"
-          label="NIP"
-          placeholder="Nomor Induk Pegawai"
-          inputmode="numeric"
-        />
-        <BaseInput
-          v-model="form.nuptk"
-          label="NUPTK"
-          placeholder="Nomor Unik PTK"
-          inputmode="numeric"
-        />
-        <BaseSelect
-          v-model="form.gender"
-          label="Jenis Kelamin"
-          :options="GENDER_OPTIONS"
-          placeholder="Pilih"
-        />
-        <BaseInput
-          v-model="form.birthDate"
-          label="Tanggal Lahir"
-          type="date"
-        />
-        <BaseInput
-          v-model="form.birthPlace"
-          label="Tempat Lahir"
-          placeholder="Contoh: Palembang"
-        />
-        <BaseSelect
-          v-model="form.religion"
-          label="Agama"
-          :options="RELIGION_OPTIONS"
-          placeholder="Pilih agama"
-        />
-        <BaseSelect
-          v-model="form.educationLevel"
-          label="Pendidikan Terakhir"
-          :options="EDUCATION_LEVEL_OPTIONS"
-          placeholder="Pilih"
-        />
-        <BaseInput
-          v-model="form.major"
-          label="Jurusan/Bidang Studi"
-          placeholder="Contoh: Pendidikan Agama Islam"
-        />
-        <BaseInput
-          v-model="form.joinDate"
-          label="Tanggal Bergabung"
-          type="date"
-        />
-        <BaseInput
-          v-model="form.phone"
-          label="No. HP"
-          placeholder="Contoh: 08xxxxxxxxxx"
-          inputmode="tel"
-          autocomplete="tel"
-        />
-        <BaseInput
-          v-model="form.email"
-          label="Email"
-          type="email"
-          placeholder="nama@sekolah.sch.id"
-          autocomplete="email"
-        />
-        <BaseTextarea
-          v-model="form.address"
-          label="Alamat"
-          placeholder="Masukkan alamat lengkap"
-          autocomplete="street-address"
-          class="sm:col-span-2"
-          :rows="3"
-        />
-        <BaseSelect
-          v-model="form.status"
-          label="Status"
-          :options="statusOptions"
-          placeholder="Pilih status"
-          required
-        />
+        <section class="space-y-4" aria-labelledby="teacher-basic-heading">
+          <div class="border-b border-slate-100 pb-3">
+            <h2 id="teacher-basic-heading" class="text-sm font-semibold text-slate-800">
+              Identitas Utama
+            </h2>
+            <p class="mt-0.5 text-xs leading-relaxed text-slate-500">
+              Informasi utama yang digunakan untuk mengenali guru.
+            </p>
+          </div>
 
-        <div
-          class="flex flex-col-reverse gap-2 pt-2 sm:col-span-2 sm:flex-row sm:justify-end"
-        >
+          <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+            <BaseInput
+              id="teacher-full-name"
+              v-model="form.fullName"
+              label="Nama Lengkap"
+              placeholder="Masukkan nama lengkap"
+              autocomplete="name"
+              required
+              :error-message="errors.fullName"
+              :disabled="isSaving"
+              class="sm:col-span-2"
+            />
+
+            <BaseInput
+              id="teacher-nip"
+              v-model="form.nip"
+              label="NIP"
+              placeholder="Nomor Induk Pegawai"
+              inputmode="numeric"
+              autocomplete="off"
+              :error-message="errors.nip"
+              :disabled="isSaving"
+            />
+
+            <BaseInput
+              id="teacher-nuptk"
+              v-model="form.nuptk"
+              label="NUPTK"
+              placeholder="Nomor Unik PTK"
+              inputmode="numeric"
+              autocomplete="off"
+              :error-message="errors.nuptk"
+              :disabled="isSaving"
+            />
+
+            <BaseSelect
+              id="teacher-gender"
+              v-model="form.gender"
+              label="Jenis Kelamin"
+              :options="GENDER_OPTIONS"
+              placeholder="Pilih jenis kelamin"
+              :error-message="errors.gender"
+              :disabled="isSaving"
+            />
+
+            <BaseSelect
+              id="teacher-religion"
+              v-model="form.religion"
+              label="Agama"
+              :options="RELIGION_OPTIONS"
+              placeholder="Pilih agama"
+              :error-message="errors.religion"
+              :disabled="isSaving"
+            />
+          </div>
+        </section>
+
+        <section class="space-y-4" aria-labelledby="teacher-profile-heading">
+          <div class="border-b border-slate-100 pb-3">
+            <h2 id="teacher-profile-heading" class="text-sm font-semibold text-slate-800">
+              Profil & Pendidikan
+            </h2>
+            <p class="mt-0.5 text-xs leading-relaxed text-slate-500">
+              Data kelahiran, pendidikan terakhir, dan masa bergabung.
+            </p>
+          </div>
+
+          <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+            <BaseInput
+              id="teacher-birth-place"
+              v-model="form.birthPlace"
+              label="Tempat Lahir"
+              placeholder="Contoh: Palembang"
+              autocomplete="address-level2"
+              :error-message="errors.birthPlace"
+              :disabled="isSaving"
+            />
+
+            <BaseInput
+              id="teacher-birth-date"
+              v-model="form.birthDate"
+              label="Tanggal Lahir"
+              type="date"
+              :error-message="errors.birthDate"
+              :disabled="isSaving"
+            />
+
+            <BaseSelect
+              id="teacher-education"
+              v-model="form.educationLevel"
+              label="Pendidikan Terakhir"
+              :options="EDUCATION_LEVEL_OPTIONS"
+              placeholder="Pilih pendidikan"
+              :error-message="errors.educationLevel"
+              :disabled="isSaving"
+            />
+
+            <BaseInput
+              id="teacher-major"
+              v-model="form.major"
+              label="Jurusan/Bidang Studi"
+              placeholder="Contoh: Pendidikan Agama Islam"
+              :error-message="errors.major"
+              :disabled="isSaving"
+            />
+
+            <BaseInput
+              id="teacher-join-date"
+              v-model="form.joinDate"
+              label="Tanggal Bergabung"
+              type="date"
+              :error-message="errors.joinDate"
+              :disabled="isSaving"
+            />
+          </div>
+        </section>
+
+        <section class="space-y-4" aria-labelledby="teacher-contact-heading">
+          <div class="border-b border-slate-100 pb-3">
+            <h2 id="teacher-contact-heading" class="text-sm font-semibold text-slate-800">
+              Kontak
+            </h2>
+            <p class="mt-0.5 text-xs leading-relaxed text-slate-500">
+              Gunakan nomor dan alamat email yang masih aktif untuk komunikasi administrasi.
+            </p>
+          </div>
+
+          <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+            <BaseInput
+              id="teacher-phone"
+              v-model="form.phone"
+              label="No. HP"
+              placeholder="Contoh: 081234567890"
+              inputmode="tel"
+              autocomplete="tel"
+              :hint="errors.phone ? undefined : 'Boleh menggunakan format 08xx atau +628xx.'"
+              :error-message="errors.phone"
+              :disabled="isSaving"
+            />
+
+            <BaseInput
+              id="teacher-email"
+              v-model="form.email"
+              label="Email"
+              type="email"
+              placeholder="nama@sekolah.sch.id"
+              autocomplete="email"
+              :error-message="errors.email"
+              :disabled="isSaving"
+            />
+
+            <BaseTextarea
+              id="teacher-address"
+              v-model="form.address"
+              label="Alamat"
+              placeholder="Masukkan alamat lengkap"
+              autocomplete="street-address"
+              :rows="3"
+              :error-message="errors.address"
+              :disabled="isSaving"
+              class="sm:col-span-2"
+            />
+          </div>
+        </section>
+
+        <section class="space-y-4" aria-labelledby="teacher-status-heading">
+          <div class="border-b border-slate-100 pb-3">
+            <h2 id="teacher-status-heading" class="text-sm font-semibold text-slate-800">
+              Status Kepegawaian
+            </h2>
+            <p class="mt-0.5 text-xs leading-relaxed text-slate-500">
+              Status menentukan apakah guru masih tersedia sebagai data aktif di aplikasi.
+            </p>
+          </div>
+
+          <div class="max-w-sm">
+            <BaseSelect
+              id="teacher-status"
+              v-model="form.status"
+              label="Status"
+              :options="statusOptions"
+              placeholder="Pilih status"
+              required
+              :error-message="errors.status"
+              :disabled="isSaving"
+            />
+          </div>
+        </section>
+
+        <div class="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-end">
           <BaseButton
             variant="outline"
             type="button"
-            :disabled="isSaving"
             class="w-full sm:w-auto"
+            :disabled="isSaving"
             @click="goBack"
           >
             Batal
           </BaseButton>
+
           <BaseButton
             type="submit"
+            class="w-full sm:w-auto"
             :loading="isSaving"
             loading-text="Menyimpan..."
-            class="w-full sm:w-auto"
           >
             <Save class="h-4 w-4" />
             {{ isEdit ? 'Simpan Perubahan' : 'Tambah Guru' }}
@@ -168,7 +299,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Save } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
@@ -188,23 +319,31 @@ import {
   GENDER_OPTIONS,
   RELIGION_OPTIONS,
 } from '@/constants'
+import { teacherSchema } from '@/utils/validation'
 import { toast } from 'vue-sonner'
+import type { TeacherFormData } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
 
-const isEdit = computed(() => Boolean(route.params.id))
-const isLoading = ref(Boolean(route.params.id))
+const editId = computed(() => {
+  const id = String(route.params.id ?? '').trim()
+  return id === 'undefined' || id === 'null' ? '' : id
+})
+const isEdit = computed(() => Boolean(editId.value))
+
+const isLoading = ref(Boolean(editId.value))
 const isSaving = ref(false)
 const errorMsg = ref('')
 const loadError = ref('')
+const errors = reactive<Record<string, string>>({})
 
 const statusOptions = [
   { value: 'active', label: 'Aktif' },
   { value: 'inactive', label: 'Nonaktif' },
 ]
 
-const form = reactive({
+const createInitialForm = (): TeacherFormData => ({
   fullName: '',
   nip: '',
   nuptk: '',
@@ -221,111 +360,217 @@ const form = reactive({
   status: 'active',
 })
 
-function resetForm() {
+const form = reactive<TeacherFormData>(createInitialForm())
+
+let formLoadVersion = 0
+let isMounted = false
+
+function clearErrors() {
+  Object.keys(errors).forEach(key => delete errors[key])
+}
+
+function resetFormState() {
+  Object.assign(form, createInitialForm())
+  clearErrors()
+  errorMsg.value = ''
+}
+
+function applyTeacherData(teacher: Awaited<ReturnType<typeof teachersService.get>>) {
   Object.assign(form, {
-    fullName: '',
-    nip: '',
-    nuptk: '',
-    gender: '',
-    birthDate: '',
-    birthPlace: '',
-    religion: '',
-    educationLevel: '',
-    major: '',
-    joinDate: '',
-    phone: '',
-    email: '',
-    address: '',
-    status: 'active',
+    fullName: teacher.fullName ?? '',
+    nip: teacher.nip ?? '',
+    nuptk: teacher.nuptk ?? '',
+    gender: teacher.gender ?? '',
+    birthDate: normalizeDateInput(teacher.birthDate),
+    birthPlace: teacher.birthPlace ?? '',
+    religion: teacher.religion ?? '',
+    educationLevel: teacher.educationLevel ?? '',
+    major: teacher.major ?? '',
+    joinDate: normalizeDateInput(teacher.joinDate),
+    phone: teacher.phone ?? '',
+    email: teacher.email ?? '',
+    address: teacher.address ?? '',
+    status: teacher.status === 'inactive' ? 'inactive' : 'active',
   })
 }
 
+function normalizeDateInput(value?: string | null) {
+  const date = String(value ?? '').trim()
+  return /^\d{4}-\d{2}-\d{2}/.test(date) ? date.slice(0, 10) : ''
+}
+
+function getValidationErrors(error: unknown) {
+  if (!error || typeof error !== 'object' || !('inner' in error)) {
+    return []
+  }
+
+  const inner = (error as { inner?: unknown }).inner
+  if (!Array.isArray(inner)) return []
+
+  return inner.flatMap(item => {
+    if (!item || typeof item !== 'object') return []
+    const path = 'path' in item ? String((item as { path?: unknown }).path ?? '') : ''
+    const message =
+      'message' in item ? String((item as { message?: unknown }).message ?? '') : ''
+
+    return path && message ? [{ path, message }] : []
+  })
+}
+
+function mapServerError(message: string) {
+  if (/NIP sudah digunakan/i.test(message)) {
+    errors.nip = 'NIP sudah digunakan.'
+  } else if (/NUPTK sudah digunakan/i.test(message)) {
+    errors.nuptk = 'NUPTK sudah digunakan.'
+  } else if (/Email guru sudah digunakan/i.test(message)) {
+    errors.email = 'Email guru sudah digunakan.'
+  } else if (/Status guru tidak valid/i.test(message)) {
+    errors.status = 'Status guru tidak valid.'
+  } else if (/Nama lengkap wajib diisi/i.test(message)) {
+    errors.fullName = 'Nama lengkap wajib diisi.'
+  }
+}
+
 async function loadTeacher() {
-  const id = String(route.params.id ?? '').trim()
+  const version = ++formLoadVersion
+  const id = editId.value
+
+  clearErrors()
+  errorMsg.value = ''
+  loadError.value = ''
 
   if (!id) {
-    resetForm()
-    loadError.value = ''
+    resetFormState()
     isLoading.value = false
     return
   }
 
   isLoading.value = true
-  loadError.value = ''
+  resetFormState()
 
   try {
     const teacher = await teachersService.get(id)
 
-    Object.assign(form, {
-      fullName: teacher.fullName ?? '',
-      nip: teacher.nip ?? '',
-      nuptk: teacher.nuptk ?? '',
-      gender: teacher.gender ?? '',
-      birthDate: teacher.birthDate ?? '',
-      birthPlace: teacher.birthPlace ?? '',
-      religion: teacher.religion ?? '',
-      educationLevel: teacher.educationLevel ?? '',
-      major: teacher.major ?? '',
-      joinDate: teacher.joinDate ?? '',
-      phone: teacher.phone ?? '',
-      email: teacher.email ?? '',
-      address: teacher.address ?? '',
-      status: teacher.status === 'inactive' ? 'inactive' : 'active',
-    })
+    if (!isMounted || version !== formLoadVersion || editId.value !== id) return
+    if (!teacher) throw new Error('Data guru tidak ditemukan.')
+
+    applyTeacherData(teacher)
   } catch (e: unknown) {
-    loadError.value = e instanceof Error ? e.message : 'Gagal memuat data guru.'
+    if (!isMounted || version !== formLoadVersion || editId.value !== id) return
+
+    loadError.value = e instanceof Error
+      ? e.message
+      : 'Gagal memuat data guru.'
   } finally {
-    isLoading.value = false
+    if (isMounted && version === formLoadVersion && editId.value === id) {
+      isLoading.value = false
+    }
+  }
+}
+
+function buildPayload(): TeacherFormData {
+  return {
+    fullName: form.fullName.trim(),
+    nip: form.nip?.trim() ?? '',
+    nuptk: form.nuptk?.trim() ?? '',
+    gender: form.gender?.trim() ?? '',
+    birthPlace: form.birthPlace?.trim() ?? '',
+    birthDate: form.birthDate?.trim() ?? '',
+    religion: form.religion?.trim() ?? '',
+    educationLevel: form.educationLevel?.trim() ?? '',
+    major: form.major?.trim() ?? '',
+    joinDate: form.joinDate?.trim() ?? '',
+    phone: form.phone?.trim() ?? '',
+    email: form.email?.trim().toLowerCase() ?? '',
+    address: form.address?.trim() ?? '',
+    status: form.status?.trim() || 'active',
   }
 }
 
 async function handleSubmit() {
-  errorMsg.value = ''
-
   if (isSaving.value || (isEdit.value && isLoading.value)) return
 
-  const fullName = form.fullName.trim()
-  if (!fullName) {
-    errorMsg.value = 'Nama lengkap wajib diisi.'
-    return
-  }
+  clearErrors()
+  errorMsg.value = ''
 
-  isSaving.value = true
-
-  const payload = {
-    ...form,
-    fullName,
-    nip: form.nip.trim(),
-    nuptk: form.nuptk.trim(),
-    birthPlace: form.birthPlace.trim(),
-    major: form.major.trim(),
-    phone: form.phone.trim(),
-    email: form.email.trim(),
-    address: form.address.trim(),
-  }
+  const payload = buildPayload()
 
   try {
+    const validated = await teacherSchema.validate(payload, {
+      abortEarly: false,
+    }) as TeacherFormData
+
+    isSaving.value = true
+
     if (isEdit.value) {
-      await teachersService.update(String(route.params.id), payload)
+      const id = editId.value
+      if (!id) throw new Error('ID guru tidak valid.')
+
+      await teachersService.update(id, validated)
       toast.success('Data guru berhasil diperbarui.')
     } else {
-      await teachersService.create(payload)
+      await teachersService.create(validated)
       toast.success('Guru berhasil ditambahkan.')
     }
 
     await router.push('/teachers')
   } catch (e: unknown) {
-    errorMsg.value = e instanceof Error ? e.message : 'Gagal menyimpan data guru.'
+    const validationErrors = getValidationErrors(e)
+
+    if (validationErrors.length) {
+      validationErrors.forEach(({ path, message }) => {
+        errors[path] = message
+      })
+      errorMsg.value = `Periksa ${validationErrors.length} field yang ditandai sebelum menyimpan.`
+
+      await nextTick()
+      const firstField = document.getElementById(`teacher-${validationErrors[0].path.replace(/([A-Z])/g, '-$1').toLowerCase()}`)
+      firstField?.focus()
+      return
+    }
+
+    const message = e instanceof Error ? e.message : 'Gagal menyimpan data guru.'
+    mapServerError(message)
+    errorMsg.value = message
   } finally {
     isSaving.value = false
   }
 }
 
 function goBack() {
-  router.back()
+  void router.push('/teachers')
 }
 
 onMounted(() => {
-  void loadTeacher()
+  isMounted = true
+
+  if (isEdit.value) {
+    void loadTeacher()
+  } else {
+    resetFormState()
+    isLoading.value = false
+  }
+})
+
+watch(
+  () => editId.value,
+  (newId, oldId) => {
+    if (!isMounted || newId === oldId) return
+
+    if (!newId) {
+      ++formLoadVersion
+      resetFormState()
+      loadError.value = ''
+      isLoading.value = false
+      return
+    }
+
+    void loadTeacher()
+  },
+)
+
+onUnmounted(() => {
+  isMounted = false
+  ++formLoadVersion
 })
 </script>
