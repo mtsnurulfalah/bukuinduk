@@ -171,7 +171,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { RefreshCw, Save } from 'lucide-vue-next'
+import { Save } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import {
   BaseAlert,
