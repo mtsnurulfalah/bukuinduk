@@ -29,7 +29,7 @@
       title="Data kelas gagal dimuat"
       :message="error"
       :loading="isRetryingClassroom"
-      @retry="loadClassroom"
+      @retry="retryClassroom"
     />
 
     <template v-else-if="isLoading || classroom">
@@ -442,6 +442,23 @@ async function loadClassroom() {
       isLoading.value = false
     }
   }
+}
+
+function retryClassroom() {
+  if (
+    isRetryingClassroom.value ||
+    isLoading.value
+  ) {
+    return
+  }
+
+  isRetryingClassroom.value = true
+
+  void loadClassroom().finally(() => {
+    if (isMounted) {
+      isRetryingClassroom.value = false
+    }
+  })
 }
 
 async function loadStudents(
