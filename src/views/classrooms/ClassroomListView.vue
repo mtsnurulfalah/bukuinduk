@@ -2,7 +2,7 @@
   <div class="min-w-0 space-y-5">
     <PageHeader
       title="Kelas & Rombel"
-      :subtitle="\`\${filteredClassrooms.length} dari \${classrooms.length} kelas\`"
+      :subtitle="`${filteredClassrooms.length} dari ${classrooms.length} kelas`"
     >
       <template #actions>
         <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
@@ -99,7 +99,7 @@ function goCreate() {
 }
 
 function goEdit(id: string) {
-  void router.push(\`/classrooms/\${id}/edit\`)
+  void router.push(`/classrooms/${id}/edit`)
 }
 
 async function loadClassrooms() {
