@@ -13,6 +13,39 @@ var SubjectHandler = {
     }
   },
 
+  _normalizeInput: function(payload, fallback) {
+    var source = Object.assign({}, fallback || {}, payload || {});
+    var name = String(source.name || '').trim().replace(/\\s+/g, ' ');
+    var code = normalizeIdentifier(source.code).toUpperCase();
+    var shortName = String(source.shortName || '').trim().replace(/\\s+/g, ' ');
+    var groupName = String(source.groupName || '').trim().replace(/\\s+/g, ' ');
+    var sortRaw = source.sortOrder;
+    var sortOrder = sortRaw === '' || sortRaw == null ? 0 : Number(sortRaw);
+    var schoolYearId = String(source.schoolYearId || '').trim();
+
+    if (!schoolYearId) return { error: 'Tahun pelajaran wajib dipilih.' };
+    if (!name) return { error: 'Nama mata pelajaran wajib diisi.' };
+    if (name.length > 100) return { error: 'Nama mata pelajaran maksimal 100 karakter.' };
+    if (code.length > 30) return { error: 'Kode mata pelajaran maksimal 30 karakter.' };
+    if (shortName.length > 50) return { error: 'Singkatan maksimal 50 karakter.' };
+    if (groupName.length > 60) return { error: 'Kelompok maksimal 60 karakter.' };
+    if (!isFinite(sortOrder) || Math.floor(sortOrder) !== sortOrder || sortOrder < 0 || sortOrder > 9999) {
+      return { error: 'Urutan harus berupa angka bulat antara 0 sampai 9999.' };
+    }
+
+    return {
+      data: {
+        schoolYearId: schoolYearId,
+        code: code,
+        name: name,
+        shortName: shortName,
+        groupName: groupName,
+        isActive: normalizeBoolean(source.isActive, true),
+        sortOrder: sortOrder,
+      },
+    };
+  },
+
   list: function(payload, user) {
     checkPermission(user, 'subject:view');
     var all = sheetToObjects(getOrCreateSheet(CONFIG.SHEETS.SUBJECTS,
@@ -44,16 +77,21 @@ var SubjectHandler = {
     }
     try {
     checkPermission(user, 'subject:manage');
-    if (!payload.schoolYearId) return errorResponse(400, 'Tahun pelajaran wajib dipilih.');
-    if (!sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS)).some(function(y){ return String(y.id) === String(payload.schoolYearId); })) return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
-    if (!payload.name || !String(payload.name).trim()) return errorResponse(400, 'Nama mata pelajaran wajib diisi.');
+
+    var normalized = this._normalizeInput(payload, { isActive: true });
+    if (normalized.error) return errorResponse(400, normalized.error);
+
+    var subjectInput = normalized.data;
+    if (!sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS)).some(function(y){ return String(y.id) === subjectInput.schoolYearId; })) {
+      return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
+    }
 
     var sheet = getOrCreateSheet(CONFIG.SHEETS.SUBJECTS,
       ['id','schoolYearId','code','name','shortName','groupName','isActive','sortOrder','createdAt','updatedAt','createdBy']);
     var headers = getHeaders(sheet);
     var all = sheetToObjects(sheet);
-    var code = normalizeIdentifier(payload.code).toUpperCase();
-    var name = String(payload.name).trim();
+    var code = subjectInput.code;
+    var name = subjectInput.name;
 
     var duplicate = all.find(function(s) {
       return String(s.schoolYearId) === String(payload.schoolYearId) &&
@@ -65,13 +103,13 @@ var SubjectHandler = {
     var ts = now();
     var subject = {
       id: generateUUID(),
-      schoolYearId: payload.schoolYearId,
+      schoolYearId: subjectInput.schoolYearId,
       code: code,
       name: name,
-      shortName: String(payload.shortName || '').trim(),
-      groupName: String(payload.groupName || '').trim(),
-      isActive: normalizeBoolean(payload.isActive, true),
-      sortOrder: Number(payload.sortOrder) || 0,
+      shortName: subjectInput.shortName,
+      groupName: subjectInput.groupName,
+      isActive: subjectInput.isActive,
+      sortOrder: subjectInput.sortOrder,
       createdAt: ts,
       updatedAt: ts,
       createdBy: user.id,
@@ -104,28 +142,31 @@ var SubjectHandler = {
     var old = all.find(function(s) { return String(s.id) === String(payload.id); });
     if (!old) return errorResponse(404, 'Mata pelajaran tidak ditemukan.');
 
-    if (payload.schoolYearId && !sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS)).some(function(y){ return String(y.id) === String(payload.schoolYearId); })) return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
+    var normalized = this._normalizeInput(payload, old);
+    if (normalized.error) return errorResponse(400, normalized.error);
 
-    if (payload.schoolYearId && String(payload.schoolYearId) !== String(old.schoolYearId)) {
+    var subjectInput = normalized.data;
+    if (!sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS)).some(function(y){ return String(y.id) === subjectInput.schoolYearId; })) {
+      return errorResponse(400, 'Tahun pelajaran tidak ditemukan.');
+    }
+
+    if (String(subjectInput.schoolYearId) !== String(old.schoolYearId)) {
       var linkedScores = sheetToObjects(getOrCreateSheet(CONFIG.SHEETS.SCORES,
         ['id','studentId','schoolYearId','semester','subjectId','score','predicate','notes','createdAt','updatedAt','createdBy']))
         .filter(function(g) { return String(g.subjectId) === String(payload.id); });
       if (linkedScores.length) return errorResponse(409, 'Tahun pelajaran mata pelajaran tidak dapat diubah karena sudah memiliki data nilai.');
     }
 
-    var updated = Object.assign({}, old);
-    updated.schoolYearId = payload.schoolYearId !== undefined ? String(payload.schoolYearId) : String(old.schoolYearId);
-    Object.assign(updated, {
-      code: normalizeIdentifier(payload.code !== undefined ? payload.code : old.code).toUpperCase(),
-      name: String(payload.name !== undefined ? payload.name : old.name).trim(),
-      shortName: String(payload.shortName !== undefined ? payload.shortName : old.shortName || '').trim(),
-      groupName: String(payload.groupName !== undefined ? payload.groupName : old.groupName || '').trim(),
-      isActive: normalizeBoolean(payload.isActive !== undefined ? payload.isActive : old.isActive, true),
-      sortOrder: Number(payload.sortOrder !== undefined ? payload.sortOrder : old.sortOrder) || 0,
+    var updated = Object.assign({}, old, {
+      schoolYearId: subjectInput.schoolYearId,
+      code: subjectInput.code,
+      name: subjectInput.name,
+      shortName: subjectInput.shortName,
+      groupName: subjectInput.groupName,
+      isActive: subjectInput.isActive,
+      sortOrder: subjectInput.sortOrder,
       updatedAt: now(),
     });
-
-    if (!updated.name) return errorResponse(400, 'Nama mata pelajaran wajib diisi.');
 
     var duplicate = all.find(function(s) {
       if (String(s.id) === String(payload.id)) return false;
