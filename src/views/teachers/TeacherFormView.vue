@@ -524,8 +524,23 @@ async function handleSubmit() {
       errorMsg.value = `Periksa ${validationErrors.length} field yang ditandai sebelum menyimpan.`
 
       await nextTick()
-      const firstField = document.getElementById(`teacher-${validationErrors[0].path.replace(/([A-Z])/g, '-$1').toLowerCase()}`)
-      firstField?.focus()
+      const fieldIds: Record<string, string> = {
+        fullName: 'teacher-full-name',
+        nip: 'teacher-nip',
+        nuptk: 'teacher-nuptk',
+        gender: 'teacher-gender',
+        birthPlace: 'teacher-birth-place',
+        birthDate: 'teacher-birth-date',
+        religion: 'teacher-religion',
+        educationLevel: 'teacher-education',
+        major: 'teacher-major',
+        joinDate: 'teacher-join-date',
+        phone: 'teacher-phone',
+        email: 'teacher-email',
+        address: 'teacher-address',
+        status: 'teacher-status',
+      }
+      document.getElementById(fieldIds[validationErrors[0].path])?.focus()
       return
     }
 
