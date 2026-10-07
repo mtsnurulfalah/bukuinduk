@@ -229,7 +229,7 @@ async function loadClassroom() {
   }
 }
 
-async function loadStudents(schoolYearId?: string) {
+async function loadStudents(schoolYearId = classroom.value?.schoolYearId) {
   const id = String(route.params.id ?? '').trim()
   const requestId = ++studentsRequestVersion
 
@@ -273,8 +273,12 @@ watch(pageCount, count => {
 
 watch(() => route.params.id, () => {
   if (!isMounted) return
+  ++classroomRequestVersion
+  ++studentsRequestVersion
   classroom.value = null
   students.value = []
+  error.value = ''
+  studentsError.value = ''
   search.value = ''
   page.value = 1
   void loadClassroom()
