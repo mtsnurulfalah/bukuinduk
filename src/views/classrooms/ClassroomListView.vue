@@ -1,19 +1,25 @@
 <template>
   <div class="space-y-5">
-    <PageHeader title="Kelas & Rombel" :subtitle="`${classrooms.length} kelas ditemukan`">
+    <PageHeader title="Kelas & Rombel" :subtitle="`${filteredClassrooms.length} dari ${classrooms.length} kelas`">
       <template #actions>
         <BaseSelect
           v-model="selectedSchoolYearId"
           :options="schoolYearStore.schoolYearOptions"
           placeholder="Pilih Tahun Pelajaran"
-          class="w-44"
-          @update:model-value="loadClassrooms"
+          class="w-full sm:w-52"
         />
         <BaseButton v-if="can(PERMISSIONS.CLASSROOM_MANAGE)" size="sm" @click="$router.push('/classrooms/create')">
           <Plus class="h-4 w-4" /> Tambah Kelas
         </BaseButton>
       </template>
     </PageHeader>
+
+    <BaseCard :padding="true">
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <SearchFilter v-model:search="search" search-placeholder="Cari nama kelas, tingkat, atau wali kelas..." />
+        <BaseSelect v-model="statusFilter" :options="statusOptions" class="w-full sm:w-40" aria-label="Filter status kelas" />
+      </div>
+    </BaseCard>
 
     <div v-if="isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <BaseSkeleton v-for="i in 6" :key="i" height="h-32" />
@@ -26,7 +32,12 @@
       @retry="loadClassrooms"
     />
 
-    <BaseEmpty v-else-if="!classrooms.length" title="Belum ada kelas" description="Tambah kelas untuk tahun pelajaran ini." type="data">
+    <BaseEmpty
+      v-else-if="!filteredClassrooms.length"
+      :title="classrooms.length ? 'Kelas tidak ditemukan' : 'Belum ada kelas'"
+      :description="classrooms.length ? 'Coba ubah pencarian atau filter status.' : 'Tambah kelas untuk tahun pelajaran ini.'"
+      type="data"
+    >
       <template #action>
         <BaseButton v-if="can(PERMISSIONS.CLASSROOM_MANAGE)" @click="$router.push('/classrooms/create')">
           <Plus class="h-4 w-4" /> Tambah Kelas
@@ -34,11 +45,11 @@
       </template>
     </BaseEmpty>
 
-    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div v-else class="grid min-w-0 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <div
-        v-for="cls in classrooms"
+        v-for="cls in filteredClassrooms"
         :key="cls.id"
-        class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:border-primary-200 hover:shadow-md transition-all group cursor-pointer"
+        class="min-w-0 bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:border-primary-200 hover:shadow-md transition-all group cursor-pointer"
         @click="$router.push(`/classrooms/${cls.id}`)"
       >
         <div class="flex items-start justify-between mb-3">
@@ -98,9 +109,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { Plus, School, Users, GraduationCap, Pencil, Trash2 } from 'lucide-vue-next'
-import { PageHeader } from '@/components/shared'
+import { PageHeader, SearchFilter } from '@/components/shared'
 import { BaseButton, BaseSelect, BaseBadge, BaseSkeleton, BaseEmpty, BaseRetry, BaseConfirmDialog } from '@/components/ui'
 import { useClassroomsStore } from '@/stores/classrooms'
 import { useSchoolYearStore } from '@/stores/schoolYear'
@@ -118,6 +129,13 @@ const confirm = useConfirm()
 const classrooms = ref<Classroom[]>([])
 const isLoading = ref(true)
 const error = ref('')
+const search = ref('')
+const statusFilter = ref('all')
+const statusOptions = [
+  { value: 'all', label: 'Semua Status' },
+  { value: 'active', label: 'Aktif' },
+  { value: 'inactive', label: 'Nonaktif' },
+]
 
 // BUG-61 FIX: Gunakan computed agar selectedSchoolYearId reaktif terhadap
 // perubahan activeSchoolYear. Sebelumnya ref() hanya di-set sekali saat
@@ -129,23 +147,46 @@ const selectedSchoolYearId = computed({
 const _selectedId = ref('')
 
 let deleteTargetId = ''
+let loadVersion = 0
+let isMounted = false
+let bootstrapped = false
 
 async function loadClassrooms() {
+  const requestVersion = ++loadVersion
   isLoading.value = true
   error.value = ''
   try {
-    classrooms.value = await classroomsService.list(selectedSchoolYearId.value || undefined)
+    const data = await classroomsService.list(selectedSchoolYearId.value || undefined)
+    if (!isMounted || requestVersion !== loadVersion) return
+    classrooms.value = Array.isArray(data) ? data : []
+    classroomsStore.list = [...classrooms.value]
+    classroomsStore.currentSchoolYearId = selectedSchoolYearId.value
+    classroomsStore.initialized = true
   } catch (e: unknown) {
+    if (!isMounted || requestVersion !== loadVersion) return
     error.value = e instanceof Error ? e.message : 'Gagal memuat data kelas.'
   } finally {
-    isLoading.value = false
+    if (isMounted && requestVersion === loadVersion) isLoading.value = false
   }
 }
+
+const filteredClassrooms = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return classrooms.value.filter(cls => {
+    const statusOk = statusFilter.value === 'all' ||
+      (statusFilter.value === 'active' && cls.isActive) ||
+      (statusFilter.value === 'inactive' && !cls.isActive)
+    if (!statusOk) return false
+    if (!q) return true
+    return [cls.name, cls.gradeName, cls.homeroomTeacherName, cls.schoolYearName]
+      .some(value => String(value ?? '').toLowerCase().includes(q))
+  })
+})
 
 // BUG-61 FIX: Watch selectedSchoolYearId agar reload otomatis saat tahun pelajaran
 // aktif berubah (misalnya admin mengubah di tab Settings).
 watch(selectedSchoolYearId, () => {
-  loadClassrooms()
+  if (bootstrapped) void loadClassrooms()
 })
 
 function handleDelete(id: string, name: string) {
@@ -168,8 +209,18 @@ async function confirmDelete() {
 }
 
 onMounted(async () => {
-  await schoolYearStore.fetch()
-  // selectedSchoolYearId computed sudah mengambil activeSchoolYear dari store
-  await loadClassrooms()
+  isMounted = true
+  try {
+    await schoolYearStore.fetch()
+    bootstrapped = true
+    await loadClassrooms()
+  } catch (e: unknown) {
+    if (isMounted) error.value = e instanceof Error ? e.message : 'Gagal memuat tahun pelajaran.'
+  }
+})
+
+onUnmounted(() => {
+  isMounted = false
+  ++loadVersion
 })
 </script>
