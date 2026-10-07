@@ -249,6 +249,7 @@ function validate(): boolean {
 
 async function handleSubmit() {
   if (isSaving.value || !validate()) return
+  const wasEdit = Boolean(editTarget.value)
   isSaving.value = true
 
   try {
@@ -273,7 +274,7 @@ async function handleSubmit() {
 
     grades.value.sort((a, b) => a.level - b.level)
     closeModal()
-    toast.success(editTarget.value ? 'Tingkat kelas berhasil diperbarui.' : 'Tingkat kelas berhasil ditambahkan.')
+    toast.success(wasEdit ? 'Tingkat kelas berhasil diperbarui.' : 'Tingkat kelas berhasil ditambahkan.')
   } catch (e: unknown) {
     toast.error(e instanceof Error ? e.message : 'Gagal menyimpan tingkat kelas.')
   } finally {
