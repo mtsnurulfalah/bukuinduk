@@ -69,12 +69,12 @@
             <span>{{ occupancyPercent }}%</span>
           </div>
           <div class="h-2 overflow-hidden rounded-full bg-slate-100">
-            <div class="h-full rounded-full bg-primary-500 transition-all" :style="{ width: \`\${occupancyPercent}%\` }" />
+            <div class="h-full rounded-full bg-primary-500 transition-all" :style="{ width: `${occupancyPercent}%` }" />
           </div>
         </div>
       </BaseCard>
 
-      <BaseCard :title="\`Daftar Siswa (\${filteredStudents.length} ditampilkan / \${students.length} total)\`">
+      <BaseCard :title="`Daftar Siswa (${filteredStudents.length} ditampilkan / ${students.length} total)`">
         <div class="mb-3 mt-1">
           <SearchFilter v-model:search="search" search-placeholder="Cari nama atau NIS..." />
         </div>
@@ -108,7 +108,7 @@
             <RouterLink
               v-for="(s, i) in pagedStudents"
               :key="s.id"
-              :to="\`/students/\${s.id}\`"
+              :to="`/students/${s.id}`"
               class="group -mx-2 flex min-w-0 items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 sm:-mx-5 sm:px-5"
             >
               <span class="w-7 shrink-0 text-right text-xs text-slate-400">{{ pageStartIndex + i + 1 }}</span>
@@ -197,7 +197,7 @@ const occupancyPercent = computed(() => {
 
 function goEdit() {
   if (!classroom.value) return
-  void router.push(\`/classrooms/\${classroom.value.id}/edit\`)
+  void router.push(`/classrooms/${classroom.value.id}/edit`)
 }
 
 async function loadClassroom() {
