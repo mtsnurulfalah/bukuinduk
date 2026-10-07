@@ -19,7 +19,12 @@ var TeacherHandler = {
     checkPermission(user, 'teacher:view');
     var all = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS));
 
-    if (payload.status) all = all.filter(function(t){ return t.status === payload.status; });
+    var statusFilter = normalizeIdentifier(payload.status).toLowerCase();
+    if (statusFilter) {
+      all = all.filter(function(t){
+        return normalizeIdentifier(t.status).toLowerCase() === statusFilter;
+      });
+    }
     if (payload.search) {
       all = all.filter(function(t){
         return searchInObject(t, payload.search, ['fullName','nip','nuptk','email']);
@@ -47,7 +52,14 @@ var TeacherHandler = {
     }
     try {
     checkPermission(user, 'teacher:manage');
-    if (!payload.fullName) return errorResponse(400, 'Nama lengkap wajib diisi.');
+    var fullName = normalizeIdentifier(payload.fullName);
+    if (!fullName) return errorResponse(400, 'Nama lengkap wajib diisi.');
+
+    var status = normalizeIdentifier(payload.status).toLowerCase() || 'active';
+    if (['active', 'inactive'].indexOf(status) === -1) {
+      return errorResponse(400, 'Status guru tidak valid.');
+    }
+
     var sheet   = getSheet(CONFIG.SHEETS.TEACHERS);
     var headers = getHeaders(sheet);
     var all = sheetToObjects(sheet);
@@ -64,10 +76,11 @@ var TeacherHandler = {
       teacher[h] = h === 'userId' ? '' : (payload[h] !== undefined ? payload[h] : '');
     });
     teacher.id = id;
+    teacher.fullName = fullName;
     teacher.nip = nip;
     teacher.nuptk = nuptk;
     teacher.email = email;
-    teacher.status = payload.status || 'active';
+    teacher.status = status;
     teacher.createdAt = ts;
     teacher.updatedAt = ts;
     appendRow(sheet, teacher, headers);
@@ -94,6 +107,19 @@ var TeacherHandler = {
     var all = sheetToObjects(sheet);
     var old = all.find(function(t){ return String(t.id) === String(payload.id); });
     if (!old) return errorResponse(404, 'Guru tidak ditemukan.');
+
+    var nextFullName = payload.fullName !== undefined
+      ? normalizeIdentifier(payload.fullName)
+      : normalizeIdentifier(old.fullName);
+    if (!nextFullName) return errorResponse(400, 'Nama lengkap wajib diisi.');
+
+    var nextStatus = payload.status !== undefined
+      ? normalizeIdentifier(payload.status).toLowerCase()
+      : (normalizeIdentifier(old.status).toLowerCase() || 'active');
+    if (['active', 'inactive'].indexOf(nextStatus) === -1) {
+      return errorResponse(400, 'Status guru tidak valid.');
+    }
+
     var nextNip = payload.nip !== undefined ? normalizeIdentifier(payload.nip) : normalizeIdentifier(old.nip);
     var nextNuptk = payload.nuptk !== undefined ? normalizeIdentifier(payload.nuptk) : normalizeIdentifier(old.nuptk);
     var nextEmail = payload.email !== undefined ? normalizeIdentifier(payload.email).toLowerCase() : normalizeIdentifier(old.email).toLowerCase();
@@ -104,9 +130,11 @@ var TeacherHandler = {
     headers.forEach(function(h){
       if (payload[h] !== undefined && h !== 'id' && h !== 'createdAt' && h !== 'userId') updated[h] = payload[h];
     });
+    updated.fullName = nextFullName;
     updated.nip = nextNip;
     updated.nuptk = nextNuptk;
     updated.email = nextEmail;
+    updated.status = nextStatus;
     updated.updatedAt = now();
     updateRow(sheet, rowIdx, updated, headers);
     AuditService.log(user.id, 'UPDATE', 'teacher', payload.id, old, updated, 'Edit guru');
@@ -144,7 +172,7 @@ var TeacherHandler = {
   listActive: function(payload, user) {
     checkPermission(user, 'teacher:view');
     var all = sheetToObjects(getSheet(CONFIG.SHEETS.TEACHERS))
-      .filter(function(t){ return t.status === 'active'; })
+      .filter(function(t){ return normalizeIdentifier(t.status).toLowerCase() === 'active'; })
       .map(function(t){ return { id: t.id, fullName: t.fullName }; });
     all.sort(function(a,b){ return (a.fullName||'').localeCompare(b.fullName||''); });
     return successResponse(all);
