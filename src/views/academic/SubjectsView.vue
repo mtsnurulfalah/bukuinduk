@@ -454,7 +454,7 @@ function validateForm(): boolean {
   const shortName = normalizeText(form.shortName)
   const groupName = normalizeText(form.groupName)
   const rawSortOrder = form.sortOrder
-  const sortOrder = rawSortOrder == null || rawSortOrder === ('' as never) ? 0 : Number(rawSortOrder)
+  const sortOrder = rawSortOrder == null ? 0 : Number(rawSortOrder)
 
   if (!schoolYearId.value) {
     formError.value = 'Tahun pelajaran wajib dipilih.'
@@ -591,9 +591,7 @@ async function initialize(forceYearRefresh = false) {
       throw new Error('Tahun pelajaran belum dapat ditentukan.')
     }
 
-    const subjectRequestVersion = requestVersion + 1
-    loadVersion = subjectRequestVersion
-    await loadSubjectsForYear(selectedYearId, subjectRequestVersion)
+    await loadSubjectsForYear(selectedYearId, requestVersion)
   } catch (e: unknown) {
     if (!isMounted || requestVersion > loadVersion) return
     error.value = e instanceof Error ? e.message : 'Gagal menyiapkan data mata pelajaran.'
