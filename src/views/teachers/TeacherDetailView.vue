@@ -114,7 +114,10 @@ const infoItems = computed(() => {
     },
     {
       label: 'Tempat, Tgl Lahir',
-      value: [current.birthPlace, formatDate(current.birthDate)]
+      value: [
+        current.birthPlace,
+        current.birthDate ? formatDate(current.birthDate) : '',
+      ]
         .filter(Boolean)
         .join(', '),
     },
