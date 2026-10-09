@@ -213,6 +213,12 @@ const profileCaption = computed(() => {
     .join(' • ') || 'Profil guru'
 })
 
+const headerSubtitle = computed(() => {
+  if (isLoading.value) return 'Memuat informasi identitas dan kontak guru.'
+  if (error.value) return 'Informasi guru belum berhasil dimuat.'
+  return profileCaption.value
+})
+
 const infoItems = computed<TeacherDetailItem[]>(() => {
   const current = teacher.value
   if (!current) return []
