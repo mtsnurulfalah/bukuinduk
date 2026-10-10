@@ -1,5 +1,8 @@
 <template>
-  <div class="min-w-0 max-w-3xl space-y-5">
+  <div
+    class="min-w-0 max-w-3xl space-y-5"
+    :aria-busy="isEdit && isLoadingUser ? 'true' : undefined"
+  >
     <PageHeader
       :title="isEdit ? 'Edit Pengguna' : 'Tambah Pengguna'"
       :subtitle="isEdit ? 'Perbarui identitas dan hak akses pengguna.' : 'Buat akun dan tetapkan peran akses aplikasi.'"
@@ -38,7 +41,13 @@
       </div>
     </BaseAlert>
 
-    <BaseCard v-if="isEdit && isLoadingUser" class="space-y-4" aria-live="polite">
+    <BaseCard
+      v-if="isEdit && isLoadingUser"
+      class="min-w-0 space-y-4"
+      role="status"
+      aria-live="polite"
+      aria-label="Memuat data pengguna"
+    >
       <div class="space-y-2">
         <BaseSkeleton height="h-4" width="w-32" />
         <BaseSkeleton height="h-10" />
@@ -124,7 +133,7 @@
                 :options="teacherOptions"
                 placeholder="Pilih data guru"
                 :required="form.role === 'teacher'"
-                :disabled="isLoadingTeachers || teacherOptions.length === 0"
+                :disabled="isLoadingTeachers || Boolean(teacherLoadError) || teacherOptions.length === 0"
                 :error-message="errors.teacherId"
                 :hint="teacherSelectHint"
               />
@@ -221,6 +230,7 @@ const userLoadError = ref('')
 const teacherLoadError = ref('')
 const errors = reactive<Record<string, string>>({})
 const teacherOptions = ref<{ value: string; label: string }[]>([])
+const currentLinkedTeacherOptionId = ref('')
 
 const roleOptions = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))
 const form = reactive({
@@ -241,6 +251,16 @@ const teacherSelectHint = computed(() => {
 let latestUserRequestId = 0
 let latestTeacherRequestId = 0
 let isComponentActive = true
+
+function isCurrentSubmissionRoute(editMode: boolean, userId: string, fullPath: string): boolean {
+  if (
+    !isComponentActive ||
+    route.fullPath !== fullPath ||
+    isEdit.value !== editMode
+  ) return false
+
+  return !editMode || routeUserId() === userId
+}
 
 function clearValidationErrors() {
   Object.keys(errors).forEach(key => delete errors[key])
@@ -269,11 +289,20 @@ function routeUserId(): string {
   return Array.isArray(value) ? String(value[0] ?? '') : String(value ?? '')
 }
 
+function removeCurrentLinkedTeacherOption() {
+  const id = currentLinkedTeacherOptionId.value
+  if (!id) return
+
+  teacherOptions.value = teacherOptions.value.filter(option => option.value !== id)
+  currentLinkedTeacherOptionId.value = ''
+}
+
 function onRoleChange(role: string) {
   clearFieldError('role')
   if (role !== 'teacher') {
     form.teacherId = ''
     clearFieldError('teacherId')
+    removeCurrentLinkedTeacherOption()
   }
 }
 
@@ -284,6 +313,58 @@ watch(() => form.email, () => clearFieldError('email'))
 watch(() => form.password, () => clearFieldError('password'))
 watch(() => form.teacherId, () => clearFieldError('teacherId'))
 
+function hasTeacherOption(teacherId: string): boolean {
+  return teacherOptions.value.some(option => option.value === teacherId)
+}
+
+/**
+ * An existing teacher account can point to a teacher who was later deactivated.
+ * The selector loads active teachers only, so preserve a visible option for the
+ * existing relation instead of showing an empty select for a saved teacherId.
+ */
+async function ensureCurrentTeacherOption(
+  teacherId: string,
+  userId: string,
+  userRequestId: number,
+) {
+  const id = String(teacherId ?? '').trim()
+  if (!id || hasTeacherOption(id)) return
+
+  const isStillCurrent = () =>
+    isComponentActive &&
+    latestUserRequestId === userRequestId &&
+    routeUserId() === userId &&
+    form.role === 'teacher' &&
+    form.teacherId === id
+
+  try {
+    const teacher = await teachersService.get(id)
+    if (!isStillCurrent() || hasTeacherOption(id)) return
+
+    const name = String(teacher?.fullName ?? '').trim() || 'Guru tanpa nama'
+    const status = String(teacher?.status ?? '').trim().toLowerCase()
+    const suffix = status === 'active'
+      ? ' (tidak tercantum dalam daftar aktif)'
+      : ' (nonaktif)'
+
+    teacherOptions.value = [...teacherOptions.value, {
+      value: id,
+      label: name + suffix,
+    }]
+    currentLinkedTeacherOptionId.value = id
+  } catch {
+    // Keep the persisted relationship selectable even if the teacher detail
+    // cannot be fetched; the backend remains authoritative on update.
+    if (!isStillCurrent() || hasTeacherOption(id)) return
+
+    teacherOptions.value = [...teacherOptions.value, {
+      value: id,
+      label: `Guru terhubung (ID: ${id})`,
+    }]
+    currentLinkedTeacherOptionId.value = id
+  }
+}
+
 async function loadTeacherOptions() {
   const requestId = ++latestTeacherRequestId
   isLoadingTeachers.value = true
@@ -293,6 +374,8 @@ async function loadTeacherOptions() {
     const teachers = await teachersService.listActive()
     if (requestId !== latestTeacherRequestId) return
 
+    // A fresh active list replaces any temporary option from a prior edit record.
+    currentLinkedTeacherOptionId.value = ''
     teacherOptions.value = Array.isArray(teachers)
       ? teachers
           .filter(teacher => teacher && teacher.id != null)
@@ -301,6 +384,15 @@ async function loadTeacherOptions() {
             label: String(teacher.fullName || 'Guru tanpa nama'),
           }))
       : []
+
+    // If the active list omits the user's currently linked (inactive) teacher,
+    // add that current relation after the latest active-list response is applied.
+    const currentUserId = routeUserId()
+    const currentRequestId = latestUserRequestId
+    const currentTeacherId = form.role === 'teacher' ? form.teacherId : ''
+    if (currentUserId && currentTeacherId && !hasTeacherOption(currentTeacherId)) {
+      await ensureCurrentTeacherOption(currentTeacherId, currentUserId, currentRequestId)
+    }
   } catch (e: unknown) {
     if (requestId === latestTeacherRequestId) {
       teacherLoadError.value = e instanceof Error
@@ -332,6 +424,10 @@ async function loadUser(id: string) {
       teacherId: String(user.teacherId ?? ''),
       isActive: user.isActive === true,
     })
+
+    if (form.role === 'teacher' && form.teacherId) {
+      void ensureCurrentTeacherOption(form.teacherId, id, requestId)
+    }
   } catch (e: unknown) {
     if (requestId === latestUserRequestId) {
       userLoadError.value = e instanceof Error ? e.message : 'Gagal memuat data pengguna.'
@@ -352,6 +448,10 @@ watch(
     const id = Array.isArray(rawId) ? String(rawId[0] ?? '') : String(rawId ?? '')
     errorMsg.value = ''
     if (id) {
+      // Avoid leaking the previous record's temporary inactive-teacher option
+      // when Vue reuses this form component for another user ID.
+      removeCurrentLinkedTeacherOption()
+      resetForm()
       void loadUser(id)
     } else {
       latestUserRequestId += 1
@@ -378,9 +478,10 @@ async function handleSubmit() {
   clearValidationErrors()
   errorMsg.value = ''
 
-  // Normalize common text fields before validation and submission.
+  // Normalize editable fields. The username is immutable in edit mode, so do
+  // not mutate legacy username values that will not be included in the update.
   form.fullName = form.fullName.trim()
-  form.username = form.username.trim().toLowerCase()
+  if (!submitIsEdit) form.username = form.username.trim().toLowerCase()
   form.email = form.email.trim().toLowerCase()
   form.teacherId = form.teacherId.trim()
 
@@ -390,11 +491,23 @@ async function handleSubmit() {
   isValidating.value = true
 
   try {
-    await userSchema.validate(values, {
+    // Username and password are not editable in this flow; validating them here
+    // can block updates for legacy accounts whose stored username predates the
+    // current creation rules. Keep the stricter schema for create mode.
+    const schema = submitIsEdit
+      ? userSchema.omit(['username', 'password'])
+      : userSchema
+
+    await schema.validate(values, {
       abortEarly: false,
       context: { isCreate: !submitIsEdit },
     })
   } catch (err: unknown) {
+    if (!isCurrentSubmissionRoute(submitIsEdit, submitUserId, submitRouteFullPath)) {
+      isValidating.value = false
+      return
+    }
+
     let mappedFieldError = false
 
     if (err && typeof err === 'object' && 'inner' in err) {
@@ -420,12 +533,7 @@ async function handleSubmit() {
   }
 
   // Ignore a validation result if navigation changed the record while it ran.
-  if (
-    !isComponentActive ||
-    submitRouteFullPath !== route.fullPath ||
-    submitIsEdit !== isEdit.value ||
-    (submitIsEdit && submitUserId !== routeUserId())
-  ) {
+  if (!isCurrentSubmissionRoute(submitIsEdit, submitUserId, submitRouteFullPath)) {
     isValidating.value = false
     return
   }
@@ -467,25 +575,14 @@ async function handleSubmit() {
     }
 
     // Do not let a stale request redirect a newly opened form.
-    if (
-      !isComponentActive ||
-      submitRouteFullPath !== route.fullPath ||
-      submitIsEdit !== isEdit.value ||
-      (submitIsEdit && submitUserId !== routeUserId()) ||
-      (!submitIsEdit && isEdit.value)
-    ) return
+    if (!isCurrentSubmissionRoute(submitIsEdit, submitUserId, submitRouteFullPath)) return
 
     toast.success(submitIsEdit
       ? 'Pengguna berhasil diperbarui.'
       : 'Pengguna berhasil dibuat.')
     await router.push('/users')
   } catch (e: unknown) {
-    const isCurrentRoute =
-      isComponentActive &&
-      submitRouteFullPath === route.fullPath &&
-      submitIsEdit === isEdit.value &&
-      (!submitIsEdit || submitUserId === routeUserId())
-    if (isCurrentRoute) {
+    if (isCurrentSubmissionRoute(submitIsEdit, submitUserId, submitRouteFullPath)) {
       errorMsg.value = e instanceof Error ? e.message : 'Gagal menyimpan pengguna.'
     }
   } finally {
