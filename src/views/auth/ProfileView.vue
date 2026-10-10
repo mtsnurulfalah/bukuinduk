@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="min-w-0 space-y-6">
     <PageHeader title="Profil Saya" subtitle="Kelola informasi akun Anda" />
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
