@@ -71,7 +71,7 @@ export const settingsService = {
     backup: Record<string, unknown>,
     options: BackupRestoreRequestOptions,
   ): Promise<BackupRestorePreview> {
-    return gasRequest('settings.previewRestore', {
+    return gasRequest<BackupRestorePreview>('settings.previewRestore', {
       backup,
       selectedSheets: options.selectedSheets,
       mode: options.mode,
@@ -87,7 +87,7 @@ export const settingsService = {
       confirmation: 'GABUNGKAN' | 'GANTI'
     },
   ): Promise<BackupRestoreResult> {
-    return gasRequest('settings.restoreBackup', {
+    return gasRequest<BackupRestoreResult>('settings.restoreBackup', {
       backup,
       selectedSheets: options.selectedSheets,
       mode: options.mode,
