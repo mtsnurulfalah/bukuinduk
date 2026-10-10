@@ -23,8 +23,6 @@
       :key="teacherLoadError"
       type="warning"
       title="Daftar guru tidak dapat dimuat"
-      dismissible
-      @dismiss="teacherLoadError = ''"
     >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p class="min-w-0 break-words">{{ teacherLoadError }}</p>
