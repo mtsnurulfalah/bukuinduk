@@ -1,39 +1,46 @@
 <template>
-  <div class="flex h-screen bg-slate-50 overflow-hidden">
+  <div class="flex h-screen h-[100dvh] overflow-hidden bg-slate-50">
 
     <ConnectionStatus />
     <PwaInstallPrompt />
 
     <!-- ── Sidebar Desktop ──────────────────────────────────── -->
     <aside
+      aria-label="Navigasi desktop"
       :class="[
-        'hidden lg:flex flex-col bg-white border-r border-slate-200 transition-all duration-300 shrink-0',
+        'hidden lg:flex min-h-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-200 shrink-0',
         uiStore.sidebarCollapsed ? 'w-16' : 'w-60',
       ]"
     >
       <!-- Logo -->
-      <div class="flex items-center h-16 px-4 border-b border-slate-100 shrink-0">
-        <div class="flex items-center gap-3 overflow-hidden">
-          <img src="/favicon.svg" alt="Logo" class="h-8 w-8 shrink-0" />
+      <div
+        :class="[
+          'flex h-16 shrink-0 items-center border-b border-slate-100',
+          uiStore.sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4',
+        ]"
+      >
+        <div v-if="!uiStore.sidebarCollapsed" class="flex min-w-0 items-center gap-3 overflow-hidden">
+          <img src="/favicon.svg" alt="Logo Buku Induk Digital" class="h-8 w-8 shrink-0" />
           <Transition name="fade-slide">
-            <span
-              v-if="!uiStore.sidebarCollapsed"
-              class="font-bold text-sm text-slate-800 truncate leading-tight"
-            >
+            <span class="truncate text-sm font-bold leading-tight text-slate-800">
               Buku Induk<br />Digital
             </span>
           </Transition>
         </div>
         <button
-          class="ml-auto p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
+          type="button"
+          class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+          :aria-label="uiStore.sidebarCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'"
+          :aria-expanded="!uiStore.sidebarCollapsed"
+          title="Ubah lebar sidebar"
           @click="uiStore.toggleSidebar()"
         >
-          <PanelLeft class="h-4 w-4" />
+          <PanelLeft class="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
 
       <!-- Navigation -->
-      <nav class="flex-1 overflow-y-auto py-4 px-2 scrollbar-thin space-y-0.5">
+      <nav aria-label="Menu utama desktop" class="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4 px-2 scrollbar-thin space-y-0.5">
         <template v-for="item in filteredNavItems" :key="item.name">
           <!-- Section label -->
           <p
@@ -50,12 +57,13 @@
             :to="item.to"
             :title="uiStore.sidebarCollapsed ? item.label : undefined"
             :class="[
-              'flex items-center gap-3 px-2.5 py-2 rounded-lg text-sm font-medium transition-colors group',
+              'flex min-h-10 items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
               isActive(item.to)
                 ? 'bg-primary-50 text-primary-700'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800',
               uiStore.sidebarCollapsed ? 'justify-center' : '',
             ]"
+            :aria-current="isActive(item.to) ? 'page' : undefined"
           >
             <component
               :is="item.icon"
@@ -70,27 +78,35 @@
       </nav>
 
       <!-- User info bottom -->
-      <div class="border-t border-slate-100 p-3 shrink-0">
-        <div
-          :class="[
-            'flex items-center gap-3 rounded-lg p-2',
-            uiStore.sidebarCollapsed ? 'justify-center' : '',
-          ]"
-        >
-          <BaseAvatar :name="authStore.user?.fullName" size="sm" color="blue" class="shrink-0" />
-          <Transition name="fade-slide">
-            <div v-if="!uiStore.sidebarCollapsed" class="flex-1 min-w-0">
-              <p class="text-xs font-semibold text-slate-700 truncate">{{ authStore.user?.fullName }}</p>
-              <p class="text-xs text-slate-400 truncate">{{ roleLabel }}</p>
-            </div>
-          </Transition>
+      <div class="shrink-0 border-t border-slate-100 p-3">
+        <div v-if="uiStore.sidebarCollapsed" class="flex flex-col items-center gap-2">
+          <BaseAvatar :name="authStore.user?.fullName" size="sm" color="blue" />
           <button
-            v-if="!uiStore.sidebarCollapsed"
-            class="p-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+            type="button"
+            class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50"
+            aria-label="Keluar"
             title="Keluar"
+            :disabled="isLoggingOut"
             @click="handleLogout"
           >
-            <LogOut class="h-4 w-4" />
+            <LogOut class="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+        <div v-else class="flex items-center gap-2 rounded-lg p-1">
+          <BaseAvatar :name="authStore.user?.fullName" size="sm" color="blue" class="shrink-0" />
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-xs font-semibold text-slate-700">{{ authStore.user?.fullName || 'Pengguna' }}</p>
+            <p class="truncate text-xs text-slate-400">{{ roleLabel }}</p>
+          </div>
+          <button
+            type="button"
+            class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50"
+            aria-label="Keluar"
+            title="Keluar"
+            :disabled="isLoggingOut"
+            @click="handleLogout"
+          >
+            <LogOut class="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -100,35 +116,48 @@
     <Transition name="overlay">
       <div
         v-if="uiStore.mobileSidebarOpen"
-        class="fixed inset-0 z-40 lg:hidden"
+        class="fixed inset-0 z-40 overscroll-none lg:hidden"
       >
-        <!-- Backdrop -->
-        <div class="absolute inset-0 bg-black/40" @click="uiStore.closeMobileSidebar()" />
+        <button
+          type="button"
+          class="absolute inset-0 h-full w-full cursor-default bg-black/40"
+          aria-label="Tutup menu navigasi"
+          @click="closeMobileSidebar"
+        />
 
-        <!-- Drawer -->
-        <aside class="absolute left-0 top-0 h-full w-64 bg-white border-r border-slate-200 flex flex-col">
-          <!-- Logo -->
-          <div class="flex items-center justify-between h-16 px-4 border-b border-slate-100">
-            <div class="flex items-center gap-3">
-              <img src="/favicon.svg" alt="Logo" class="h-8 w-8" />
-              <span class="font-bold text-sm text-slate-800 leading-tight">
+        <aside
+          id="mobile-sidebar-dialog"
+          ref="mobileSidebarRef"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mobile-sidebar-title"
+          tabindex="-1"
+          class="mobile-sidebar-drawer absolute inset-y-0 left-0 flex h-screen h-[100dvh] w-72 max-w-[calc(100vw-2rem)] flex-col border-r border-slate-200 bg-white shadow-xl"
+        >
+          <!-- Logo and close control -->
+          <div class="flex h-16 shrink-0 items-center justify-between border-b border-slate-100 px-4">
+            <div class="flex min-w-0 items-center gap-3">
+              <img src="/favicon.svg" alt="Logo Buku Induk Digital" class="h-8 w-8 shrink-0" />
+              <h2 id="mobile-sidebar-title" class="text-sm font-bold leading-tight text-slate-800">
                 Buku Induk<br />Digital
-              </span>
+              </h2>
             </div>
             <button
-              class="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              @click="uiStore.closeMobileSidebar()"
+              type="button"
+              class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              aria-label="Tutup menu"
+              @click="closeMobileSidebar"
             >
-              <X class="h-5 w-5" />
+              <X class="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
 
           <!-- Navigation -->
-          <nav class="flex-1 overflow-y-auto py-4 px-2 space-y-0.5">
+          <nav aria-label="Menu utama mobile" class="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4 px-2 scrollbar-thin space-y-0.5">
             <template v-for="item in filteredNavItems" :key="item.name">
               <p
                 v-if="item.section"
-                class="px-2 pt-4 pb-1 text-xs font-semibold text-slate-400 uppercase tracking-wider first:pt-1"
+                class="px-2 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-400"
               >
                 {{ item.section }}
               </p>
@@ -136,12 +165,13 @@
                 v-if="item.to"
                 :to="item.to"
                 :class="[
-                  'flex items-center gap-3 px-2.5 py-2 rounded-lg text-sm font-medium transition-colors group',
+                  'flex min-h-11 items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
                   isActive(item.to)
                     ? 'bg-primary-50 text-primary-700'
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800',
                 ]"
-                @click="uiStore.closeMobileSidebar()"
+                :aria-current="isActive(item.to) ? 'page' : undefined"
+                @click="closeMobileSidebar"
               >
                 <component
                   :is="item.icon"
@@ -149,25 +179,30 @@
                     'h-4 w-4 shrink-0',
                     isActive(item.to) ? 'text-primary-600' : 'text-slate-400 group-hover:text-slate-600',
                   ]"
+                  aria-hidden="true"
                 />
-                <span class="truncate">{{ item.label }}</span>
+                <span class="min-w-0 truncate">{{ item.label }}</span>
               </RouterLink>
             </template>
           </nav>
 
-          <!-- User bottom -->
-          <div class="border-t border-slate-100 p-3">
-            <div class="flex items-center gap-3 p-2">
-              <BaseAvatar :name="authStore.user?.fullName" size="sm" color="blue" />
-              <div class="flex-1 min-w-0">
-                <p class="text-xs font-semibold text-slate-700 truncate">{{ authStore.user?.fullName }}</p>
-                <p class="text-xs text-slate-400 truncate">{{ roleLabel }}</p>
+          <!-- User and logout -->
+          <div class="shrink-0 border-t border-slate-100 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div class="flex min-w-0 items-center gap-3 rounded-lg p-1">
+              <BaseAvatar :name="authStore.user?.fullName" size="sm" color="blue" class="shrink-0" />
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-xs font-semibold text-slate-700">{{ authStore.user?.fullName || 'Pengguna' }}</p>
+                <p class="truncate text-xs text-slate-400">{{ roleLabel }}</p>
               </div>
               <button
-                class="p-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                type="button"
+                class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50"
+                aria-label="Keluar"
+                title="Keluar"
+                :disabled="isLoggingOut"
                 @click="handleLogout"
               >
-                <LogOut class="h-4 w-4" />
+                <LogOut class="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -182,10 +217,14 @@
       <header class="h-16 bg-white border-b border-slate-200 flex items-center px-4 gap-3 shrink-0">
         <!-- Mobile menu button -->
         <button
-          class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
-          @click="uiStore.openMobileSidebar()"
+          type="button"
+          class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 lg:hidden"
+          aria-label="Buka menu navigasi"
+          aria-controls="mobile-sidebar-dialog"
+          :aria-expanded="uiStore.mobileSidebarOpen"
+          @click="openMobileSidebarFromTrigger"
         >
-          <Menu class="h-5 w-5" />
+          <Menu class="h-5 w-5" aria-hidden="true" />
         </button>
 
         <!-- Page title (mobile) -->
@@ -234,39 +273,42 @@
 
     <!-- ── Mobile Bottom Navigation ─────────────────────────── -->
     <nav
-      class="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 pb-safe"
-      aria-label="Navigasi utama"
+      class="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 pb-safe backdrop-blur lg:hidden"
+      aria-label="Navigasi ringkas"
     >
-      <div class="grid grid-cols-5 items-center px-1">
+      <div class="grid grid-cols-5 items-stretch px-1">
         <RouterLink
           v-for="item in mobilePrimaryNavItems"
           :key="item.name"
           :to="item.to"
           :class="[
-            'flex min-w-0 flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors',
+            'flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
             isActive(item.to) ? 'text-primary-600' : 'text-slate-400',
           ]"
           :aria-current="isActive(item.to) ? 'page' : undefined"
+          :aria-label="item.label"
         >
-          <component :is="item.icon" class="h-5 w-5 shrink-0" />
-          <span class="text-[11px] font-medium truncate max-w-full">{{ item.mobileLabel || item.label }}</span>
+          <component :is="item.icon" class="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span class="max-w-full truncate text-center text-[11px] font-medium leading-tight">{{ item.mobileLabel || item.label }}</span>
         </RouterLink>
 
         <button
           type="button"
-          class="flex min-w-0 flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
-          aria-label="Buka menu"
-          @click="uiStore.openMobileSidebar()"
+          class="flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-2 text-slate-500 transition-colors hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+          aria-label="Buka semua menu"
+          aria-controls="mobile-sidebar-dialog"
+          :aria-expanded="uiStore.mobileSidebarOpen"
+          @click="openMobileSidebarFromTrigger"
         >
-          <MoreHorizontal class="h-5 w-5 shrink-0" />
-          <span class="text-[11px] font-medium">Menu</span>
+          <MoreHorizontal class="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span class="text-[11px] font-medium leading-tight">Menu</span>
         </button>
       </div>
     </nav>  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import {
   LayoutDashboard, Users, GraduationCap, School,
@@ -293,10 +335,103 @@ const router = useRouter()
 const settingsStore = useSettingsStore()
 const schoolYearStore = useSchoolYearStore()
 
-// BUG-31 FIX: Pastikan overflow:hidden dibersihkan saat layout di-unmount
-// (misalnya navigasi ke halaman tanpa AppLayout saat sidebar mobile terbuka).
+const mobileSidebarRef = ref<HTMLElement | null>(null)
+const mobileSidebarReturnFocus = ref<HTMLElement | null>(null)
+const isLoggingOut = ref(false)
+let desktopMediaQuery: MediaQueryList | null = null
+
+function openMobileSidebarFromTrigger(event: MouseEvent): void {
+  mobileSidebarReturnFocus.value = event.currentTarget instanceof HTMLElement
+    ? event.currentTarget
+    : null
+  uiStore.openMobileSidebar()
+}
+
+function closeMobileSidebar(): void {
+  uiStore.closeMobileSidebar()
+}
+
+function handleDocumentKeydown(event: KeyboardEvent): void {
+  if (!uiStore.mobileSidebarOpen) return
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeMobileSidebar()
+    return
+  }
+  if (event.key !== 'Tab') return
+
+  const drawer = mobileSidebarRef.value
+  if (!drawer) return
+  const focusable = Array.from(
+    drawer.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter(element => element.getClientRects().length > 0 && element.getAttribute('aria-hidden') !== 'true')
+
+  if (!focusable.length) {
+    event.preventDefault()
+    drawer.focus()
+    return
+  }
+
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && (document.activeElement === first || !drawer.contains(document.activeElement))) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && (document.activeElement === last || !drawer.contains(document.activeElement))) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+function handleDesktopBreakpointChange(event: MediaQueryListEvent): void {
+  if (event.matches && uiStore.mobileSidebarOpen) closeMobileSidebar()
+}
+
+watch(
+  () => uiStore.mobileSidebarOpen,
+  async (isOpen) => {
+    const returnTarget = mobileSidebarReturnFocus.value
+    await nextTick()
+    if (uiStore.mobileSidebarOpen !== isOpen) return
+
+    if (isOpen) {
+      const firstNavigationLink = mobileSidebarRef.value?.querySelector<HTMLElement>('nav a[href]')
+      ;(firstNavigationLink ?? mobileSidebarRef.value)?.focus()
+      return
+    }
+
+    mobileSidebarReturnFocus.value = null
+    if (returnTarget?.isConnected && returnTarget.getClientRects().length > 0) {
+      returnTarget.focus()
+    }
+  },
+  { flush: 'post' }
+)
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (uiStore.mobileSidebarOpen) closeMobileSidebar()
+  }
+)
+
+onMounted(() => {
+  document.addEventListener('keydown', handleDocumentKeydown)
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    desktopMediaQuery = window.matchMedia('(min-width: 1024px)')
+    desktopMediaQuery.addEventListener('change', handleDesktopBreakpointChange)
+    if (desktopMediaQuery.matches && uiStore.mobileSidebarOpen) closeMobileSidebar()
+  }
+})
+
 onUnmounted(() => {
+  document.removeEventListener('keydown', handleDocumentKeydown)
+  desktopMediaQuery?.removeEventListener('change', handleDesktopBreakpointChange)
   if (uiStore.mobileSidebarOpen) {
+    mobileSidebarReturnFocus.value = null
     uiStore.closeMobileSidebar()
   }
 })
@@ -440,55 +575,70 @@ function hasPermission(item: NavItem): boolean {
 
 const filteredNavItems = computed(() => navItems.filter(hasPermission))
 
-// Bottom nav: empat fungsi utama + Menu untuk seluruh navigasi.
+// Empat shortcut mobile diprioritaskan; jika role tidak memiliki izin pada
+// shortcut tertentu, isi slot dari menu yang memang terlihat oleh role tersebut.
 const mobilePrimaryNavItems = computed<NavItem[]>(() => {
-  const preferred = [
+  const isTeacher = authStore.user?.role === 'teacher'
+  const preferred: Array<Pick<NavItem, 'to' | 'icon' | 'label' | 'mobileLabel'>> = [
     { to: '/dashboard', icon: Home, label: 'Dashboard', mobileLabel: 'Beranda' },
-    { to: authStore.user?.role === 'teacher' ? '/my-students' : '/students', icon: Search, label: authStore.user?.role === 'teacher' ? 'Siswa Saya' : 'Data Siswa', mobileLabel: 'Siswa' },
+    {
+      to: isTeacher ? '/my-students' : '/students',
+      icon: Search,
+      label: isTeacher ? 'Siswa Saya' : 'Data Siswa',
+      mobileLabel: 'Siswa',
+    },
     { to: '/classrooms', icon: School, label: 'Kelas & Rombel', mobileLabel: 'Kelas' },
     { to: '/reports', icon: BarChart3, label: 'Laporan', mobileLabel: 'Laporan' },
-  ] as const
+  ]
 
-  return preferred
-    .map((item, index) => ({
-      name: `mobile-${index}-${item.to}`,
-      ...item,
-      section: undefined,
-      roles: undefined,
-      permission: undefined,
-    }))
-    .filter(item => filteredNavItems.value.some(nav => nav.to === item.to))
+  const visibleByPath = new Map(filteredNavItems.value.map(item => [item.to, item]))
+  const selected: NavItem[] = []
+
+  preferred.forEach(item => {
+    const visibleItem = visibleByPath.get(item.to)
+    if (visibleItem && !selected.some(selectedItem => selectedItem.to === item.to)) {
+      selected.push({ ...visibleItem, ...item })
+    }
+  })
+
+  for (const item of filteredNavItems.value) {
+    if (selected.length >= 4) break
+    if (!selected.some(selectedItem => selectedItem.to === item.to)) {
+      selected.push(item)
+    }
+  }
+
+  return selected.slice(0, 4).map((item, index) => ({
+    ...item,
+    name: `mobile-${index}-${item.to}`,
+    section: undefined,
+  }))
 })
 
-// BUG-30 FIX: Gunakan route.matched untuk pengecekan isActive yang lebih presisi.
-// Sebelumnya startsWith('/students') juga cocok dengan '/students/create', dll. — memang
-// diinginkan untuk highlight parent menu. Namun route yang tidak terkait tapi secara
-// kebetulan prefix-match bisa terhighlight secara salah.
-// Solusi: exact match untuk '/' dan startsWith untuk sub-paths, tapi pastikan
-// path yang dibandingkan adalah path yang spesifik (bukan prefix umum seperti '/').
+// Sub-route menyorot menu induk, kecuali ada menu anak yang terlihat dan lebih spesifik.
 function isActive(path: string): boolean {
-  if (path === '/') return route.path === '/'
-  // Exact match selalu aktif
   if (route.path === path) return true
-  // Untuk sub-path: aktif jika berada di bawah path ini,
-  // KECUALI path tersebut adalah prefix dari nav item lain yang lebih spesifik.
-  // Contoh: /classrooms aktif untuk /classrooms/123 tapi TIDAK untuk /classrooms/grades
-  // karena /classrooms/grades punya nav item sendiri.
-  const moreSpecificNavExists = navItems.some(
-    item => item.to !== path && item.to.startsWith(path + '/') && route.path.startsWith(item.to)
+  if (!route.path.startsWith(path + '/')) return false
+
+  const moreSpecificVisibleItem = filteredNavItems.value.some(
+    item => item.to !== path &&
+      item.to.startsWith(path + '/') &&
+      (route.path === item.to || route.path.startsWith(item.to + '/'))
   )
-  if (moreSpecificNavExists) return false
-  return route.path.startsWith(path + '/')
+  return !moreSpecificVisibleItem
 }
 
-async function handleLogout() {
-  // BUG-31 FIX: Tutup mobile sidebar sebelum navigasi agar tidak ada visual artifact
-  if (uiStore.mobileSidebarOpen) {
-    uiStore.closeMobileSidebar()
+async function handleLogout(): Promise<void> {
+  if (isLoggingOut.value) return
+  isLoggingOut.value = true
+  closeMobileSidebar()
+  try {
+    await authStore.logout()
+    toast.success('Berhasil keluar')
+    await router.replace('/login')
+  } finally {
+    isLoggingOut.value = false
   }
-  await authStore.logout()
-  toast.success('Berhasil keluar')
-  router.push('/login')
 }
 </script>
 
@@ -512,8 +662,29 @@ async function handleLogout() {
   opacity: 0;
 }
 
+.overlay-enter-active .mobile-sidebar-drawer,
+.overlay-leave-active .mobile-sidebar-drawer {
+  transition: transform 0.2s ease;
+}
+
+.overlay-enter-from .mobile-sidebar-drawer,
+.overlay-leave-to .mobile-sidebar-drawer {
+  transform: translateX(-100%);
+}
+
 /* Safe area padding for bottom nav on iOS */
 .pb-safe {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-slide-enter-active,
+  .fade-slide-leave-active,
+  .overlay-enter-active,
+  .overlay-leave-active,
+  .overlay-enter-active .mobile-sidebar-drawer,
+  .overlay-leave-active .mobile-sidebar-drawer {
+    transition-duration: 0.01ms;
+  }
 }
 </style>
