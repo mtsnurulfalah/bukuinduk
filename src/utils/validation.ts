@@ -383,7 +383,12 @@ export const schoolYearSchema = yup.object({
     .test('endDate', 'Tanggal selesai harus setelah tanggal mulai', function (value) {
       const { startDate } = this.parent
       // Validitas tanggal ditangani oleh test date-only agar error lebih akurat.
-      if (!isValidDateOnly(startDate) || !isValidDateOnly(value)) return true
+      if (
+        typeof startDate !== 'string' ||
+        typeof value !== 'string' ||
+        !isValidDateOnly(startDate) ||
+        !isValidDateOnly(value)
+      ) return true
       return value > startDate
     }),
 })
