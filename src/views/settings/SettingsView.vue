@@ -535,6 +535,117 @@
 
       <BaseCard
         v-if="canManageSettings"
+        title="Riwayat dan Otomatisasi Backup"
+        subtitle="Simpan snapshot privat, unduh cadangan sebelumnya, dan atur backup terjadwal."
+        class="min-w-0"
+      >
+        <div class="min-w-0 space-y-5">
+          <BaseAlert type="info" title="Penyimpanan aman">
+            Snapshot disimpan di folder Google Drive privat milik akun yang menjalankan Apps Script.
+            Backup otomatis berjalan sekitar pukul 02.00 sesuai zona waktu proyek GAS. Hash kata sandi
+            pengguna tidak disertakan dalam file backup.
+          </BaseAlert>
+          <BaseAlert v-if="backupAutomationError" type="error" title="Pengaturan backup belum tersedia">
+            <p class="break-words">{{ backupAutomationError }}</p>
+            <p class="mt-1 text-xs">Fitur ini memerlukan gas-backend/ReportHandler.gs terbaru dan izin Google Drive/Apps Script yang sesuai.</p>
+          </BaseAlert>
+          <BaseAlert v-if="backupHistoryError" type="error" title="Riwayat backup gagal dimuat">
+            {{ backupHistoryError }}
+          </BaseAlert>
+
+          <section class="min-w-0 space-y-3" aria-labelledby="backup-automation-heading">
+            <div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div class="min-w-0">
+                <h3 id="backup-automation-heading" class="text-sm font-semibold text-slate-800">Jadwal backup otomatis</h3>
+                <p class="mt-1 text-sm leading-relaxed text-slate-500">
+                  Jadwal baru aktif setelah disimpan. Backup otomatis tidak diaktifkan secara default.
+                </p>
+              </div>
+              <BaseBadge v-if="backupAutomationState?.triggerInstalled && backupAutomation.enabled" color="green" dot>Terjadwal</BaseBadge>
+              <BaseBadge v-else color="slate">Tidak aktif</BaseBadge>
+            </div>
+            <div class="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-3">
+              <label class="min-w-0">
+                <span class="mb-1.5 block text-sm font-medium text-slate-700">Status</span>
+                <select v-model="backupAutomation.enabled" :disabled="isLoadingBackupHistory || isSavingBackupAutomation || isCreatingBackupSnapshot" class="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20">
+                  <option :value="false">Nonaktif</option>
+                  <option :value="true">Aktif</option>
+                </select>
+              </label>
+              <label class="min-w-0">
+                <span class="mb-1.5 block text-sm font-medium text-slate-700">Frekuensi</span>
+                <select v-model="backupAutomation.frequency" :disabled="isLoadingBackupHistory || isSavingBackupAutomation || isCreatingBackupSnapshot" class="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20">
+                  <option value="daily">Setiap hari</option>
+                  <option value="weekly">Setiap minggu</option>
+                </select>
+              </label>
+              <label class="min-w-0">
+                <span class="mb-1.5 block text-sm font-medium text-slate-700">Retensi snapshot</span>
+                <select v-model.number="backupAutomation.retention" :disabled="isLoadingBackupHistory || isSavingBackupAutomation || isCreatingBackupSnapshot" class="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20">
+                  <option :value="5">5 backup terakhir</option>
+                  <option :value="10">10 backup terakhir</option>
+                  <option :value="20">20 backup terakhir</option>
+                </select>
+              </label>
+            </div>
+            <p v-if="backupAutomationState" class="break-words text-xs leading-relaxed text-slate-500">
+              Zona waktu GAS: {{ backupAutomationState.timezone || 'mengikuti konfigurasi proyek' }}.
+              Retensi menghapus snapshot Drive yang lebih lama setelah backup baru berhasil dibuat.
+            </p>
+            <div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <BaseButton type="button" class="w-full sm:w-auto" :disabled="isLoadingBackupHistory || isSavingBackupAutomation || isCreatingBackupSnapshot" :loading="isSavingBackupAutomation" loading-text="Menyimpan jadwal..." @click="saveBackupAutomation">
+                <Save class="h-4 w-4" aria-hidden="true" /> Simpan Jadwal
+              </BaseButton>
+              <BaseButton type="button" variant="outline" class="w-full sm:w-auto" :disabled="isLoadingBackupHistory || isSavingBackupAutomation || isCreatingBackupSnapshot" :loading="isCreatingBackupSnapshot" loading-text="Membuat snapshot..." @click="createStoredBackup">
+                <Database class="h-4 w-4" aria-hidden="true" /> Buat Snapshot Sekarang
+              </BaseButton>
+              <BaseButton type="button" variant="outline" class="w-full sm:w-auto" :disabled="isLoadingBackupHistory || isSavingBackupAutomation || isCreatingBackupSnapshot" @click="loadBackupAutomation">
+                Muat Ulang Riwayat
+              </BaseButton>
+            </div>
+          </section>
+
+          <section class="min-w-0 border-t border-slate-200 pt-4" aria-labelledby="backup-history-heading">
+            <div class="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div class="min-w-0">
+                <h3 id="backup-history-heading" class="text-sm font-semibold text-slate-800">Riwayat snapshot</h3>
+                <p class="mt-1 text-sm text-slate-500">Daftar berisi snapshot manual dan otomatis; file yang gagal dibuat tetap dicatat untuk audit operasional.</p>
+              </div>
+              <span class="shrink-0 text-xs text-slate-500">{{ backupHistory.length }} entri</span>
+            </div>
+            <p v-if="isLoadingBackupHistory" class="py-5 text-sm text-slate-500" role="status" aria-live="polite">Memuat status dan riwayat backup...</p>
+            <div v-else-if="!backupHistory.length" class="rounded-xl border border-dashed border-slate-300 p-5 text-center">
+              <Database class="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
+              <p class="mt-2 text-sm font-medium text-slate-700">Belum ada snapshot tersimpan</p>
+              <p class="mt-1 text-sm text-slate-500">Gunakan “Buat Snapshot Sekarang” atau aktifkan jadwal otomatis.</p>
+            </div>
+            <div v-else class="min-w-0 space-y-3">
+              <article v-for="item in backupHistory" :key="item.id" class="flex min-w-0 flex-col gap-3 rounded-xl border border-slate-200 p-3 sm:p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div class="min-w-0">
+                  <div class="flex min-w-0 flex-wrap items-center gap-2">
+                    <p class="break-all text-sm font-semibold text-slate-800">{{ item.fileName || (item.status === 'failed' ? 'Snapshot gagal dibuat' : 'Snapshot backup') }}</p>
+                    <BaseBadge v-if="item.status === 'success'" color="green" dot>Berhasil</BaseBadge>
+                    <BaseBadge v-else color="red" dot>Gagal</BaseBadge>
+                    <BaseBadge v-if="item.source === 'scheduled'" color="blue">Otomatis</BaseBadge>
+                    <BaseBadge v-else>Manual</BaseBadge>
+                  </div>
+                  <p class="mt-1 break-words text-xs text-slate-500">{{ formatDateTime(item.generatedAt) }}</p>
+                  <p v-if="item.status === 'success'" class="mt-1 break-words text-xs text-slate-600">
+                    {{ item.sheetCount }} sheet · {{ item.recordCount.toLocaleString('id-ID') }} record · {{ formatStoredBackupSize(item.sizeBytes) }}
+                  </p>
+                  <p v-else class="mt-1 break-words text-xs text-red-700">{{ item.error || 'Tidak ada detail error dari backend.' }}</p>
+                </div>
+                <BaseButton v-if="item.status === 'success'" type="button" variant="outline" class="w-full shrink-0 sm:w-auto lg:self-center" :disabled="isDownloadingBackupId !== null || isCreatingBackupSnapshot || isSavingBackupAutomation" :loading="isDownloadingBackupId === item.id" loading-text="Menyiapkan..." @click="downloadStoredBackup(item)">
+                  <Download class="h-4 w-4" aria-hidden="true" /> Unduh JSON
+                </BaseButton>
+              </article>
+            </div>
+          </section>
+        </div>
+      </BaseCard>
+
+      <BaseCard
+        v-if="canManageSettings"
         title="Pemeriksa File Backup JSON"
         subtitle="Buka backup dari komputer untuk memeriksa kelengkapan dan melihat ringkasan data tanpa mengubah data aplikasi."
         class="min-w-0"
@@ -1062,6 +1173,9 @@ import type {
   BackupConflictStrategy,
   BackupRestorePreview,
   BackupRestoreResult,
+  BackupAutomationState,
+  BackupAutomationOptions,
+  BackupHistoryItem,
 } from '@/services'
 import { PERMISSIONS } from '@/constants'
 import { formatDate, formatDateTime, isValidEmail } from '@/utils'
@@ -1089,6 +1203,8 @@ interface BackupViewerReport {
   totalRecords: number
   data: Record<string, unknown[]>
 }
+
+type BackupAutomationFrequency = 'daily' | 'weekly'
 
 const MAX_RESTORE_FILE_SIZE = 10 * 1024 * 1024
 const REQUIRED_BACKUP_SHEETS = [
@@ -1136,6 +1252,19 @@ const isSettingActiveSY = ref<string | null>(null)
 const backupMeta = ref<BackupManifest | null>(null)
 const backupError = ref('')
 const backupLastFileName = ref('')
+const backupAutomation = reactive<{ enabled: boolean; frequency: BackupAutomationFrequency; retention: 5 | 10 | 20 }>({
+  enabled: false,
+  frequency: 'daily',
+  retention: 10,
+})
+const backupAutomationState = ref<BackupAutomationState | null>(null)
+const backupHistory = ref<BackupHistoryItem[]>([])
+const isLoadingBackupHistory = ref(false)
+const isSavingBackupAutomation = ref(false)
+const isCreatingBackupSnapshot = ref(false)
+const isDownloadingBackupId = ref<string | null>(null)
+const backupAutomationError = ref('')
+const backupHistoryError = ref('')
 const backupFileInput = ref<HTMLInputElement | null>(null)
 const isReadingBackupFile = ref(false)
 const backupViewerResult = ref<BackupViewerReport | null>(null)
@@ -1217,6 +1346,149 @@ const tabs = [
   { key: 'schoolyear', label: 'Tahun Pelajaran', icon: Calendar },
   { key: 'backup', label: 'Backup Data', icon: Database },
 ]
+
+// ── Backup history and automatic schedule ────────────────────
+function formatStoredBackupSize(value: number): string {
+  const bytes = Number.isFinite(value) && value > 0 ? value : 0
+  if (bytes < 1024) return String(bytes) + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toLocaleString('id-ID', { maximumFractionDigits: 1 }) + ' KB'
+  return (bytes / (1024 * 1024)).toLocaleString('id-ID', { maximumFractionDigits: 2 }) + ' MB'
+}
+
+async function loadBackupAutomation() {
+  if (!canManageSettings.value || isLoadingBackupHistory.value) return
+  isLoadingBackupHistory.value = true
+  backupAutomationError.value = ''
+  backupHistoryError.value = ''
+  try {
+    const [statusValue, historyValue] = await Promise.all([
+      settingsService.getBackupAutomation(),
+      settingsService.listBackupHistory(),
+    ])
+    if (!isRecord(statusValue) || typeof statusValue.enabled !== 'boolean' ||
+        (statusValue.frequency !== 'daily' && statusValue.frequency !== 'weekly') ||
+        ![5, 10, 20].includes(Number(statusValue.retention)) ||
+        !Array.isArray(historyValue)) {
+      throw new Error('Backend mengembalikan status atau riwayat backup dengan format yang tidak dikenali.')
+    }
+    const status = statusValue as unknown as BackupAutomationState
+    backupAutomationState.value = status
+    Object.assign(backupAutomation, {
+      enabled: status.enabled,
+      frequency: status.frequency,
+      retention: status.retention,
+    })
+    backupHistory.value = historyValue
+      .filter((item): item is BackupHistoryItem => isRecord(item) &&
+        typeof item.id === 'string' &&
+        typeof item.generatedAt === 'string' &&
+        (item.status === 'success' || item.status === 'failed'))
+      .slice(0, 25)
+  } catch (error: unknown) {
+    const message = error instanceof Error
+      ? error.message
+      : 'Tidak dapat memuat riwayat dan jadwal backup.'
+    backupAutomationError.value = message
+    backupHistoryError.value = message
+  } finally {
+    isLoadingBackupHistory.value = false
+  }
+}
+
+async function saveBackupAutomation() {
+  if (!canManageSettings.value || isSavingBackupAutomation.value ||
+      isCreatingBackupSnapshot.value || isLoadingBackupHistory.value) return
+  isSavingBackupAutomation.value = true
+  backupAutomationError.value = ''
+  try {
+    const options: BackupAutomationOptions = {
+      enabled: backupAutomation.enabled,
+      frequency: backupAutomation.frequency,
+      retention: backupAutomation.retention,
+    }
+    const result = await settingsService.configureBackupAutomation(options)
+    if (!isRecord(result) || typeof result.enabled !== 'boolean' ||
+        typeof result.triggerInstalled !== 'boolean') {
+      throw new Error('Backend tidak mengonfirmasi jadwal backup yang tersimpan.')
+    }
+    backupAutomationState.value = result as unknown as BackupAutomationState
+    toast.success(backupAutomation.enabled
+      ? 'Backup otomatis ' + (backupAutomation.frequency === 'daily' ? 'harian' : 'mingguan') + ' berhasil diaktifkan.'
+      : 'Backup otomatis dinonaktifkan.')
+    await loadBackupAutomation()
+  } catch (error: unknown) {
+    backupAutomationError.value = error instanceof Error
+      ? error.message
+      : 'Gagal menyimpan jadwal backup otomatis.'
+    toast.error(backupAutomationError.value)
+  } finally {
+    isSavingBackupAutomation.value = false
+  }
+}
+
+async function createStoredBackup() {
+  if (!canManageSettings.value || isCreatingBackupSnapshot.value ||
+      isSavingBackupAutomation.value || isLoadingBackupHistory.value) return
+  isCreatingBackupSnapshot.value = true
+  backupAutomationError.value = ''
+  backupHistoryError.value = ''
+  try {
+    const result = await settingsService.createBackupSnapshot()
+    if (!isRecord(result) || typeof result.id !== 'string' ||
+        result.status !== 'success' || typeof result.generatedAt !== 'string') {
+      throw new Error('Backend belum mengonfirmasi bahwa snapshot tersimpan dengan lengkap.')
+    }
+    toast.success('Snapshot backup berhasil disimpan ke Google Drive privat.')
+    await loadBackupAutomation()
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal membuat snapshot backup.'
+    await loadBackupAutomation()
+    backupHistoryError.value = message
+    toast.error(message)
+  } finally {
+    isCreatingBackupSnapshot.value = false
+  }
+}
+
+async function downloadStoredBackup(item: BackupHistoryItem) {
+  if (!canManageSettings.value || item.status !== 'success' ||
+      isDownloadingBackupId.value !== null) return
+  isDownloadingBackupId.value = item.id
+  backupHistoryError.value = ''
+  try {
+    const response = await settingsService.readBackupSnapshot(item.id)
+    const validated = validateBackupResponse(response)
+    const json = JSON.stringify(validated.data, null, 2)
+    if (!json) throw new Error('Isi snapshot tidak dapat dikonversi menjadi JSON.')
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' })
+    const objectUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = item.fileName || ('backup-buku-induk-' + item.generatedAt.replace(/[:.]/g, '-') + '.json')
+    anchor.style.display = 'none'
+    try {
+      document.body.appendChild(anchor)
+      anchor.click()
+    } finally {
+      window.setTimeout(() => {
+        anchor.remove()
+        URL.revokeObjectURL(objectUrl)
+      }, 1000)
+    }
+    toast.success('Snapshot berhasil divalidasi dan unduhan dimulai.')
+  } catch (error: unknown) {
+    backupHistoryError.value = error instanceof Error
+      ? error.message
+      : 'Gagal mengunduh snapshot backup.'
+    toast.error(backupHistoryError.value)
+  } finally {
+    isDownloadingBackupId.value = null
+  }
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'backup' && canManageSettings.value) void loadBackupAutomation()
+})
 
 // ── School settings form ─────────────────────────────────────
 // BUG-58 FIX: Hilangkan field academicYear dari form settings.
