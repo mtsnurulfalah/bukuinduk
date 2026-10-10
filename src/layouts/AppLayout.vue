@@ -188,12 +188,20 @@
 
           <!-- User and logout -->
           <div class="shrink-0 border-t border-slate-100 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-            <div class="flex min-w-0 items-center gap-3 rounded-lg p-1">
-              <BaseAvatar :name="authStore.user?.fullName" size="sm" color="blue" class="shrink-0" />
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-xs font-semibold text-slate-700">{{ authStore.user?.fullName || 'Pengguna' }}</p>
-                <p class="truncate text-xs text-slate-400">{{ roleLabel }}</p>
-              </div>
+            <div class="flex min-w-0 items-center gap-2">
+              <RouterLink
+                to="/profile"
+                aria-label="Buka profil saya"
+                :aria-current="route.path === '/profile' ? 'page' : undefined"
+                class="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                @click="closeMobileSidebar"
+              >
+                <BaseAvatar :name="authStore.user?.fullName" size="sm" color="blue" class="shrink-0" />
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-xs font-semibold text-slate-700">{{ authStore.user?.fullName || 'Pengguna' }}</p>
+                  <p class="truncate text-xs text-slate-400">{{ roleLabel }}</p>
+                </div>
+              </RouterLink>
               <button
                 type="button"
                 class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50"
@@ -214,7 +222,7 @@
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
       <!-- Top Header -->
-      <header class="h-16 bg-white border-b border-slate-200 flex items-center px-4 gap-3 shrink-0">
+      <header class="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4">
         <!-- Mobile menu button -->
         <button
           type="button"
@@ -228,34 +236,41 @@
         </button>
 
         <!-- Page title (mobile) -->
-        <h1 class="text-sm font-semibold text-slate-700 lg:hidden truncate flex-1">
+        <h1 class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 lg:hidden">
           {{ pageTitle }}
         </h1>
 
         <!-- School name (desktop) -->
-        <p class="hidden lg:block text-sm font-medium text-slate-500 flex-1 truncate">
+        <p class="hidden min-w-0 flex-1 truncate text-sm font-medium text-slate-500 lg:block">
           {{ settingsStore.schoolName || 'Buku Induk Digital' }}
         </p>
 
         <!-- Right side -->
-        <div class="flex items-center gap-2 ml-auto">
+        <div class="ml-auto flex min-w-0 items-center gap-2">
           <!-- Active school year badge -->
           <span
             v-if="activeSchoolYear"
-            class="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium"
+            class="hidden sm:inline-flex max-w-44 min-w-0 shrink items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700"
+            :title="activeSchoolYear"
           >
-            <CalendarDays class="h-3 w-3" />
-            {{ activeSchoolYear }}
+            <CalendarDays class="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span class="truncate">{{ activeSchoolYear }}</span>
           </span>
 
           <!-- User menu desktop -->
-          <div class="hidden lg:flex items-center gap-2.5">
+          <RouterLink
+            to="/profile"
+            aria-label="Buka profil saya"
+            title="Buka profil saya"
+            :aria-current="route.path === '/profile' ? 'page' : undefined"
+            class="hidden min-w-0 max-w-56 items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 lg:flex"
+          >
             <BaseAvatar :name="authStore.user?.fullName" size="sm" color="blue" />
-            <div class="text-left">
-              <p class="text-xs font-semibold text-slate-700 leading-none">{{ authStore.user?.fullName }}</p>
-              <p class="text-xs text-slate-400 mt-0.5">{{ roleLabel }}</p>
+            <div class="min-w-0 max-w-44 text-left">
+              <p class="truncate text-xs font-semibold leading-none text-slate-700">{{ authStore.user?.fullName || 'Pengguna' }}</p>
+              <p class="mt-0.5 truncate text-xs text-slate-400">{{ roleLabel }}</p>
             </div>
-          </div>
+          </RouterLink>
         </div>
       </header>
 
@@ -512,7 +527,6 @@ const navItems: NavItem[] = [
     mobileLabel: 'Mapel',
     to: '/subjects',
     icon: BookOpen,
-    section: 'Akademik',
     permission: PERMISSIONS.SUBJECT_VIEW,
   },
   {
@@ -638,6 +652,8 @@ async function handleLogout(): Promise<void> {
     await authStore.logout()
     toast.success('Berhasil keluar')
     await router.replace('/login')
+  } catch {
+    toast.error('Gagal keluar. Silakan coba lagi.')
   } finally {
     isLoggingOut.value = false
   }
