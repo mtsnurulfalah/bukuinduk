@@ -36,18 +36,34 @@ export const useUiStore = defineStore('ui', () => {
     sidebarCollapsed.value = !sidebarCollapsed.value
   }
 
+  // Simpan nilai inline sebelumnya agar menutup drawer tidak merusak style
+  // milik komponen/modal lain yang mungkin juga mengunci scroll halaman.
+  let previousBodyOverflow: string | null = null
+
   function openMobileSidebar() {
+    if (mobileSidebarOpen.value) return
     mobileSidebarOpen.value = true
-    // BUG-09 FIX: Tangani potensi error saat memodifikasi document.body
-    // (meski jarang, bisa gagal di lingkungan SSR atau test)
-    try { document.body.style.overflow = 'hidden' } catch { /* noop */ }
+    try {
+      if (typeof document !== 'undefined') {
+        previousBodyOverflow = document.body.style.overflow
+        document.body.style.overflow = 'hidden'
+      }
+    } catch {
+      // Preferensi UI tetap berfungsi pada lingkungan tanpa DOM.
+    }
   }
 
   function closeMobileSidebar() {
     mobileSidebarOpen.value = false
-    // BUG-09 FIX: Selalu bersihkan overflow saat menutup, termasuk jika dipanggil
-    // dari onUnmounted AppLayout untuk mencegah body "terkunci" selamanya.
-    try { document.body.style.overflow = '' } catch { /* noop */ }
+    try {
+      if (typeof document !== 'undefined' && previousBodyOverflow !== null) {
+        document.body.style.overflow = previousBodyOverflow
+      }
+    } catch {
+      // Jangan biarkan kegagalan pemulihan style memblokir navigasi.
+    } finally {
+      previousBodyOverflow = null
+    }
   }
 
   // ── Global loading ────────────────────────────────────────────
