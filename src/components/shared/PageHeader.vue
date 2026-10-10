@@ -43,7 +43,7 @@
     <!-- Actions -->
     <div
       v-if="$slots.actions"
-      class="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:justify-end"
+      class="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:max-w-full sm:justify-end"
     >
       <slot name="actions" />
     </div>
