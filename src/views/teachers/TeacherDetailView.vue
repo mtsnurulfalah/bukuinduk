@@ -63,7 +63,7 @@
         <BaseCard class="min-w-0 p-5 text-center sm:p-6">
           <div class="flex min-w-0 flex-col items-center gap-3">
             <BaseAvatar
-              :name="teacher.fullName?.trim() || 'Guru'"
+              :name="teacherName || 'Guru'"
               :src="teacher.photoUrl"
               size="xl"
               color="teal"
@@ -71,7 +71,7 @@
 
             <div class="min-w-0 max-w-full">
               <h2 class="break-words text-lg font-bold text-slate-800">
-                {{ teacher.fullName?.trim() || 'Nama belum diisi' }}
+                {{ teacherName || 'Nama belum diisi' }}
               </h2>
               <p class="mt-1 break-words text-sm text-slate-500">
                 {{ profileCaption }}
@@ -165,6 +165,16 @@ import { PERMISSIONS } from '@/constants'
 import { formatDate } from '@/utils'
 import type { Teacher } from '@/types'
 
+/**
+ * Data dari Google Sheets/GAS dapat berisi angka untuk kolom yang secara
+ * konseptual berupa teks (mis. NIP/NUPTK). Jangan memanggil .trim() secara
+ * langsung pada nilai API yang runtime-nya belum tentu string.
+ */
+function safeDisplayText(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return ''
+}
 interface TeacherDetailItem {
   label: string
   value: string
@@ -190,14 +200,16 @@ const detailId = computed(() => {
   return id === 'undefined' || id === 'null' ? '' : id
 })
 
+const teacherName = computed(() => safeDisplayText(teacher.value?.fullName))
+
 const headerTitle = computed(() => {
-  const name = teacher.value?.fullName?.trim()
+  const name = teacherName.value
   if (name) return name
   return isLoading.value ? 'Memuat Detail Guru' : 'Detail Guru'
 })
 
 const breadcrumbLabel = computed(() => {
-  const name = teacher.value?.fullName?.trim()
+  const name = teacherName.value
   if (name) return name
   return isLoading.value ? 'Memuat...' : 'Detail'
 })
@@ -206,8 +218,8 @@ const profileCaption = computed(() => {
   if (!teacher.value) return 'Profil guru'
 
   return [
-    teacher.value.educationLevel?.trim(),
-    teacher.value.major?.trim(),
+    safeDisplayText(teacher.value.educationLevel),
+    safeDisplayText(teacher.value.major),
   ]
     .filter(Boolean)
     .join(' • ') || 'Profil guru'
@@ -223,19 +235,19 @@ const infoItems = computed<TeacherDetailItem[]>(() => {
   const current = teacher.value
   if (!current) return []
 
-  const phone = current.phone?.trim() ?? ''
+  const phone = safeDisplayText(current.phone)
   const phoneTarget = phone.replace(/[^\d+]/g, '')
-  const email = current.email?.trim() ?? ''
+  const email = safeDisplayText(current.email)
   const birthDetails = [
-    current.birthPlace?.trim(),
+    safeDisplayText(current.birthPlace),
     current.birthDate ? formatDate(current.birthDate) : '',
   ]
     .filter(Boolean)
     .join(', ')
 
   return [
-    { label: 'NIP', value: current.nip?.trim() || '—' },
-    { label: 'NUPTK', value: current.nuptk?.trim() || '—' },
+    { label: 'NIP', value: safeDisplayText(current.nip) || '—' },
+    { label: 'NUPTK', value: safeDisplayText(current.nuptk) || '—' },
     {
       label: 'Jenis Kelamin',
       value:
@@ -246,9 +258,9 @@ const infoItems = computed<TeacherDetailItem[]>(() => {
             : '—',
     },
     { label: 'Tempat, Tanggal Lahir', value: birthDetails || '—' },
-    { label: 'Agama', value: current.religion?.trim() || '—' },
-    { label: 'Pendidikan Terakhir', value: current.educationLevel?.trim() || '—' },
-    { label: 'Jurusan/Bidang Studi', value: current.major?.trim() || '—' },
+    { label: 'Agama', value: safeDisplayText(current.religion) || '—' },
+    { label: 'Pendidikan Terakhir', value: safeDisplayText(current.educationLevel) || '—' },
+    { label: 'Jurusan/Bidang Studi', value: safeDisplayText(current.major) || '—' },
     {
       label: 'Tanggal Bergabung',
       value: current.joinDate ? formatDate(current.joinDate) : '—',
@@ -265,7 +277,7 @@ const infoItems = computed<TeacherDetailItem[]>(() => {
     },
     {
       label: 'Alamat',
-      value: current.address?.trim() || '—',
+      value: safeDisplayText(current.address) || '—',
       fullWidth: true,
     },
   ]
