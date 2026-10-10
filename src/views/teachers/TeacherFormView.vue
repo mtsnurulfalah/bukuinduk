@@ -399,9 +399,9 @@ function applyTeacherData(teacher: Awaited<ReturnType<typeof teachersService.get
 }
 
 /**
- * Google Sheets puede devolver identificadores o teléfonos como números aunque
- * el formulario los trate como texto. Normalizar en el límite evita llamar
- * .trim()/.toLowerCase() directamente sobre un valor que no sea string.
+ * Google Sheets dapat mengembalikan ID atau nomor telepon sebagai angka
+ * meskipun form memperlakukannya sebagai teks. Normalisasi di batas API
+ * mencegah pemanggilan .trim()/.toLowerCase() pada nilai non-string.
  */
 function normalizeFormString(value: unknown): string {
   if (typeof value === 'string') return value
