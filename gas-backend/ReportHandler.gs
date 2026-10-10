@@ -990,18 +990,37 @@ var SettingsHandler = {
   getBackupAutomation: function(payload, user) {
     checkPermission(user, 'settings:manage');
     var config = this._getBackupAutomationConfig();
-    var triggers = ScriptApp.getProjectTriggers().filter(function(trigger) {
-      return trigger.getHandlerFunction() === 'runScheduledBackup';
-    });
+    var props = this._backupProperties();
     var history = this._getBackupHistory();
+
+    // Endpoint pembacaan UI tidak boleh memerlukan scope ScriptApp.
+    // Status trigger disimpan setelah konfigurasi berhasil; trigger yang
+    // tertinggal ketika dinonaktifkan tetap aman karena runner memeriksa config.
+    var triggerInstalled = config.enabled &&
+      props.getProperty('BID_BACKUP_TRIGGER_INSTALLED_V1') === 'true';
+
     return successResponse({
       enabled: config.enabled,
       frequency: config.frequency,
       retention: config.retention,
       timezone: Session.getScriptTimeZone(),
-      triggerInstalled: triggers.length > 0,
+      triggerInstalled: triggerInstalled,
       lastRun: history.length ? this._publicBackupHistoryItem(history[0]) : null
     });
+  },
+
+  _backupTriggerPermissionError: function(error) {
+    var message = String(error && error.message ? error.message : error);
+    if (/script\.scriptapp|ScriptApp|getProjectTriggers|authorization|izin|permission/i.test(message)) {
+      return new Error(
+        'Otorisasi trigger backup belum tersedia. Di editor Google Apps Script, buka Project Settings dan tampilkan appsscript.json. ' +
+        'Jika manifest sudah memiliki array oauthScopes, tambahkan "https://www.googleapis.com/auth/script.scriptapp" tanpa menghapus scope lama. ' +
+        'Jika oauthScopes belum ada, jangan membuat daftar scope baru hanya dengan satu scope; jalankan fungsi authorizeBackupAutomationAccess dari editor dan setujui permintaan izin. ' +
+        'Setelah itu deploy ulang Web App dengan versi baru. ' +
+        'Detail: ' + message
+      );
+    }
+    return error instanceof Error ? error : new Error(message);
   },
 
   configureBackupAutomation: function(payload, user) {
@@ -1018,25 +1037,49 @@ var SettingsHandler = {
 
     var props = this._backupProperties();
     var previousValue = props.getProperty('BID_BACKUP_AUTOMATION_V1');
-    var oldTriggers = ScriptApp.getProjectTriggers().filter(function(trigger) {
-      return trigger.getHandlerFunction() === 'runScheduledBackup';
-    });
+    var previousTriggerValue = props.getProperty('BID_BACKUP_TRIGGER_INSTALLED_V1');
     var next = { enabled: payload.enabled, frequency: frequency, retention: retention };
+    var oldTriggers = [];
     var newTrigger = null;
 
     if (next.enabled) {
-      var builder = ScriptApp.newTrigger('runScheduledBackup').timeBased();
-      builder = next.frequency === 'weekly' ? builder.everyWeeks(1) : builder.everyDays(1);
-      newTrigger = builder.atHour(2).inTimezone(Session.getScriptTimeZone()).create();
+      // Membuat jadwal memang membutuhkan scope script.scriptapp. Tangkap
+      // error ini agar UI menampilkan langkah otorisasi yang spesifik.
+      try {
+        oldTriggers = ScriptApp.getProjectTriggers().filter(function(trigger) {
+          return trigger.getHandlerFunction() === 'runScheduledBackup';
+        });
+        var builder = ScriptApp.newTrigger('runScheduledBackup').timeBased();
+        builder = next.frequency === 'weekly' ? builder.everyWeeks(1) : builder.everyDays(1);
+        newTrigger = builder.atHour(2).inTimezone(Session.getScriptTimeZone()).create();
+      } catch (triggerError) {
+        throw this._backupTriggerPermissionError(triggerError);
+      }
     }
 
     try {
       props.setProperty('BID_BACKUP_AUTOMATION_V1', JSON.stringify(next));
-      oldTriggers.forEach(function(trigger) {
-        if (!newTrigger || trigger.getUniqueId() !== newTrigger.getUniqueId()) {
-          ScriptApp.deleteTrigger(trigger);
+      props.setProperty('BID_BACKUP_TRIGGER_INSTALLED_V1', next.enabled ? 'true' : 'false');
+
+      if (next.enabled) {
+        oldTriggers.forEach(function(trigger) {
+          if (!newTrigger || trigger.getUniqueId() !== newTrigger.getUniqueId()) {
+            ScriptApp.deleteTrigger(trigger);
+          }
+        });
+      } else {
+        // Status config OFF sudah cukup untuk memastikan runner tidak membuat
+        // snapshot. Penghapusan trigger lama bersifat best-effort agar proses
+        // menonaktifkan backup tidak gagal hanya karena scope belum tersedia.
+        try {
+          ScriptApp.getProjectTriggers().filter(function(trigger) {
+            return trigger.getHandlerFunction() === 'runScheduledBackup';
+          }).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+        } catch (cleanupError) {
+          Logger.log('Backup dinonaktifkan; penghapusan trigger lama tertunda: ' +
+            String(cleanupError && cleanupError.message ? cleanupError.message : cleanupError));
         }
-      });
+      }
     } catch (error) {
       if (newTrigger) {
         try { ScriptApp.deleteTrigger(newTrigger); } catch (ignore) {}
@@ -1044,8 +1087,10 @@ var SettingsHandler = {
       try {
         if (previousValue) props.setProperty('BID_BACKUP_AUTOMATION_V1', previousValue);
         else props.deleteProperty('BID_BACKUP_AUTOMATION_V1');
+        if (previousTriggerValue !== null) props.setProperty('BID_BACKUP_TRIGGER_INSTALLED_V1', previousTriggerValue);
+        else props.deleteProperty('BID_BACKUP_TRIGGER_INSTALLED_V1');
       } catch (rollbackError) {}
-      throw error;
+      throw this._backupTriggerPermissionError(error);
     }
 
     AuditService.log(user.id, 'UPDATE', 'backup', null, null, null,
@@ -1548,6 +1593,16 @@ var SettingsHandler = {
 };
 
 /** Dipanggil oleh time-driven trigger Apps Script; status aktif dicek ulang di backend. */
+/**
+ * Jalankan sekali dari editor Apps Script setelah menambahkan scope
+ * https://www.googleapis.com/auth/script.scriptapp pada appsscript.json.
+ * Fungsi ini hanya membaca trigger dan tidak membuat atau menghapus jadwal.
+ */
+function authorizeBackupAutomationAccess() {
+  ScriptApp.getProjectTriggers();
+  return 'Izin pengelolaan trigger Apps Script sudah tersedia.';
+}
+
 function runScheduledBackup() {
   return SettingsHandler.runScheduledBackup();
 }
