@@ -26,10 +26,19 @@ export const useSchoolYearStore = defineStore('schoolYear', () => {
     grades.value.map(g => ({ value: g.id, label: g.name }))
   )
 
+  // Berbagi satu request in-flight agar beberapa halaman tidak melakukan fetch
+  // tahun pelajaran bersamaan atau kehilangan hasil/error dari pemuatan yang sama.
+  let schoolYearFetchPromise: Promise<void> | null = null
+
   async function fetch(): Promise<void> {
     if (initialized.value) return
+    if (schoolYearFetchPromise) {
+      await schoolYearFetchPromise
+      return
+    }
+
     isLoading.value = true
-    try {
+    const request = (async () => {
       // Jalankan keduanya paralel, tapi tangani masing-masing secara independen
       // agar kegagalan fetch grades tidak memblokir schoolYears (dan sebaliknya).
       const results = await Promise.allSettled([
@@ -49,9 +58,13 @@ export const useSchoolYearStore = defineStore('schoolYear', () => {
       if (results[0].status === 'fulfilled') {
         initialized.value = true
       }
-    } catch {
-      // Tidak perlu catch — Promise.allSettled tidak pernah reject
+    })()
+
+    schoolYearFetchPromise = request
+    try {
+      await request
     } finally {
+      if (schoolYearFetchPromise === request) schoolYearFetchPromise = null
       isLoading.value = false
     }
   }
@@ -70,6 +83,8 @@ export const useSchoolYearStore = defineStore('schoolYear', () => {
   }
 
   async function refresh(): Promise<void> {
+    // Tunggu pemuatan yang berjalan sebelum meminta data segar.
+    if (schoolYearFetchPromise) await schoolYearFetchPromise
     initialized.value = false
     await fetch()
   }
