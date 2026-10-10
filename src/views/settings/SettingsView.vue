@@ -1637,7 +1637,7 @@ function validateBackupResponse(value: unknown): {
   }
 
   const counts: Record<string, number> = {}
-  const expectedSheets = Object.keys(rawCounts!)
+  const expectedSheets = Object.keys(rawMeta.counts)
   for (const [sheetName, count] of Object.entries(rawMeta.counts)) {
     if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
       throw new Error(`Jumlah record pada sheet "${sheetName}" tidak valid. Backup dibatalkan.`)
