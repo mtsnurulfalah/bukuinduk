@@ -103,7 +103,7 @@
       <div v-if="isLoading" class="space-y-2">
         <BaseSkeleton v-for="i in 5" :key="i" height="h-10" />
       </div>
-      <BaseEmpty v-else-if="!classStats.length" title="Tidak ada data" type="data" />
+      <BaseEmpty v-else-if="!classStatsForDisplay.length" title="Tidak ada data" description="Tidak ada kelas yang sesuai dengan filter yang dipilih." type="data" />
       <div v-else class="max-w-full -mx-5 overflow-x-auto px-5 overscroll-x-contain sm:mx-0 sm:px-0">
         <table class="w-full min-w-[620px] text-sm" id="print-table">
           <thead>
@@ -167,6 +167,7 @@
         <div v-if="isLoading" class="space-y-2 mt-2">
           <BaseSkeleton v-for="i in 5" :key="i" height="h-8" />
         </div>
+        <BaseEmpty v-else-if="!classStatsForDisplay.length" title="Tidak ada distribusi" description="Belum ada kelas dengan data sesuai filter." type="data" />
         <div v-else class="space-y-2.5 mt-3">
           <div v-for="cls in classStatsForDisplay.slice(0, 8)" :key="cls.classroomId" class="flex min-w-0 items-center gap-2 text-xs">
             <span class="w-12 shrink-0 font-medium text-slate-600 truncate">{{ cls.classroomName }}</span>
