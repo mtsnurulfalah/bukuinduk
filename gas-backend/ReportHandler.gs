@@ -896,7 +896,7 @@ var SettingsHandler = {
     if (!payload || !Array.isArray(payload.selectedSheets) || !payload.selectedSheets.length) {
       throw new Error('Pilih minimal satu sheet untuk dipulihkan.');
     }
-    var requested = {};
+    var requested = Object.create(null);
     payload.selectedSheets.forEach(function(name) {
       if (typeof name !== 'string' || allowedTargets.indexOf(name) === -1) {
         throw new Error('Sheet "' + String(name) + '" tidak diizinkan untuk restore selektif.');
@@ -947,7 +947,7 @@ var SettingsHandler = {
       }
 
       var sourceRecords = context.backup[name];
-      var seenSourceIds = {};
+      var seenSourceIds = Object.create(null);
       var sourceRows = sourceRecords.map(function(record, rowIndex) {
         var keys = Object.keys(record);
         if (
@@ -994,8 +994,8 @@ var SettingsHandler = {
         ? sheet.getRange(2, 1, existingCount, headers.length).getFormulas()
         : [];
       var idColumn = headers.indexOf('id');
-      var currentIdToRow = {};
-      var duplicateCurrentIds = {};
+      var currentIdToRow = Object.create(null);
+      var duplicateCurrentIds = Object.create(null);
 
       currentValues.forEach(function(row, index) {
         var id = row[idColumn] === null || row[idColumn] === undefined ? '' : String(row[idColumn]).trim();
