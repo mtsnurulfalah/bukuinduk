@@ -50,6 +50,33 @@ export interface BackupRestoreResult {
   totalRecords: number
 }
 
+export type BackupHistorySource = 'manual' | 'scheduled'
+export type BackupHistoryStatus = 'success' | 'failed'
+
+export interface BackupHistoryItem {
+  id: string
+  fileName: string
+  generatedAt: string
+  source: BackupHistorySource
+  sheetCount: number
+  recordCount: number
+  sizeBytes: number
+  status: BackupHistoryStatus
+  error: string
+}
+
+export interface BackupAutomationOptions {
+  enabled: boolean
+  frequency: 'daily' | 'weekly'
+  retention: 5 | 10 | 20
+}
+
+export interface BackupAutomationState extends BackupAutomationOptions {
+  timezone: string
+  triggerInstalled: boolean
+  lastRun: BackupHistoryItem | null
+}
+
 export const settingsService = {
   async get(): Promise<AppSettings> {
     return gasRequest<AppSettings>('settings.get', undefined, { retry404: 2 })
@@ -64,6 +91,27 @@ export const settingsService = {
     return gasRequest<Record<string, unknown[]>>('settings.exportBackup', undefined, {
       timeout: 120_000,
     })
+  },
+
+  /** Buat snapshot JSON privat di Google Drive dan simpan metadata riwayat. */
+  async createBackupSnapshot(): Promise<BackupHistoryItem> {
+    return gasRequest<BackupHistoryItem>('settings.createBackupSnapshot', undefined, { timeout: 120_000 })
+  },
+
+  async listBackupHistory(): Promise<BackupHistoryItem[]> {
+    return gasRequest<BackupHistoryItem[]>('settings.listBackupHistory', undefined, { timeout: 120_000 })
+  },
+
+  async getBackupAutomation(): Promise<BackupAutomationState> {
+    return gasRequest<BackupAutomationState>('settings.getBackupAutomation', undefined, { timeout: 30_000 })
+  },
+
+  async configureBackupAutomation(options: BackupAutomationOptions): Promise<BackupAutomationState> {
+    return gasRequest<BackupAutomationState>('settings.configureBackupAutomation', options, { timeout: 60_000 })
+  },
+
+  async readBackupSnapshot(historyId: string): Promise<Record<string, unknown>> {
+    return gasRequest<Record<string, unknown>>('settings.readBackupSnapshot', { historyId }, { timeout: 120_000 })
   },
 
   /** Hitung pratinjau restore di backend tanpa menulis ke Spreadsheet. */
