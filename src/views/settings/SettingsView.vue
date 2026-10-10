@@ -747,10 +747,28 @@ watch(
 )
 
 watch(
-  () => [syForm.startDate, syForm.endDate] as const,
+  () => syForm.startDate,
   () => {
     syErrors.startDate = ''
+    // Tanggal mulai mengubah validitas rentang tanggal selesai.
     syErrors.endDate = ''
+    sySubmitError.value = ''
+  },
+  { flush: 'sync' },
+)
+
+watch(
+  () => syForm.endDate,
+  () => {
+    syErrors.endDate = ''
+    sySubmitError.value = ''
+  },
+  { flush: 'sync' },
+)
+
+watch(
+  () => syForm.isActive,
+  () => {
     sySubmitError.value = ''
   },
   { flush: 'sync' },
