@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="w-full min-w-0 space-y-6 pb-6">
     <PageHeader title="Pengaturan" subtitle="Konfigurasi profil sekolah dan sistem" />
 
     <!-- Tab navigation -->
