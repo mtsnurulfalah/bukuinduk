@@ -16,4 +16,18 @@ export const settingsService = {
       timeout: 120_000,
     })
   },
+
+  /** Restore backup JSON setelah validasi ulang di backend. */
+  async restoreBackup(backup: Record<string, unknown>): Promise<{
+    restoredAt: string
+    restoredSheets: string[]
+    preservedSheets: string[]
+    counts: Record<string, number>
+    totalRecords: number
+  }> {
+    return gasRequest('settings.restoreBackup', {
+      backup,
+      confirmation: 'PULIHKAN',
+    }, { timeout: 120_000 })
+  },
 }
