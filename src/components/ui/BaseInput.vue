@@ -22,6 +22,8 @@
         :disabled="disabled"
         :readonly="readonly"
         :required="required"
+        :aria-invalid="hasError ? 'true' : undefined"
+        :aria-describedby="hasError ? errorId : undefined"
         :class="[
           'block w-full rounded-lg border text-sm text-slate-800 placeholder-slate-400 transition-colors',
           'focus:outline-none focus:ring-2 focus:ring-offset-0',
@@ -54,7 +56,7 @@
       </div>
     </div>
 
-    <p v-if="hasError" class="mt-1 text-xs text-red-500">{{ errorMessage }}</p>
+    <p v-if="hasError" :id="errorId" class="mt-1 text-xs text-red-500">{{ errorMessage }}</p>
     <p v-else-if="hint" class="mt-1 text-xs text-slate-500">{{ hint }}</p>
   </div>
 </template>
@@ -125,6 +127,7 @@ function handleInput(event: Event) {
 }
 
 const inputId = computed(() => props.id ?? `input-${uid()}`)
+const errorId = computed(() => `${inputId.value}-error`)
 const hasError = computed(() => Boolean(props.errorMessage))
 </script>
 
