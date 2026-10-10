@@ -70,6 +70,15 @@ function setupSpreadsheet() {
                 'description','oldValues','newValues','createdAt'],
     },
     {
+      name: CONFIG.SHEETS.VERIFICATIONS,
+      headers: ['id','studentId','section','label','status','verifiedBy','verifiedAt','notes'],
+    },
+    {
+      name: CONFIG.SHEETS.DOCUMENTS,
+      headers: ['id','studentId','documentType','documentName','documentNumber','fileUrl',
+                'status','notes','createdAt','updatedAt','createdBy'],
+    },
+    {
       name: CONFIG.SHEETS.SUBJECTS,
       headers: ['id','schoolYearId','code','name','shortName','groupName','isActive','sortOrder',
                 'createdAt','updatedAt','createdBy'],
