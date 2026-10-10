@@ -1013,9 +1013,10 @@ var SettingsHandler = {
     var message = String(error && error.message ? error.message : error);
     if (/script\.scriptapp|ScriptApp|getProjectTriggers|authorization|izin|permission/i.test(message)) {
       return new Error(
-        'Otorisasi trigger backup belum tersedia. Di editor Google Apps Script, buka Project Settings, tampilkan appsscript.json, lalu tambahkan scope ' +
-        '"https://www.googleapis.com/auth/script.scriptapp" ke array oauthScopes tanpa menghapus scope yang sudah ada. ' +
-        'Simpan, jalankan fungsi authorizeBackupAutomationAccess dari editor dan setujui izin, kemudian deploy ulang Web App dengan versi baru. ' +
+        'Otorisasi trigger backup belum tersedia. Di editor Google Apps Script, buka Project Settings dan tampilkan appsscript.json. ' +
+        'Jika manifest sudah memiliki array oauthScopes, tambahkan "https://www.googleapis.com/auth/script.scriptapp" tanpa menghapus scope lama. ' +
+        'Jika oauthScopes belum ada, jangan membuat daftar scope baru hanya dengan satu scope; jalankan fungsi authorizeBackupAutomationAccess dari editor dan setujui permintaan izin. ' +
+        'Setelah itu deploy ulang Web App dengan versi baru. ' +
         'Detail: ' + message
       );
     }
