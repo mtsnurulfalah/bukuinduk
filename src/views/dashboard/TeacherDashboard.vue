@@ -171,7 +171,7 @@ const error      = ref('')
 let latestRequestId = 0
 
 const firstName = computed(() =>
-  authStore.user?.fullName?.split(' ')[0] ?? 'Guru'
+  authStore.user?.fullName?.trim().split(/\\s+/)[0] || 'Guru'
 )
 
 // BUG FIX: Expose hasTeacherId agar template bisa membedakan
