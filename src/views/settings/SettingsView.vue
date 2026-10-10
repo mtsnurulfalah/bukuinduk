@@ -3,13 +3,12 @@
     <PageHeader title="Pengaturan" subtitle="Konfigurasi profil sekolah dan sistem" />
 
     <!-- Tab navigation -->
-    <div class="flex max-w-full gap-0 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="Bagian pengaturan">
+    <div class="flex max-w-full gap-0 overflow-x-auto border-b border-slate-200" role="group" aria-label="Bagian pengaturan">
       <button
         v-for="tab in tabs"
         :key="tab.key"
         type="button"
-        role="tab"
-        :aria-selected="activeTab === tab.key"
+        :aria-pressed="activeTab === tab.key"
         :class="[
           'min-h-11 shrink-0 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-inset',
           activeTab === tab.key
@@ -397,6 +396,7 @@ async function saveSY() {
     // Sinkronkan status aktif antar-tahun; updateSchoolYear juga dapat menambahkan
     // item baru dan menonaktifkan tahun lama secara reaktif.
     schoolYearStore.updateSchoolYear(created)
+    schoolYearStore.schoolYears.sort((a, b) => b.name.localeCompare(a.name))
     schoolYearLoadError.value = ''
     toast.success('Tahun pelajaran berhasil ditambahkan.')
     showAddSY.value = false
