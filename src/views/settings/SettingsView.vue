@@ -534,6 +534,7 @@
       </BaseCard>
 
       <BaseCard
+        v-if="canManageSettings"
         title="Pemeriksa File Backup JSON"
         subtitle="Buka backup dari komputer untuk memeriksa kelengkapan dan melihat ringkasan data tanpa mengubah data aplikasi."
         class="min-w-0"
@@ -756,6 +757,13 @@
         </div>
       </BaseCard>
 
+      <BaseAlert
+        v-else
+        type="warning"
+        title="Akses pemeriksaan backup terbatas"
+      >
+        File backup dapat berisi informasi pribadi siswa, orang tua, dan guru. Hanya administrator dengan izin pengelolaan pengaturan yang dapat menggunakan viewer dan validator ini.
+      </BaseAlert>
     </template>
   </div>
 </template>
