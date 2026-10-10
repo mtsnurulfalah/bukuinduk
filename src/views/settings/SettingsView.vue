@@ -487,9 +487,9 @@ function clearSchoolFormErrors() {
 
 function isValidSchoolWebsite(value: string): boolean {
   if (!value) return true
-  if (/\\s/.test(value)) return false
+  if (/\s/.test(value)) return false
 
-  const candidate = /^https?:\\/\\//i.test(value) ? value : `https://${value}`
+  const candidate = /^https?:\/\//i.test(value) ? value : `https://${value}`
   try {
     const url = new URL(candidate)
     return (
@@ -510,7 +510,7 @@ function validateSchoolForm(): boolean {
   }
 
   const npsn = schoolForm.schoolNpsn.trim()
-  if (npsn && !/^\\d{8}$/.test(npsn)) {
+  if (npsn && !/^\d{8}$/.test(npsn)) {
     schoolFormErrors.schoolNpsn = 'NPSN harus terdiri dari 8 digit angka.'
   }
 
