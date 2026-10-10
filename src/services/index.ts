@@ -6,5 +6,14 @@ export { teachersService } from './teachers.service'
 export { usersService } from './users.service'
 export { reportsService } from './reports.service'
 export { settingsService } from './settings.service'
+export type {
+  BackupRestoreMode,
+  BackupConflictStrategy,
+  BackupRestoreRequestOptions,
+  BackupRestoreSheetPreview,
+  BackupRestorePreview,
+  BackupRestoreSheetResult,
+  BackupRestoreResult,
+} from './settings.service'
 export { subjectsService } from './subjects.service'
 export { gradesService } from './grades.service'

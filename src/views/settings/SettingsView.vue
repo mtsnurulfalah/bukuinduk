@@ -766,26 +766,27 @@
       </BaseAlert>
       <BaseCard
         v-if="canManageSettings"
-        title="Restore Aman"
-        subtitle="Pulihkan data dari file backup tervalidasi dengan perlindungan akun dan audit."
+        title="Restore Selektif dan Gabungkan Data"
+        subtitle="Pilih sheet tertentu, tinjau dampaknya dari server, lalu gabungkan atau ganti data dengan konfirmasi eksplisit."
         class="min-w-0"
       >
-        <div class="min-w-0 space-y-4">
-          <BaseAlert type="warning" title="Pemulihan akan mengganti data saat ini">
-            Restore mengganti seluruh record pada {{ RESTORE_TARGET_SHEETS.length }} sheet data aplikasi yang tercantum pada pratinjau.
-            Sheet <strong>users</strong> (akun dan autentikasi) serta <strong>audit_logs</strong> (jejak audit) tidak ditimpa.
-            Buat dan simpan backup terbaru sebelum melanjutkan.
+        <div class="min-w-0 space-y-5">
+          <BaseAlert type="warning" title="Periksa cakupan dan relasi data sebelum restore">
+            Mode gabungkan menambahkan ID baru dan menangani ID yang sudah ada sesuai strategi konflik.
+            Mode ganti menghapus record lama hanya pada sheet yang dipilih, lalu mengisinya dari backup.
+            Sheet <strong>users</strong> dan <strong>audit_logs</strong> selalu dilindungi. Memulihkan hanya sebagian sheet yang saling berelasi dapat membuat relasi data tidak lengkap.
           </BaseAlert>
 
-          <BaseAlert v-if="restoreError" type="error" title="Pemulihan belum berhasil" dismissible @dismiss="restoreError = ''">
+          <BaseAlert v-if="restoreError" type="error" title="Restore belum berhasil" dismissible @dismiss="restoreError = ''">
             <p class="break-words">{{ restoreError }}</p>
           </BaseAlert>
 
-          <BaseAlert v-if="restoreResult" type="success" title="Pemulihan berhasil" aria-live="polite">
+          <BaseAlert v-if="restoreResult" type="success" title="Restore berhasil" aria-live="polite">
             <p>
-              {{ restoreResult.restoredSheets.length }} sheet berhasil dipulihkan,
-              {{ restoreResult.totalRecords.toLocaleString('id-ID') }} record diproses.
-              Akun pengguna dan log audit tetap dipertahankan.
+              {{ restoreResult.restoredSheets.length }} sheet berhasil diproses;
+              {{ restoreResult.totalRecords.toLocaleString('id-ID') }}
+              {{ restoreResult.mode === 'merge' ? 'record ditambahkan atau diperbarui' : 'record diterapkan dari backup' }}.
+              Akun pengguna dan log audit lama tetap dipertahankan.
             </p>
             <p class="mt-1 text-xs text-emerald-800">Waktu selesai: {{ formatDateTime(restoreResult.restoredAt) }}</p>
             <BaseButton type="button" class="mt-3 w-full sm:w-auto" size="sm" @click="reloadAfterRestore">
@@ -793,76 +794,250 @@
             </BaseButton>
           </BaseAlert>
 
-          <div v-if="canPrepareRestore" class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Pratinjau dampak pemulihan">
-            <div class="min-w-0 rounded-lg border border-slate-200 p-3">
-              <p class="text-xs text-slate-500">Sheet yang diganti</p>
-              <p class="mt-1 text-lg font-semibold tabular-nums text-slate-800">{{ RESTORE_TARGET_SHEETS.length }}</p>
-            </div>
-            <div class="min-w-0 rounded-lg border border-slate-200 p-3">
-              <p class="text-xs text-slate-500">Record dari backup</p>
-              <p class="mt-1 text-lg font-semibold tabular-nums text-slate-800">{{ restoreTargetRecordCount.toLocaleString('id-ID') }}</p>
-            </div>
-            <div class="min-w-0 rounded-lg border border-slate-200 p-3">
-              <p class="text-xs text-slate-500">Sheet dilindungi</p>
-              <p class="mt-1 text-lg font-semibold tabular-nums text-slate-800">2</p>
-              <p class="mt-1 text-xs text-slate-500">users · audit_logs</p>
-            </div>
-          </div>
-
-          <BaseAlert v-else type="info" title="Backup belum siap dipulihkan">
-            Pilih file JSON yang valid dan lengkap pada bagian Pemeriksa File Backup JSON di atas. Untuk menjaga kestabilan request GAS,
-            ukuran file yang dapat dipulihkan dibatasi 10 MB. File besar tetap dapat diperiksa, tetapi tidak dapat dikirim melalui alur restore ini.
+          <BaseAlert v-if="!canPrepareRestore" type="info" title="Backup belum siap dipulihkan">
+            Pilih file JSON yang valid dan lengkap pada bagian Pemeriksa File Backup JSON di atas.
+            Ukuran file restore maksimum 10 MB. File besar tetap dapat diperiksa, tetapi tidak dapat dikirim melalui alur restore.
           </BaseAlert>
 
-          <div class="min-w-0 space-y-3 border-t border-slate-200 pt-4">
-            <div>
-              <label for="backup-restore-confirmation" class="mb-1.5 block text-sm font-medium text-slate-700">
-                Konfirmasi eksplisit
-              </label>
-              <p class="mb-2 text-sm leading-relaxed text-slate-600">
-                Ketik <strong>PULIHKAN</strong> untuk mengonfirmasi bahwa data pada sheet target akan diganti dengan isi backup.
+          <template v-if="canPrepareRestore">
+            <section class="min-w-0 space-y-3" aria-labelledby="restore-sheets-heading">
+              <div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0">
+                  <h3 id="restore-sheets-heading" class="text-sm font-semibold text-slate-800">1. Pilih sheet</h3>
+                  <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                    {{ selectedRestoreSheets.length }} dari {{ RESTORE_TARGET_SHEETS.length }} sheet dipilih.
+                    Users dan audit logs tidak dapat dipilih untuk restore.
+                  </p>
+                </div>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                  <BaseButton type="button" variant="outline" size="sm" :disabled="isPreparingRestorePreview || isRestoringBackup" @click="selectAllRestoreSheets">
+                    Pilih Semua
+                  </BaseButton>
+                  <BaseButton type="button" variant="outline" size="sm" :disabled="!selectedRestoreSheets.length || isPreparingRestorePreview || isRestoringBackup" @click="clearRestoreSheetSelection">
+                    Hapus Pilihan
+                  </BaseButton>
+                </div>
+              </div>
+
+              <div class="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                <label
+                  v-for="sheetName in RESTORE_TARGET_SHEETS"
+                  :key="sheetName"
+                  class="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors"
+                  :class="selectedRestoreSheets.includes(sheetName) ? 'border-primary-300 bg-primary-50/60' : 'border-slate-200 bg-white hover:bg-slate-50'"
+                >
+                  <input
+                    v-model="selectedRestoreSheets"
+                    type="checkbox"
+                    :value="sheetName"
+                    :disabled="isPreparingRestorePreview || isRestoringBackup"
+                    class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span class="min-w-0 flex-1">
+                    <span class="block break-words text-sm font-medium text-slate-800">{{ RESTORE_SHEET_LABELS[sheetName] || sheetName }}</span>
+                    <span class="mt-1 block break-all text-xs text-slate-500">{{ sheetName }}</span>
+                    <span class="mt-1 block text-xs tabular-nums text-slate-600">
+                      {{ (backupViewerResult?.counts[sheetName] ?? 0).toLocaleString('id-ID') }} record di backup
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <p v-if="!selectedRestoreSheets.length" class="text-sm text-amber-700" role="status">
+                Pilih minimal satu sheet sebelum menghitung pratinjau.
               </p>
-              <input
-                id="backup-restore-confirmation"
-                v-model="restoreConfirmation"
-                type="text"
-                autocomplete="off"
-                autocapitalize="characters"
-                spellcheck="false"
-                maxlength="20"
-                :disabled="isRestoringBackup || !canPrepareRestore"
-                placeholder="Ketik PULIHKAN"
-                class="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50"
-              />
-            </div>
+            </section>
 
-            <label class="flex min-w-0 items-start gap-3 rounded-lg border border-slate-200 p-3">
-              <input
-                v-model="restoreAcknowledged"
-                type="checkbox"
-                :disabled="isRestoringBackup || !canPrepareRestore"
-                class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="min-w-0 text-sm leading-relaxed text-slate-700">
-                Saya sudah memastikan file backup benar, menyimpan salinan backup terbaru, dan memahami bahwa record pada sheet target akan diganti.
-              </span>
-            </label>
+            <section class="min-w-0 space-y-3 border-t border-slate-200 pt-4" aria-labelledby="restore-mode-heading">
+              <h3 id="restore-mode-heading" class="text-sm font-semibold text-slate-800">2. Tentukan cara pemulihan</h3>
+              <div class="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
+                <label class="flex min-w-0 cursor-pointer items-start gap-3 rounded-xl border p-4" :class="restoreMode === 'merge' ? 'border-primary-300 bg-primary-50/60' : 'border-slate-200'">
+                  <input v-model="restoreMode" type="radio" name="restore-mode" value="merge" :disabled="isPreparingRestorePreview || isRestoringBackup" class="mt-0.5 h-4 w-4 shrink-0 border-slate-300 text-primary-600 focus:ring-primary-500" />
+                  <span class="min-w-0">
+                    <span class="block text-sm font-semibold text-slate-800">Gabungkan berdasarkan ID</span>
+                    <span class="mt-1 block text-sm leading-relaxed text-slate-600">
+                      Record baru ditambahkan. ID yang sudah ada dipertahankan atau diperbarui sesuai strategi konflik. Record lain tidak dihapus.
+                    </span>
+                  </span>
+                </label>
+                <label class="flex min-w-0 cursor-pointer items-start gap-3 rounded-xl border p-4" :class="restoreMode === 'replace' ? 'border-amber-300 bg-amber-50/70' : 'border-slate-200'">
+                  <input v-model="restoreMode" type="radio" name="restore-mode" value="replace" :disabled="isPreparingRestorePreview || isRestoringBackup" class="mt-0.5 h-4 w-4 shrink-0 border-slate-300 text-primary-600 focus:ring-primary-500" />
+                  <span class="min-w-0">
+                    <span class="block text-sm font-semibold text-slate-800">Ganti isi sheet terpilih</span>
+                    <span class="mt-1 block text-sm leading-relaxed text-slate-600">
+                      Semua record saat ini pada sheet terpilih akan diganti dengan isi backup, termasuk record yang tidak ada dalam file.
+                    </span>
+                  </span>
+                </label>
+              </div>
 
-            <BaseButton
-              type="button"
-              class="w-full sm:w-auto"
-              :disabled="!canExecuteRestore"
-              :loading="isRestoringBackup"
-              loading-text="Memvalidasi dan memulihkan..."
-              @click="handleRestoreBackup"
-            >
-              Pulihkan Data dari Backup
-            </BaseButton>
-            <p class="text-xs leading-relaxed text-slate-500" role="note">
-              Pemulihan dijalankan di backend GAS di bawah izin settings:manage. Backend memvalidasi ulang manifest, skema, record, serta ID sebelum menulis.
-              Jika penulisan gagal, backend mencoba mengembalikan snapshot sheet yang sudah tersentuh.
-            </p>
-          </div>
+              <div v-if="restoreMode === 'merge'" class="min-w-0">
+                <label for="restore-conflict-strategy" class="mb-1.5 block text-sm font-medium text-slate-700">Jika ID sudah ada</label>
+                <select
+                  id="restore-conflict-strategy"
+                  v-model="restoreConflictStrategy"
+                  :disabled="isPreparingRestorePreview || isRestoringBackup"
+                  class="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 sm:max-w-xl"
+                >
+                  <option value="keepExisting">Pertahankan data saat ini (paling aman)</option>
+                  <option value="overwriteExisting">Timpa record yang ID-nya sama dengan data backup</option>
+                </select>
+                <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                  Pilihan timpa akan mengganti semua kolom record bentrok yang dipilih, bukan menggabungkan tiap kolom satu per satu.
+                </p>
+              </div>
+            </section>
+
+            <section class="min-w-0 space-y-3 border-t border-slate-200 pt-4" aria-labelledby="restore-preview-heading">
+              <h3 id="restore-preview-heading" class="text-sm font-semibold text-slate-800">3. Hitung dampak di server</h3>
+              <p class="text-sm leading-relaxed text-slate-600">
+                Backend membaca keadaan Spreadsheet saat ini dan menghitung record baru, konflik, record yang akan ditimpa, atau record lama yang akan dihapus.
+                Perhitungan ini tidak menulis data.
+              </p>
+              <BaseButton
+                type="button"
+                class="w-full sm:w-auto"
+                :disabled="!canPreviewRestore"
+                :loading="isPreparingRestorePreview"
+                loading-text="Menghitung pratinjau..."
+                @click="handlePreviewRestore"
+              >
+                <ShieldCheck class="h-4 w-4" aria-hidden="true" />
+                Hitung Pratinjau
+              </BaseButton>
+
+              <template v-if="restorePreview">
+                <BaseAlert :type="restorePreview.mode === 'replace' ? 'warning' : 'info'" title="Pratinjau dihitung oleh backend">
+                  <p v-if="restorePreview.mode === 'merge'">
+                    {{ restorePreview.totals.added.toLocaleString('id-ID') }} record baru akan ditambahkan,
+                    {{ restorePreview.totals.updated.toLocaleString('id-ID') }} diperbarui,
+                    dan {{ restorePreview.totals.skipped.toLocaleString('id-ID') }} dilewati karena ID sudah ada.
+                    Tidak ada record lama yang dihapus.
+                  </p>
+                  <p v-else>
+                    {{ restorePreview.totals.currentRecords.toLocaleString('id-ID') }} record lama akan dihapus dari sheet terpilih lalu diganti dengan
+                    {{ restorePreview.totals.backupRecords.toLocaleString('id-ID') }} record dari backup.
+                  </p>
+                  <p class="mt-1 text-xs">Pratinjau dibuat: {{ formatDateTime(restorePreview.generatedAt) }}. Backend akan memeriksa ulang perubahan data sebelum menulis.</p>
+                </BaseAlert>
+
+                <div class="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Ringkasan pratinjau restore">
+                  <div class="min-w-0 rounded-lg border border-slate-200 p-3">
+                    <p class="text-xs text-slate-500">Sheet terpilih</p>
+                    <p class="mt-1 text-lg font-semibold tabular-nums text-slate-800">{{ restorePreview.sheets.length }}</p>
+                  </div>
+                  <div class="min-w-0 rounded-lg border border-slate-200 p-3">
+                    <p class="text-xs text-slate-500">{{ restorePreview.mode === 'merge' ? 'Record baru' : 'Record backup' }}</p>
+                    <p class="mt-1 text-lg font-semibold tabular-nums text-slate-800">{{ (restorePreview.mode === 'merge' ? restorePreview.totals.added : restorePreview.totals.backupRecords).toLocaleString('id-ID') }}</p>
+                  </div>
+                  <div class="min-w-0 rounded-lg border border-slate-200 p-3">
+                    <p class="text-xs text-slate-500">{{ restorePreview.mode === 'merge' ? 'Diperbarui' : 'Record lama dihapus' }}</p>
+                    <p class="mt-1 text-lg font-semibold tabular-nums text-slate-800">{{ (restorePreview.mode === 'merge' ? restorePreview.totals.updated : restorePreview.totals.deleted).toLocaleString('id-ID') }}</p>
+                  </div>
+                  <div class="min-w-0 rounded-lg border border-slate-200 p-3">
+                    <p class="text-xs text-slate-500">{{ restorePreview.mode === 'merge' ? 'Dilewati' : 'Record akhir' }}</p>
+                    <p class="mt-1 text-lg font-semibold tabular-nums text-slate-800">{{ (restorePreview.mode === 'merge' ? restorePreview.totals.skipped : restorePreview.totals.finalRecords).toLocaleString('id-ID') }}</p>
+                  </div>
+                </div>
+
+                <div class="min-w-0 space-y-3">
+                  <h4 class="text-sm font-semibold text-slate-800">Rincian per sheet</h4>
+                  <article v-for="sheet in restorePreview.sheets" :key="sheet.sheetName" class="min-w-0 rounded-lg border border-slate-200 p-3 sm:p-4">
+                    <div class="mb-3 flex min-w-0 flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <p class="break-words text-sm font-semibold text-slate-800">{{ RESTORE_SHEET_LABELS[sheet.sheetName] || sheet.sheetName }}</p>
+                      <p class="break-all text-xs text-slate-500">{{ sheet.sheetName }}</p>
+                    </div>
+                    <div v-if="restorePreview.mode === 'merge'" class="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div class="min-w-0">
+                        <p class="text-xs text-slate-500">Baru</p>
+                        <p class="mt-1 text-sm font-semibold tabular-nums text-emerald-700">{{ sheet.added.toLocaleString('id-ID') }}</p>
+                      </div>
+                      <div class="min-w-0">
+                        <p class="text-xs text-slate-500">Ditimpa</p>
+                        <p class="mt-1 text-sm font-semibold tabular-nums text-amber-700">{{ sheet.updated.toLocaleString('id-ID') }}</p>
+                      </div>
+                      <div class="min-w-0">
+                        <p class="text-xs text-slate-500">Dilewati</p>
+                        <p class="mt-1 text-sm font-semibold tabular-nums text-slate-700">{{ sheet.skipped.toLocaleString('id-ID') }}</p>
+                      </div>
+                      <div class="min-w-0">
+                        <p class="text-xs text-slate-500">Total setelah proses</p>
+                        <p class="mt-1 text-sm font-semibold tabular-nums text-slate-800">{{ sheet.finalRecords.toLocaleString('id-ID') }}</p>
+                      </div>
+                    </div>
+                    <div v-else class="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3">
+                      <div class="min-w-0">
+                        <p class="text-xs text-slate-500">Record saat ini</p>
+                        <p class="mt-1 text-sm font-semibold tabular-nums text-slate-700">{{ sheet.currentRecords.toLocaleString('id-ID') }}</p>
+                      </div>
+                      <div class="min-w-0">
+                        <p class="text-xs text-slate-500">Record dari backup</p>
+                        <p class="mt-1 text-sm font-semibold tabular-nums text-slate-700">{{ sheet.backupRecords.toLocaleString('id-ID') }}</p>
+                      </div>
+                      <div class="min-w-0">
+                        <p class="text-xs text-slate-500">Record akhir</p>
+                        <p class="mt-1 text-sm font-semibold tabular-nums text-slate-800">{{ sheet.finalRecords.toLocaleString('id-ID') }}</p>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </template>
+            </section>
+
+            <section class="min-w-0 space-y-3 border-t border-slate-200 pt-4" aria-labelledby="restore-confirm-heading">
+              <h3 id="restore-confirm-heading" class="text-sm font-semibold text-slate-800">4. Konfirmasi perubahan</h3>
+              <BaseAlert v-if="!restorePreview" type="info" title="Pratinjau wajib dilakukan">
+                Hitung pratinjau setelah memilih sheet, mode, dan strategi konflik. Jika pilihan berubah, pratinjau sebelumnya akan dibatalkan.
+              </BaseAlert>
+              <div>
+                <label for="backup-restore-confirmation" class="mb-1.5 block text-sm font-medium text-slate-700">
+                  Ketik {{ restoreConfirmationPhrase }}
+                </label>
+                <p class="mb-2 text-sm leading-relaxed text-slate-600">
+                  Ketik frasa yang ditampilkan untuk mengonfirmasi bahwa Anda memahami dampak mode
+                  {{ restoreMode === 'merge' ? 'gabungkan data' : 'ganti isi sheet' }}.
+                </p>
+                <input
+                  id="backup-restore-confirmation"
+                  v-model="restoreConfirmation"
+                  type="text"
+                  autocomplete="off"
+                  autocapitalize="characters"
+                  spellcheck="false"
+                  maxlength="20"
+                  :disabled="isRestoringBackup || !restorePreview"
+                  :placeholder="'Ketik ' + restoreConfirmationPhrase"
+                  class="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 sm:max-w-xl"
+                />
+              </div>
+              <label class="flex min-w-0 items-start gap-3 rounded-lg border border-slate-200 p-3">
+                <input
+                  v-model="restoreAcknowledged"
+                  type="checkbox"
+                  :disabled="isRestoringBackup || !restorePreview"
+                  class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span class="min-w-0 text-sm leading-relaxed text-slate-700">
+                  Saya sudah menyimpan backup terbaru, memeriksa seluruh ringkasan dampak, dan memahami pilihan konflik serta sheet yang akan berubah.
+                </span>
+              </label>
+              <BaseButton
+                type="button"
+                class="w-full sm:w-auto"
+                :disabled="!canExecuteRestore"
+                :loading="isRestoringBackup"
+                loading-text="Memvalidasi dan memulihkan..."
+                @click="handleRestoreBackup"
+              >
+                <Database class="h-4 w-4" aria-hidden="true" />
+                Jalankan Restore Selektif
+              </BaseButton>
+              <p class="text-xs leading-relaxed text-slate-500" role="note">
+                Backend memeriksa ulang manifest, ID, skema, izin, dan fingerprint data setelah pratinjau.
+                Jika data Spreadsheet berubah sesudah pratinjau, restore ditolak dan pratinjau harus dihitung ulang.
+                Apabila penulisan gagal, backend mencoba rollback pada sheet yang sudah tersentuh.
+              </p>
+            </section>
+          </template>
         </div>
       </BaseCard>
     </template>
@@ -882,6 +1057,12 @@ import { useSettingsStore } from '@/stores/settings'
 import { useSchoolYearStore } from '@/stores/schoolYear'
 import { useConfirm, usePermission } from '@/composables'
 import { classroomsService, settingsService } from '@/services'
+import type {
+  BackupRestoreMode,
+  BackupConflictStrategy,
+  BackupRestorePreview,
+  BackupRestoreResult,
+} from '@/services'
 import { PERMISSIONS } from '@/constants'
 import { formatDate, formatDateTime, isValidEmail } from '@/utils'
 import { schoolYearSchema } from '@/utils/validation'
@@ -909,14 +1090,6 @@ interface BackupViewerReport {
   data: Record<string, unknown[]>
 }
 
-interface BackupRestoreResult {
-  restoredAt: string
-  restoredSheets: string[]
-  preservedSheets: string[]
-  counts: Record<string, number>
-  totalRecords: number
-}
-
 const MAX_RESTORE_FILE_SIZE = 10 * 1024 * 1024
 const REQUIRED_BACKUP_SHEETS = [
   'users', 'students', 'student_parents', 'student_health', 'student_education',
@@ -927,6 +1100,22 @@ const REQUIRED_BACKUP_SHEETS = [
 const RESTORE_TARGET_SHEETS = REQUIRED_BACKUP_SHEETS.filter(
   (name) => name !== 'users' && name !== 'audit_logs',
 )
+const RESTORE_SHEET_LABELS: Record<string, string> = {
+  students: 'Data Siswa',
+  student_parents: 'Data Orang Tua/Wali',
+  student_health: 'Data Kesehatan',
+  student_education: 'Riwayat Pendidikan',
+  student_enrollments: 'Riwayat Kelas',
+  teachers: 'Data Guru',
+  classrooms: 'Kelas dan Rombel',
+  grades: 'Tingkat/Kelas',
+  school_years: 'Tahun Pelajaran',
+  settings: 'Pengaturan Aplikasi',
+  student_verifications: 'Verifikasi Data',
+  student_documents: 'Dokumen Siswa',
+  subjects: 'Mata Pelajaran',
+  student_scores: 'Nilai Siswa',
+}
 
 const settingsStore = useSettingsStore()
 const schoolYearStore = useSchoolYearStore()
@@ -952,11 +1141,17 @@ const isReadingBackupFile = ref(false)
 const backupViewerResult = ref<BackupViewerReport | null>(null)
 const backupViewerSheet = ref('')
 const backupViewerSearch = ref('')
+const selectedRestoreSheets = ref<string[]>([...RESTORE_TARGET_SHEETS])
+const restoreMode = ref<BackupRestoreMode>('merge')
+const restoreConflictStrategy = ref<BackupConflictStrategy>('keepExisting')
+const restorePreview = ref<BackupRestorePreview | null>(null)
+const isPreparingRestorePreview = ref(false)
 const restoreConfirmation = ref('')
 const restoreAcknowledged = ref(false)
 const isRestoringBackup = ref(false)
 const restoreError = ref('')
 const restoreResult = ref<BackupRestoreResult | null>(null)
+const restoreConfirmationPhrase = computed(() => restoreMode.value === 'replace' ? 'GANTI' : 'GABUNGKAN')
 const selectedBackupSheetRecords = computed<unknown[]>(() => {
   const result = backupViewerResult.value
   if (!result || !backupViewerSheet.value) return []
@@ -981,19 +1176,30 @@ const canPrepareRestore = computed(() => {
   if (result.sheetNames.length !== REQUIRED_BACKUP_SHEETS.length) return false
   return REQUIRED_BACKUP_SHEETS.every((name) => Array.isArray(result.data[name]))
 })
-const restoreTargetRecordCount = computed(() => {
-  const data = backupViewerResult.value?.data
-  if (!data) return 0
-  return RESTORE_TARGET_SHEETS.reduce((total, name) => {
-    const rows = data[name]
-    return total + (Array.isArray(rows) ? rows.length : 0)
-  }, 0)
+const canPreviewRestore = computed(() =>
+  canManageSettings.value &&
+  canPrepareRestore.value &&
+  selectedRestoreSheets.value.length > 0 &&
+  !isPreparingRestorePreview.value &&
+  !isRestoringBackup.value
+)
+const restorePreviewMatchesSelection = computed(() => {
+  const preview = restorePreview.value
+  if (!preview || preview.mode !== restoreMode.value) return false
+  if (preview.mode === 'merge' && preview.conflictStrategy !== restoreConflictStrategy.value) return false
+  const selected = [...selectedRestoreSheets.value].sort()
+  const previewSelected = [...preview.selectedSheets].sort()
+  return selected.length === previewSelected.length &&
+    selected.every((name, index) => name === previewSelected[index])
 })
 const canExecuteRestore = computed(() =>
   canManageSettings.value &&
   canPrepareRestore.value &&
-  restoreConfirmation.value.trim().toLocaleUpperCase('id-ID') === 'PULIHKAN' &&
+  restorePreviewMatchesSelection.value &&
+  Boolean(restorePreview.value?.fingerprint) &&
+  restoreConfirmation.value.trim().toLocaleUpperCase('id-ID') === restoreConfirmationPhrase.value &&
   restoreAcknowledged.value &&
+  !isPreparingRestorePreview.value &&
   !isRestoringBackup.value
 )
 const backupTotalRecords = computed(() => {
@@ -1691,6 +1897,7 @@ async function handleBackupFileChange(event: Event) {
   backupViewerResult.value = null
   backupViewerSheet.value = ''
   backupViewerSearch.value = ''
+  restorePreview.value = null
   restoreConfirmation.value = ''
   restoreAcknowledged.value = false
   restoreError.value = ''
@@ -1738,45 +1945,127 @@ async function handleBackupFileChange(event: Event) {
   }
 }
 
-async function handleRestoreBackup() {
+function buildRestoreBackupPayload(): Record<string, unknown> | null {
   const result = backupViewerResult.value
-  if (!canManageSettings.value || !canExecuteRestore.value || !result?.valid || !result.meta) return
+  if (!result || !result.valid || !result.meta) return null
+  return { ...result.data, _meta: result.meta }
+}
+
+function selectAllRestoreSheets() {
+  if (isPreparingRestorePreview.value || isRestoringBackup.value) return
+  selectedRestoreSheets.value = [...RESTORE_TARGET_SHEETS]
+}
+
+function clearRestoreSheetSelection() {
+  if (isPreparingRestorePreview.value || isRestoringBackup.value) return
+  selectedRestoreSheets.value = []
+}
+
+watch(
+  () => ({
+    selectedSheets: [...selectedRestoreSheets.value].sort().join('|'),
+    mode: restoreMode.value,
+    conflictStrategy: restoreConflictStrategy.value,
+  }),
+  () => {
+    restorePreview.value = null
+    restoreConfirmation.value = ''
+    restoreAcknowledged.value = false
+    restoreError.value = ''
+  },
+)
+
+async function handlePreviewRestore() {
+  if (!canManageSettings.value || !canPreviewRestore.value) return
+  const backupPayload = buildRestoreBackupPayload()
+  if (!backupPayload) {
+    restoreError.value = 'Pilih file backup yang valid dan lengkap sebelum menghitung pratinjau.'
+    return
+  }
+
+  isPreparingRestorePreview.value = true
+  restorePreview.value = null
+  restoreConfirmation.value = ''
+  restoreAcknowledged.value = false
+  restoreError.value = ''
+  try {
+    const preview = await settingsService.previewRestore(backupPayload, {
+      selectedSheets: [...selectedRestoreSheets.value],
+      mode: restoreMode.value,
+      conflictStrategy: restoreConflictStrategy.value,
+    })
+    if (
+      !isRecord(preview) ||
+      typeof preview.fingerprint !== 'string' ||
+      !preview.fingerprint ||
+      !Array.isArray(preview.selectedSheets) ||
+      !Array.isArray(preview.sheets) ||
+      !isRecord(preview.totals)
+    ) {
+      throw new Error('Backend mengembalikan pratinjau restore yang tidak dikenali.')
+    }
+
+    restorePreview.value = preview as unknown as BackupRestorePreview
+    toast.success('Pratinjau restore berhasil dihitung di backend.')
+  } catch (error: unknown) {
+    restoreError.value = error instanceof Error
+      ? error.message
+      : 'Gagal menghitung pratinjau restore. Tidak ada data yang diubah.'
+    toast.error(restoreError.value)
+  } finally {
+    isPreparingRestorePreview.value = false
+  }
+}
+
+async function handleRestoreBackup() {
+  if (!canManageSettings.value || !canExecuteRestore.value || !restorePreview.value) return
+  const backupPayload = buildRestoreBackupPayload()
+  if (!backupPayload) {
+    restoreError.value = 'File backup tidak lagi valid. Pilih dan validasi ulang file sebelum restore.'
+    restorePreview.value = null
+    return
+  }
 
   isRestoringBackup.value = true
   restoreError.value = ''
   restoreResult.value = null
-
   try {
-    // Build a fresh object from the normalized and locally validated viewer state.
-    // The GAS endpoint repeats all security-critical checks before any writes.
-    const backupPayload: Record<string, unknown> = { ...result.data, _meta: result.meta }
-    const response: unknown = await settingsService.restoreBackup(backupPayload)
+    const response: unknown = await settingsService.restoreBackup(backupPayload, {
+      selectedSheets: [...selectedRestoreSheets.value],
+      mode: restoreMode.value,
+      conflictStrategy: restoreConflictStrategy.value,
+      expectedFingerprint: restorePreview.value.fingerprint,
+      confirmation: restoreConfirmationPhrase.value as 'GABUNGKAN' | 'GANTI',
+    })
 
     if (
       !isRecord(response) ||
       !Array.isArray(response.restoredSheets) ||
       !Array.isArray(response.preservedSheets) ||
+      !Array.isArray(response.unselectedSheets) ||
       !isRecord(response.counts) ||
       typeof response.restoredAt !== 'string' ||
-      typeof response.totalRecords !== 'number'
+      typeof response.totalRecords !== 'number' ||
+      !Number.isFinite(response.totalRecords)
     ) {
       throw new Error('Backend mengembalikan ringkasan restore yang tidak dikenali. Periksa log GAS sebelum mencoba ulang.')
     }
 
-    restoreResult.value = {
-      restoredAt: response.restoredAt,
-      restoredSheets: response.restoredSheets.filter((item): item is string => typeof item === 'string'),
-      preservedSheets: response.preservedSheets.filter((item): item is string => typeof item === 'string'),
-      counts: response.counts as Record<string, number>,
-      totalRecords: response.totalRecords,
-    }
+    restoreResult.value = response as unknown as BackupRestoreResult
+    restorePreview.value = null
     restoreConfirmation.value = ''
     restoreAcknowledged.value = false
-    toast.success('Restore berhasil. Muat ulang aplikasi untuk menggunakan data terbaru.')
+    toast.success('Restore selektif berhasil. Muat ulang aplikasi untuk menggunakan data terbaru.')
   } catch (error: unknown) {
     restoreError.value = error instanceof Error
       ? error.message
       : 'Restore gagal. Tidak ada konfirmasi keberhasilan dari server.'
+    // Data mungkin sudah berubah sejak preview; pengguna harus menghitung ulang.
+    if (/berubah setelah pratinjau|fingerprint/i.test(restoreError.value)) {
+      restorePreview.value = null
+      restoreConfirmation.value = ''
+      restoreAcknowledged.value = false
+    }
     toast.error(restoreError.value)
   } finally {
     isRestoringBackup.value = false
