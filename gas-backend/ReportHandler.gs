@@ -710,6 +710,11 @@ var SettingsHandler = {
       case 'get':           return this.get(payload, user);
       case 'update':        return this.update(payload, user);
       case 'exportBackup':  return this.exportBackup(payload, user);
+      case 'createBackupSnapshot': return this.createBackupSnapshot(payload, user);
+      case 'listBackupHistory': return this.listBackupHistory(payload, user);
+      case 'getBackupAutomation': return this.getBackupAutomation(payload, user);
+      case 'configureBackupAutomation': return this.configureBackupAutomation(payload, user);
+      case 'readBackupSnapshot': return this.readBackupSnapshot(payload, user);
       case 'previewRestore': return this.previewRestore(payload, user);
       case 'restoreBackup':  return this.restoreBackup(payload, user);
       default: return errorResponse(404, 'Settings method tidak ditemukan.');
@@ -744,7 +749,13 @@ var SettingsHandler = {
   },
   exportBackup: function(payload, user) {
     checkPermission(user, 'settings:manage');
+    var backup = this._buildBackupData();
+    AuditService.log(user.id, 'EXPORT', 'settings', null, null, null, 'Download backup JSON');
+    return successResponse(backup);
+  },
 
+  /** Bangun snapshot seluruh sheet; tidak melakukan penulisan data bisnis. */
+  _buildBackupData: function() {
     var backup = {};
     var sheetNames = Object.values(CONFIG.SHEETS);
     var counts = {};
@@ -798,8 +809,281 @@ var SettingsHandler = {
       failedSheets: failedSheets,
     };
 
-    AuditService.log(user.id, 'EXPORT', 'settings', null, null, null, 'Backup data');
+    return backup;
+  },
+
+  _backupProperties: function() {
+    return PropertiesService.getScriptProperties();
+  },
+
+  _getBackupHistory: function() {
+    try {
+      var raw = this._backupProperties().getProperty('BID_BACKUP_HISTORY_V1');
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter(function(item) {
+        return item && typeof item === 'object' &&
+          typeof item.id === 'string' &&
+          typeof item.generatedAt === 'string' &&
+          (item.status === 'success' || item.status === 'failed');
+      }) : [];
+    } catch (error) {
+      Logger.log('Riwayat backup tidak dapat dibaca: ' + (error && error.message ? error.message : error));
+      return [];
+    }
+  },
+
+  _saveBackupHistory: function(history) {
+    this._backupProperties().setProperty('BID_BACKUP_HISTORY_V1', JSON.stringify(history.slice(0, 25)));
+  },
+
+  _getBackupAutomationConfig: function() {
+    var defaults = { enabled: false, frequency: 'daily', retention: 10 };
+    try {
+      var raw = this._backupProperties().getProperty('BID_BACKUP_AUTOMATION_V1');
+      var parsed = raw ? JSON.parse(raw) : {};
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return defaults;
+      return {
+        enabled: parsed.enabled === true,
+        frequency: parsed.frequency === 'weekly' ? 'weekly' : 'daily',
+        retention: [5, 10, 20].indexOf(Number(parsed.retention)) !== -1 ? Number(parsed.retention) : 10
+      };
+    } catch (error) {
+      return defaults;
+    }
+  },
+
+  _publicBackupHistoryItem: function(item) {
+    if (!item) return null;
+    return {
+      id: item.id,
+      fileName: item.fileName || '',
+      generatedAt: item.generatedAt,
+      source: item.source === 'scheduled' ? 'scheduled' : 'manual',
+      sheetCount: Number(item.sheetCount) || 0,
+      recordCount: Number(item.recordCount) || 0,
+      sizeBytes: Number(item.sizeBytes) || 0,
+      status: item.status === 'success' ? 'success' : 'failed',
+      error: item.status === 'failed' ? String(item.error || 'Backup gagal.').slice(0, 300) : ''
+    };
+  },
+
+  _getBackupFolder: function() {
+    var props = this._backupProperties();
+    var folderId = props.getProperty('BID_BACKUP_FOLDER_ID');
+    if (folderId) {
+      try {
+        var existing = DriveApp.getFolderById(folderId);
+        if (existing && !existing.isTrashed()) return existing;
+      } catch (error) {
+        Logger.log('Folder backup lama tidak tersedia; membuat folder baru.');
+      }
+    }
+    var folder = DriveApp.createFolder('Buku Induk Digital - Backup Otomatis');
+    props.setProperty('BID_BACKUP_FOLDER_ID', folder.getId());
+    return folder;
+  },
+
+  _applyBackupRetention: function(history, retention) {
+    var keptSuccesses = 0;
+    var result = [];
+    history.forEach(function(item) {
+      if (item.status === 'success' && item.fileId) {
+        keptSuccesses++;
+        if (keptSuccesses > retention) {
+          try {
+            DriveApp.getFileById(item.fileId).setTrashed(true);
+            return;
+          } catch (error) {
+            item.error = 'Pembersihan retensi tertunda: ' +
+              String(error && error.message ? error.message : error).slice(0, 180);
+          }
+        }
+      }
+      result.push(item);
+    });
+    return result.slice(0, 25);
+  },
+
+  _storeBackupSnapshot: function(source, actorId) {
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(30000)) {
+      throw new Error('Backup tidak dapat dimulai karena ada proses penulisan lain. Coba lagi.');
+    }
+    try {
+      var backup = this._buildBackupData();
+      if (!backup._meta || backup._meta.complete !== true ||
+          !Array.isArray(backup._meta.failedSheets) || backup._meta.failedSheets.length) {
+        var failedNames = backup._meta && Array.isArray(backup._meta.failedSheets)
+          ? backup._meta.failedSheets.join(', ') : 'manifest tidak lengkap';
+        throw new Error('Snapshot dibatalkan karena tidak semua sheet berhasil dibaca: ' + failedNames + '.');
+      }
+
+      var content = JSON.stringify(backup);
+      if (!content) throw new Error('Data backup tidak dapat dikonversi menjadi JSON.');
+      var folder = this._getBackupFolder();
+      var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss');
+      var fileName = 'backup-buku-induk-' + stamp + '-' + String(source === 'scheduled' ? 'otomatis' : 'manual') + '.json';
+      var file = folder.createFile(fileName, content, 'application/json');
+      var record = {
+        id: generateUUID(),
+        fileId: file.getId(),
+        fileName: file.getName(),
+        generatedAt: backup._meta.generatedAt,
+        source: source === 'scheduled' ? 'scheduled' : 'manual',
+        sheetCount: backup._meta.sheetCount,
+        recordCount: Object.keys(backup._meta.counts || {}).reduce(function(sum, name) {
+          return sum + (Number(backup._meta.counts[name]) || 0);
+        }, 0),
+        sizeBytes: file.getSize(),
+        status: 'success',
+        error: ''
+      };
+      var history = this._getBackupHistory();
+      history.unshift(record);
+      history = this._applyBackupRetention(history, this._getBackupAutomationConfig().retention);
+      this._saveBackupHistory(history);
+
+      if (source === 'manual' && actorId) {
+        AuditService.log(actorId, 'CREATE', 'backup', record.id, null, null,
+          'Snapshot backup disimpan di Google Drive; ' + record.recordCount + ' record.');
+      }
+      return this._publicBackupHistoryItem(record);
+    } catch (error) {
+      try {
+        var failed = {
+          id: generateUUID(),
+          fileId: '',
+          fileName: '',
+          generatedAt: now(),
+          source: source === 'scheduled' ? 'scheduled' : 'manual',
+          sheetCount: 0,
+          recordCount: 0,
+          sizeBytes: 0,
+          status: 'failed',
+          error: String(error && error.message ? error.message : error).slice(0, 300)
+        };
+        var failedHistory = this._getBackupHistory();
+        failedHistory.unshift(failed);
+        this._saveBackupHistory(failedHistory.slice(0, 25));
+      } catch (historyError) {
+        Logger.log('Gagal mencatat riwayat error backup: ' +
+          String(historyError && historyError.message ? historyError.message : historyError));
+      }
+      throw error;
+    } finally {
+      lock.releaseLock();
+    }
+  },
+
+  createBackupSnapshot: function(payload, user) {
+    checkPermission(user, 'settings:manage');
+    return successResponse(this._storeBackupSnapshot('manual', user.id));
+  },
+
+  listBackupHistory: function(payload, user) {
+    checkPermission(user, 'settings:manage');
+    return successResponse(this._getBackupHistory().map(function(item) {
+      return SettingsHandler._publicBackupHistoryItem(item);
+    }));
+  },
+
+  getBackupAutomation: function(payload, user) {
+    checkPermission(user, 'settings:manage');
+    var config = this._getBackupAutomationConfig();
+    var triggers = ScriptApp.getProjectTriggers().filter(function(trigger) {
+      return trigger.getHandlerFunction() === 'runScheduledBackup';
+    });
+    var history = this._getBackupHistory();
+    return successResponse({
+      enabled: config.enabled,
+      frequency: config.frequency,
+      retention: config.retention,
+      timezone: Session.getScriptTimeZone(),
+      triggerInstalled: triggers.length > 0,
+      lastRun: history.length ? this._publicBackupHistoryItem(history[0]) : null
+    });
+  },
+
+  configureBackupAutomation: function(payload, user) {
+    checkPermission(user, 'settings:manage');
+    if (!payload || typeof payload.enabled !== 'boolean') {
+      throw new Error('Status backup otomatis harus dipilih.');
+    }
+    var frequency = payload.frequency === 'weekly' ? 'weekly' : payload.frequency === 'daily' ? 'daily' : '';
+    if (!frequency) throw new Error('Frekuensi backup harus harian atau mingguan.');
+    var retention = Number(payload.retention);
+    if ([5, 10, 20].indexOf(retention) === -1 || !Number.isInteger(retention)) {
+      throw new Error('Retensi backup harus 5, 10, atau 20 snapshot.');
+    }
+
+    var props = this._backupProperties();
+    var previousValue = props.getProperty('BID_BACKUP_AUTOMATION_V1');
+    var oldTriggers = ScriptApp.getProjectTriggers().filter(function(trigger) {
+      return trigger.getHandlerFunction() === 'runScheduledBackup';
+    });
+    var next = { enabled: payload.enabled, frequency: frequency, retention: retention };
+    var newTrigger = null;
+
+    if (next.enabled) {
+      var builder = ScriptApp.newTrigger('runScheduledBackup').timeBased();
+      builder = next.frequency === 'weekly' ? builder.everyWeeks(1) : builder.everyDays(1);
+      newTrigger = builder.atHour(2).inTimezone(Session.getScriptTimeZone()).create();
+    }
+
+    try {
+      props.setProperty('BID_BACKUP_AUTOMATION_V1', JSON.stringify(next));
+      oldTriggers.forEach(function(trigger) {
+        if (!newTrigger || trigger.getUniqueId() !== newTrigger.getUniqueId()) {
+          ScriptApp.deleteTrigger(trigger);
+        }
+      });
+    } catch (error) {
+      if (newTrigger) {
+        try { ScriptApp.deleteTrigger(newTrigger); } catch (ignore) {}
+      }
+      try {
+        if (previousValue) props.setProperty('BID_BACKUP_AUTOMATION_V1', previousValue);
+        else props.deleteProperty('BID_BACKUP_AUTOMATION_V1');
+      } catch (rollbackError) {}
+      throw error;
+    }
+
+    AuditService.log(user.id, 'UPDATE', 'backup', null, null, null,
+      next.enabled ? 'Backup otomatis ' + next.frequency + ', retensi ' + next.retention + ' snapshot.' : 'Backup otomatis dinonaktifkan.');
+    return this.getBackupAutomation(payload, user);
+  },
+
+  readBackupSnapshot: function(payload, user) {
+    checkPermission(user, 'settings:manage');
+    var historyId = payload && typeof payload.historyId === 'string' ? payload.historyId : '';
+    if (!historyId || historyId.length > 100) throw new Error('ID riwayat backup tidak valid.');
+    var entry = this._getBackupHistory().find(function(item) {
+      return item.id === historyId && item.status === 'success' && typeof item.fileId === 'string' && item.fileId;
+    });
+    if (!entry) throw new Error('Snapshot tidak ditemukan, telah kedaluwarsa oleh retensi, atau tidak dapat diunduh.');
+    var file = DriveApp.getFileById(entry.fileId);
+    if (file.isTrashed()) throw new Error('File backup telah dipindahkan ke sampah Google Drive.');
+    if (file.getSize() > 50 * 1024 * 1024) throw new Error('File backup melebihi batas unduhan 50 MB.');
+    var content = file.getBlob().getDataAsString('UTF-8');
+    var backup;
+    try { backup = JSON.parse(content); }
+    catch (error) { throw new Error('File snapshot di Google Drive bukan JSON yang valid.'); }
+    if (!backup || !backup._meta || backup._meta.complete !== true) {
+      throw new Error('Snapshot di Google Drive tidak lengkap dan tidak dapat diunduh.');
+    }
     return successResponse(backup);
+  },
+
+  runScheduledBackup: function() {
+    var config = this._getBackupAutomationConfig();
+    if (!config.enabled) return { status: 'skipped', reason: 'Backup otomatis dinonaktifkan.' };
+    try {
+      return this._storeBackupSnapshot('scheduled', 'SYSTEM');
+    } catch (error) {
+      AuditService.logError('runScheduledBackup',
+        String(error && error.message ? error.message : error).slice(0, 300));
+      throw error;
+    }
   },
 
   /**
@@ -1262,6 +1546,11 @@ var SettingsHandler = {
     }
   },
 };
+
+/** Dipanggil oleh time-driven trigger Apps Script; status aktif dicek ulang di backend. */
+function runScheduledBackup() {
+  return SettingsHandler.runScheduledBackup();
+}
 
 // ── AuditService ──────────────────────────────────────────────
 var AuditService = {
