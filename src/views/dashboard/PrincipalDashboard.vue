@@ -223,7 +223,7 @@ const {
 } = useDashboardData()
 
 const firstName = computed(() =>
-  authStore.user?.fullName?.split(' ')[0] ?? 'Kepala Sekolah'
+  authStore.user?.fullName?.trim().split(/\\s+/)[0] || 'Kepala Sekolah'
 )
 
 const statusSummary = computed(() => [
