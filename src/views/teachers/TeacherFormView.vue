@@ -379,26 +379,39 @@ function resetFormState() {
 }
 
 function applyTeacherData(teacher: Awaited<ReturnType<typeof teachersService.get>>) {
+  // Normalisasi seluruh nilai API sebelum masuk ke v-model form yang bertipe string.
   Object.assign(form, {
-    fullName: teacher.fullName ?? '',
-    nip: teacher.nip ?? '',
-    nuptk: teacher.nuptk ?? '',
-    gender: teacher.gender ?? '',
+    fullName: normalizeFormString(teacher.fullName).trim(),
+    nip: normalizeFormString(teacher.nip),
+    nuptk: normalizeFormString(teacher.nuptk),
+    gender: normalizeFormString(teacher.gender),
     birthDate: normalizeDateInput(teacher.birthDate),
-    birthPlace: teacher.birthPlace ?? '',
-    religion: teacher.religion ?? '',
-    educationLevel: teacher.educationLevel ?? '',
-    major: teacher.major ?? '',
+    birthPlace: normalizeFormString(teacher.birthPlace),
+    religion: normalizeFormString(teacher.religion),
+    educationLevel: normalizeFormString(teacher.educationLevel),
+    major: normalizeFormString(teacher.major),
     joinDate: normalizeDateInput(teacher.joinDate),
-    phone: teacher.phone ?? '',
-    email: teacher.email ?? '',
-    address: teacher.address ?? '',
-    status: teacher.status === 'inactive' ? 'inactive' : 'active',
+    phone: normalizeFormString(teacher.phone),
+    email: normalizeFormString(teacher.email),
+    address: normalizeFormString(teacher.address),
+    status: normalizeFormString(teacher.status).toLowerCase() === 'inactive' ? 'inactive' : 'active',
   })
 }
 
-function normalizeDateInput(value?: string | null) {
-  const date = String(value ?? '').trim()
+/**
+ * Google Sheets puede devolver identificadores o teléfonos como números aunque
+ * el formulario los trate como texto. Normalizar en el límite evita llamar
+ * .trim()/.toLowerCase() directamente sobre un valor que no sea string.
+ */
+function normalizeFormString(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  if (typeof value === 'boolean') return String(value)
+  return ''
+}
+
+function normalizeDateInput(value?: string | number | null) {
+  const date = normalizeFormString(value).trim()
   return /^\d{4}-\d{2}-\d{2}/.test(date) ? date.slice(0, 10) : ''
 }
 
@@ -480,20 +493,20 @@ async function loadTeacher() {
 
 function buildPayload(): TeacherFormData {
   return {
-    fullName: form.fullName.trim(),
-    nip: form.nip?.trim() ?? '',
-    nuptk: form.nuptk?.trim() ?? '',
-    gender: form.gender?.trim() ?? '',
-    birthPlace: form.birthPlace?.trim() ?? '',
-    birthDate: form.birthDate?.trim() ?? '',
-    religion: form.religion?.trim() ?? '',
-    educationLevel: form.educationLevel?.trim() ?? '',
-    major: form.major?.trim() ?? '',
-    joinDate: form.joinDate?.trim() ?? '',
-    phone: form.phone?.trim() ?? '',
-    email: form.email?.trim().toLowerCase() ?? '',
-    address: form.address?.trim() ?? '',
-    status: form.status?.trim() || 'active',
+    fullName: normalizeFormString(form.fullName).trim(),
+    nip: normalizeFormString(form.nip).trim(),
+    nuptk: normalizeFormString(form.nuptk).trim(),
+    gender: normalizeFormString(form.gender).trim(),
+    birthPlace: normalizeFormString(form.birthPlace).trim(),
+    birthDate: normalizeDateInput(form.birthDate),
+    religion: normalizeFormString(form.religion).trim(),
+    educationLevel: normalizeFormString(form.educationLevel).trim(),
+    major: normalizeFormString(form.major).trim(),
+    joinDate: normalizeDateInput(form.joinDate),
+    phone: normalizeFormString(form.phone).trim(),
+    email: normalizeFormString(form.email).trim().toLowerCase(),
+    address: normalizeFormString(form.address).trim(),
+    status: normalizeFormString(form.status).trim() || 'active',
   }
 }
 
