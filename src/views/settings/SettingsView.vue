@@ -215,7 +215,7 @@
             Perubahan belum disimpan.
           </p>
           <span v-else class="text-sm text-slate-500">
-            Perubahan disimpan setelah tombol Simpan Pengaturan dipilih.
+            Data tersimpan. Ubah isian untuk mengaktifkan tombol simpan.
           </span>
           <BaseButton
             type="submit"
