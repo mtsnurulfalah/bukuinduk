@@ -710,7 +710,8 @@ var SettingsHandler = {
       case 'get':           return this.get(payload, user);
       case 'update':        return this.update(payload, user);
       case 'exportBackup':  return this.exportBackup(payload, user);
-      case 'restoreBackup': return this.restoreBackup(payload, user);
+      case 'previewRestore': return this.previewRestore(payload, user);
+      case 'restoreBackup':  return this.restoreBackup(payload, user);
       default: return errorResponse(404, 'Settings method tidak ditemukan.');
     }
   },
