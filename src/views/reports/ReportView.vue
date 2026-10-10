@@ -279,7 +279,7 @@ import { GENDER_OPTIONS, STUDENT_STATUS_OPTIONS, PAGE_SIZE_OPTIONS } from '@/con
 import { formatDate } from '@/utils'
 import { toast } from 'vue-sonner'
 import type { ClassroomStats } from '@/types'
-import type { Student } from '@/types'
+import type { Student, StudentFilters } from '@/types'
 
 const schoolYearStore = useSchoolYearStore()
 const classroomsStore = useClassroomsStore()
@@ -430,6 +430,30 @@ function resetFilters() {
   void loadAll()
 }
 
+const REPORT_PAGE_SIZE = 10_000
+
+async function loadAllReportStudents(filtersToLoad: StudentFilters): Promise<Student[]> {
+  const firstPage = await studentsService.list({
+    ...filtersToLoad,
+    page: 1,
+    limit: REPORT_PAGE_SIZE,
+  })
+  const totalPages = Math.max(1, Number(firstPage.totalPages) || 1)
+  if (totalPages === 1) return firstPage.items
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      studentsService.list({
+        ...filtersToLoad,
+        page: index + 2,
+        limit: REPORT_PAGE_SIZE,
+      })
+    )
+  )
+
+  return [firstPage, ...remainingPages].flatMap(response => response.items)
+}
+
 async function loadAll() {
   const requestVersion = ++loadRequestVersion
   const f = { ...filters }
@@ -453,7 +477,7 @@ async function loadAll() {
         classroomId: f.classroomId || undefined,
       }),
       reportsService.getStatusDistribution(f),
-      studentsService.exportData(studentFilters),
+      loadAllReportStudents(studentFilters),
     ])
 
     if (!isMounted || requestVersion !== loadRequestVersion) return
