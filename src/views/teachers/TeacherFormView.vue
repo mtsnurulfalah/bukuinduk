@@ -84,17 +84,18 @@
           </div>
 
           <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
-            <BaseInput
-              id="teacher-full-name"
-              v-model="form.fullName"
-              label="Nama Lengkap"
-              placeholder="Masukkan nama lengkap"
-              autocomplete="name"
-              required
-              :error-message="errors.fullName"
-              :disabled="isSaving"
-              class="sm:col-span-2"
-            />
+            <div class="sm:col-span-2">
+              <BaseInput
+                id="teacher-full-name"
+                v-model="form.fullName"
+                label="Nama Lengkap"
+                placeholder="Masukkan nama lengkap"
+                autocomplete="name"
+                required
+                :error-message="errors.fullName"
+                :disabled="isSaving"
+              />
+            </div>
 
             <BaseInput
               id="teacher-nip"
@@ -234,17 +235,18 @@
               :disabled="isSaving"
             />
 
-            <BaseTextarea
-              id="teacher-address"
-              v-model="form.address"
-              label="Alamat"
-              placeholder="Masukkan alamat lengkap"
-              autocomplete="street-address"
-              :rows="3"
-              :error-message="errors.address"
-              :disabled="isSaving"
-              class="sm:col-span-2"
-            />
+            <div class="sm:col-span-2">
+              <BaseTextarea
+                id="teacher-address"
+                v-model="form.address"
+                label="Alamat"
+                placeholder="Masukkan alamat lengkap"
+                autocomplete="street-address"
+                :rows="3"
+                :error-message="errors.address"
+                :disabled="isSaving"
+              />
+            </div>
           </div>
         </section>
 
@@ -272,7 +274,7 @@
           </div>
         </section>
 
-        <div class="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-end">
+        <div class="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-end">
           <BaseButton
             variant="outline"
             type="button"
@@ -287,7 +289,7 @@
             type="submit"
             class="w-full sm:w-auto"
             :loading="isSaving"
-            loading-text="Menyimpan..."
+            :loading-text="isValidating ? 'Memeriksa data...' : 'Menyimpan...'"
           >
             <Save class="h-4 w-4" />
             {{ isEdit ? 'Simpan Perubahan' : 'Tambah Guru' }}
@@ -334,6 +336,7 @@ const isEdit = computed(() => Boolean(editId.value))
 
 const isLoading = ref(Boolean(editId.value))
 const isSaving = ref(false)
+const isValidating = ref(false)
 const errorMsg = ref('')
 const loadError = ref('')
 const errors = reactive<Record<string, string>>({})
@@ -452,7 +455,14 @@ async function loadTeacher() {
     const teacher = await teachersService.get(id)
 
     if (!isMounted || version !== formLoadVersion || editId.value !== id) return
-    if (!teacher) throw new Error('Data guru tidak ditemukan.')
+    if (
+      !teacher ||
+      typeof teacher !== 'object' ||
+      String(teacher.id ?? '').trim() !== id ||
+      !String(teacher.fullName ?? '').trim()
+    ) {
+      throw new Error('Respons data guru tidak lengkap atau ID tidak sesuai. Silakan muat ulang data guru.')
+    }
 
     applyTeacherData(teacher)
   } catch (e: unknown) {
@@ -488,40 +498,35 @@ function buildPayload(): TeacherFormData {
 }
 
 async function handleSubmit() {
-  if (isSaving.value || (isEdit.value && isLoading.value)) return
+  // Kunci sejak awal, termasuk selama validasi async, untuk mencegah submit ganda.
+  if (isSaving.value || (isEdit.value && (isLoading.value || Boolean(loadError.value)))) return
+
+  const submitIsEdit = isEdit.value
+  const submittedId = editId.value
 
   clearErrors()
   errorMsg.value = ''
-
-  const payload = buildPayload()
+  isSaving.value = true
+  isValidating.value = true
 
   try {
-    const validated = await teacherSchema.validate(payload, {
-      abortEarly: false,
-    }) as TeacherFormData
+    const payload = buildPayload()
+    let validated: TeacherFormData
 
-    isSaving.value = true
+    try {
+      validated = await teacherSchema.validate(payload, {
+        abortEarly: false,
+      }) as TeacherFormData
+    } catch (validationError: unknown) {
+      const validationErrors = getValidationErrors(validationError)
+      if (!validationErrors.length) throw validationError
 
-    if (isEdit.value) {
-      const id = editId.value
-      if (!id) throw new Error('ID guru tidak valid.')
-
-      await teachersService.update(id, validated)
-      toast.success('Data guru berhasil diperbarui.')
-    } else {
-      await teachersService.create(validated)
-      toast.success('Guru berhasil ditambahkan.')
-    }
-
-    await router.push('/teachers')
-  } catch (e: unknown) {
-    const validationErrors = getValidationErrors(e)
-
-    if (validationErrors.length) {
       validationErrors.forEach(({ path, message }) => {
         errors[path] = message
       })
-      errorMsg.value = `Periksa ${validationErrors.length} field yang ditandai sebelum menyimpan.`
+
+      const invalidPaths = [...new Set(validationErrors.map(({ path }) => path))]
+      errorMsg.value = `Periksa ${invalidPaths.length} field yang ditandai sebelum menyimpan.`
 
       await nextTick()
       const fieldIds: Record<string, string> = {
@@ -540,14 +545,56 @@ async function handleSubmit() {
         address: 'teacher-address',
         status: 'teacher-status',
       }
-      document.getElementById(fieldIds[validationErrors[0].path])?.focus()
+      const firstErrorId = fieldIds[validationErrors[0]?.path]
+      if (firstErrorId) document.getElementById(firstErrorId)?.focus()
       return
     }
 
-    const message = e instanceof Error ? e.message : 'Gagal menyimpan data guru.'
+    isValidating.value = false
+
+    // Route bisa berubah saat Yup masih memvalidasi. Jangan sampai payload
+    // dari form sebelumnya tersimpan ke ID guru yang berbeda.
+    if (
+      submitIsEdit !== isEdit.value ||
+      (submitIsEdit && editId.value !== submittedId)
+    ) {
+      errorMsg.value = 'Halaman guru berubah saat validasi berlangsung. Periksa kembali data sebelum menyimpan.'
+      return
+    }
+
+    try {
+      if (submitIsEdit) {
+        if (!submittedId) throw new Error('ID guru tidak valid.')
+        await teachersService.update(submittedId, validated)
+        toast.success('Data guru berhasil diperbarui.')
+      } else {
+        await teachersService.create(validated)
+        toast.success('Guru berhasil ditambahkan.')
+      }
+    } catch (saveError: unknown) {
+      const message = saveError instanceof Error
+        ? saveError.message
+        : 'Gagal menyimpan data guru.'
+      mapServerError(message)
+      errorMsg.value = message
+      return
+    }
+
+    // Kegagalan navigasi setelah API sukses tidak boleh dilaporkan sebagai
+    // kegagalan penyimpanan, karena data sudah tersimpan di backend.
+    try {
+      await router.push({ name: 'teachers' })
+    } catch {
+      errorMsg.value = 'Data guru berhasil disimpan, tetapi halaman daftar belum terbuka. Gunakan tombol Batal untuk kembali ke Data Guru.'
+    }
+  } catch (e: unknown) {
+    const message = e instanceof Error
+      ? e.message
+      : 'Gagal memvalidasi atau menyimpan data guru.'
     mapServerError(message)
     errorMsg.value = message
   } finally {
+    isValidating.value = false
     isSaving.value = false
   }
 }
