@@ -641,8 +641,20 @@ var ReportHandler = {
     var classrooms  = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
 
     all = all.map(function(s){
-      var enr = enrollments.find(function(e){ return String(e.studentId)===String(s.id) && e.status==='active'; });
-      var cls = enr ? classrooms.find(function(c){ return String(c.id)===String(enr.classroomId); }) : null;
+      // Ikuti filter tahun/kelas saat menentukan kelas yang ditampilkan.
+      // Jika semua tahun dipilih, gunakan enrollment aktif terbaru agar label
+      // kelas tidak bergantung pada urutan historis baris di Spreadsheet.
+      var matchingEnrollments = enrollments.filter(function(e) {
+        return String(e.studentId) === String(s.id) &&
+          e.status === 'active' &&
+          (!payload.schoolYearId || String(e.schoolYearId) === String(payload.schoolYearId)) &&
+          (!payload.classroomId || String(e.classroomId) === String(payload.classroomId));
+      });
+      matchingEnrollments.sort(function(a, b) {
+        return String(b.entryDate || '').localeCompare(String(a.entryDate || ''));
+      });
+      var enr = matchingEnrollments[0];
+      var cls = enr ? classrooms.find(function(c) { return String(c.id) === String(enr.classroomId); }) : null;
       return Object.assign({}, s, { classroomName: cls ? cls.name : '' });
     });
 
