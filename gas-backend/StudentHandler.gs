@@ -164,10 +164,10 @@ var StudentHandler = {
         return String(b.entryDate || '').localeCompare(String(a.entryDate || ''));
       });
       var enr = matchingEnrollments[0];
-      if (enr) {
-        var cls = classrooms.find(function(c) { return String(c.id) === String(enr.classroomId); });
-        s.classroomName = cls ? cls.name : '';
-      }
+      var cls = enr
+        ? classrooms.find(function(c) { return String(c.id) === String(enr.classroomId); })
+        : null;
+      s.classroomName = cls ? cls.name : '';
       // Roster/list API hanya mengembalikan field yang dibutuhkan guru.
       if (user.role === 'teacher') {
         delete s.nik;
