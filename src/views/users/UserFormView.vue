@@ -230,6 +230,7 @@ const userLoadError = ref('')
 const teacherLoadError = ref('')
 const errors = reactive<Record<string, string>>({})
 const teacherOptions = ref<{ value: string; label: string }[]>([])
+const currentLinkedTeacherOptionId = ref('')
 
 const roleOptions = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))
 const form = reactive({
@@ -288,11 +289,20 @@ function routeUserId(): string {
   return Array.isArray(value) ? String(value[0] ?? '') : String(value ?? '')
 }
 
+function removeCurrentLinkedTeacherOption() {
+  const id = currentLinkedTeacherOptionId.value
+  if (!id) return
+
+  teacherOptions.value = teacherOptions.value.filter(option => option.value !== id)
+  currentLinkedTeacherOptionId.value = ''
+}
+
 function onRoleChange(role: string) {
   clearFieldError('role')
   if (role !== 'teacher') {
     form.teacherId = ''
     clearFieldError('teacherId')
+    removeCurrentLinkedTeacherOption()
   }
 }
 
@@ -341,6 +351,7 @@ async function ensureCurrentTeacherOption(
       value: id,
       label: name + suffix,
     }]
+    currentLinkedTeacherOptionId.value = id
   } catch {
     // Keep the persisted relationship selectable even if the teacher detail
     // cannot be fetched; the backend remains authoritative on update.
@@ -350,6 +361,7 @@ async function ensureCurrentTeacherOption(
       value: id,
       label: `Guru terhubung (ID: ${id})`,
     }]
+    currentLinkedTeacherOptionId.value = id
   }
 }
 
@@ -362,6 +374,8 @@ async function loadTeacherOptions() {
     const teachers = await teachersService.listActive()
     if (requestId !== latestTeacherRequestId) return
 
+    // A fresh active list replaces any temporary option from a prior edit record.
+    currentLinkedTeacherOptionId.value = ''
     teacherOptions.value = Array.isArray(teachers)
       ? teachers
           .filter(teacher => teacher && teacher.id != null)
@@ -434,6 +448,10 @@ watch(
     const id = Array.isArray(rawId) ? String(rawId[0] ?? '') : String(rawId ?? '')
     errorMsg.value = ''
     if (id) {
+      // Avoid leaking the previous record's temporary inactive-teacher option
+      // when Vue reuses this form component for another user ID.
+      removeCurrentLinkedTeacherOption()
+      resetForm()
       void loadUser(id)
     } else {
       latestUserRequestId += 1
