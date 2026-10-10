@@ -784,7 +784,8 @@
           <BaseAlert v-if="restoreResult" type="success" title="Restore berhasil" aria-live="polite">
             <p>
               {{ restoreResult.restoredSheets.length }} sheet berhasil diproses;
-              {{ restoreResult.totalRecords.toLocaleString('id-ID') }} record ditambahkan atau diperbarui.
+              {{ restoreResult.totalRecords.toLocaleString('id-ID') }}
+              {{ restoreResult.mode === 'merge' ? 'record ditambahkan atau diperbarui' : 'record diterapkan dari backup' }}.
               Akun pengguna dan log audit lama tetap dipertahankan.
             </p>
             <p class="mt-1 text-xs text-emerald-800">Waktu selesai: {{ formatDateTime(restoreResult.restoredAt) }}</p>
