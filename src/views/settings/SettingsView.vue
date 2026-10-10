@@ -1407,9 +1407,15 @@ function inspectBackupFile(value: unknown, file: File): BackupViewerReport {
       Number.isFinite(Date.parse(rawMeta.generatedAt))
     const sheetCountIsValid = Number.isSafeInteger(rawMeta.sheetCount) &&
       (rawMeta.sheetCount as number) >= 0
-    const rawCountsAreValid = isRecord(rawMeta.counts)
+    // Simpan hasil type guard pada variabel lokal agar TypeScript tetap
+    // mempertahankan narrowing untuk nilai bertipe unknown.
+    const rawCounts = isRecord(rawMeta.counts) ? rawMeta.counts : null
+    const rawFailedSheets: unknown[] | null = Array.isArray(rawMeta.failedSheets)
+      ? rawMeta.failedSheets as unknown[]
+      : null
+    const rawCountsAreValid = rawCounts !== null
     const completeIsValid = rawMeta.complete === true
-    const failedSheetsIsValid = Array.isArray(rawMeta.failedSheets)
+    const failedSheetsIsValid = rawFailedSheets !== null
 
     if (!versionIsValid) errors.push('Versi pada manifest tidak ada atau tidak valid.')
     if (!generatedAtIsValid) errors.push('Tanggal pembuatan backup pada manifest tidak valid.')
@@ -1420,13 +1426,13 @@ function inspectBackupFile(value: unknown, file: File): BackupViewerReport {
 
     let normalizedFailedSheets: string[] = []
     if (failedSheetsIsValid) {
-      normalizedFailedSheets = rawMeta.failedSheets
+      normalizedFailedSheets = rawFailedSheets!
         .map((item) => {
           if (typeof item === 'string') return item
           return isRecord(item) && typeof item.name === 'string' ? item.name : ''
         })
         .filter(Boolean)
-      if (rawMeta.failedSheets.some((item) =>
+      if (rawFailedSheets!.some((item) =>
         typeof item !== 'string' && !(isRecord(item) && typeof item.name === 'string')
       )) {
         errors.push('Daftar failedSheets berisi item dengan format yang tidak dikenali.')
@@ -1437,7 +1443,7 @@ function inspectBackupFile(value: unknown, file: File): BackupViewerReport {
     }
 
     if (rawCountsAreValid) {
-      for (const [sheetName, count] of Object.entries(rawMeta.counts)) {
+      for (const [sheetName, count] of Object.entries(rawCounts!)) {
         if (
           sheetName === '__proto__' ||
           sheetName === 'prototype' ||
@@ -1462,15 +1468,15 @@ function inspectBackupFile(value: unknown, file: File): BackupViewerReport {
         }
       }
 
-      if (sheetCountIsValid && Object.keys(rawMeta.counts).length !== rawMeta.sheetCount) {
+      if (sheetCountIsValid && Object.keys(rawCounts!).length !== rawMeta.sheetCount) {
         errors.push('Jumlah nama sheet pada counts tidak cocok dengan sheetCount di manifest.')
       }
       const exportedSheetNames = Object.keys(value).filter((key) => key !== '_meta')
-      if (exportedSheetNames.length !== Object.keys(rawMeta.counts).length) {
+      if (exportedSheetNames.length !== Object.keys(rawCounts!).length) {
         errors.push('Jumlah bagian data sheet pada file tidak cocok dengan manifest.')
       }
       for (const sheetName of exportedSheetNames) {
-        if (!Object.prototype.hasOwnProperty.call(rawMeta.counts, sheetName)) {
+        if (!Object.prototype.hasOwnProperty.call(rawCounts!, sheetName)) {
           errors.push('Sheet "' + sheetName + '" tidak tercantum pada manifest.')
         }
       }
@@ -1623,7 +1629,7 @@ function validateBackupResponse(value: unknown): {
   }
 
   const counts: Record<string, number> = {}
-  const expectedSheets = Object.keys(rawMeta.counts)
+  const expectedSheets = Object.keys(rawCounts!)
   for (const [sheetName, count] of Object.entries(rawMeta.counts)) {
     if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
       throw new Error(`Jumlah record pada sheet "${sheetName}" tidak valid. Backup dibatalkan.`)
