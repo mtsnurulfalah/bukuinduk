@@ -213,7 +213,16 @@ var ReportHandler = {
       if (e.status !== 'active') return;
       var sid = String(e.studentId != null ? e.studentId : e.studentID || '');
       if (!sid) return;
-      activeEnrollmentByStudent[sid] = e;
+      // Jika ada lebih dari satu enrollment aktif, gunakan tanggal terbaru.
+      // Jangan bergantung pada urutan baris di Spreadsheet.
+      var currentEnrollment = activeEnrollmentByStudent[sid];
+      var currentDate = currentEnrollment
+        ? String(currentEnrollment.entryDate || currentEnrollment.createdAt || '')
+        : '';
+      var enrollmentDate = String(e.entryDate || e.createdAt || '');
+      if (!currentEnrollment || enrollmentDate > currentDate) {
+        activeEnrollmentByStudent[sid] = e;
+      }
     });
 
     // Deteksi duplikasi NIS/NISN di seluruh data siswa.
@@ -342,7 +351,10 @@ var ReportHandler = {
       if (nisn && !/^\d{10}$/.test(nisn)) issues.push('invalid_nisn');
 
       var age = getAge(s.birthDate);
-      if (age !== null && (age < 10 || age > 20)) issues.push('age_review');
+      // Tanggal lahir terisi tetapi tidak dapat diparse juga perlu ditinjau.
+      if ((hasValue(s.birthDate) && age === null) || (age !== null && (age < 10 || age > 20))) {
+        issues.push('age_review');
+      }
 
       issues.forEach(function(key) { breakdownCounts[key]++; });
 
@@ -454,7 +466,7 @@ var ReportHandler = {
         insights.push({
           id: 'age',
           title: 'Ada tanggal lahir yang perlu ditinjau',
-          description: 'Sebagian tanggal lahir menghasilkan usia di luar rentang pemeriksaan 10–20 tahun. Verifikasi data sumber.',
+          description: 'Sebagian tanggal lahir tidak dapat dibaca atau menghasilkan usia di luar rentang pemeriksaan 10–20 tahun. Verifikasi data sumber.',
           severity: 'low',
           count: breakdownCounts.age_review,
         });
