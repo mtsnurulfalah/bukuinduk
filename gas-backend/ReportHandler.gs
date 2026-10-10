@@ -806,30 +806,30 @@ var SettingsHandler = {
    * ulang di server, users dan audit_logs dipertahankan, serta snapshot
    * dipakai untuk rollback apabila penulisan lintas-sheet gagal.
    */
-  restoreBackup: function(payload, user) {
+  /**
+   * Validasi payload restore di server. Sheet users dan audit_logs tidak pernah
+   * diizinkan sebagai target oleh endpoint selektif ini.
+   */
+  _prepareRestoreRequest: function(payload, user) {
     checkPermission(user, 'settings:manage');
-
-    if (!payload || payload.confirmation !== 'PULIHKAN') {
-      throw new Error('Konfirmasi restore tidak valid. Ketik PULIHKAN lalu ulangi.');
-    }
-
-    var backup = payload.backup;
+    var backup = payload && payload.backup;
     if (!backup || typeof backup !== 'object' || Array.isArray(backup)) {
       throw new Error('Payload backup harus berupa objek JSON.');
     }
 
     var serialized;
-    try {
-      serialized = JSON.stringify(backup);
-    } catch (serializeError) {
-      throw new Error('Backup tidak dapat diproses sebagai JSON.');
-    }
+    try { serialized = JSON.stringify(backup); }
+    catch (serializeError) { throw new Error('Backup tidak dapat diproses sebagai JSON.'); }
     if (!serialized || serialized.length > 15 * 1024 * 1024) {
       throw new Error('Ukuran payload restore melewati batas aman 15 MB. Gunakan backup yang lebih kecil.');
     }
 
-    var meta = backup._meta;
     var sheetNames = Object.values(CONFIG.SHEETS);
+    var protectedSheets = [CONFIG.SHEETS.USERS, CONFIG.SHEETS.AUDIT_LOGS];
+    var allowedTargets = sheetNames.filter(function(name) {
+      return protectedSheets.indexOf(name) === -1;
+    });
+    var meta = backup._meta;
     var backupKeys = Object.keys(backup);
     var failedSheets = meta && Array.isArray(meta.failedSheets) ? meta.failedSheets : null;
 
@@ -840,14 +840,10 @@ var SettingsHandler = {
       throw new Error('Restore ditolak karena manifest backup tidak lengkap atau memiliki sheet gagal dibaca.');
     }
     if (
-      typeof meta.version !== 'string' ||
-      !meta.version.trim() ||
-      typeof meta.generatedAt !== 'string' ||
-      !Number.isFinite(Date.parse(meta.generatedAt)) ||
+      typeof meta.version !== 'string' || !meta.version.trim() ||
+      typeof meta.generatedAt !== 'string' || !Number.isFinite(Date.parse(meta.generatedAt)) ||
       meta.sheetCount !== sheetNames.length ||
-      !meta.counts ||
-      typeof meta.counts !== 'object' ||
-      Array.isArray(meta.counts)
+      !meta.counts || typeof meta.counts !== 'object' || Array.isArray(meta.counts)
     ) {
       throw new Error('Manifest backup tidak cocok dengan format yang didukung aplikasi.');
     }
@@ -862,9 +858,7 @@ var SettingsHandler = {
     var countKeys = Object.keys(meta.counts);
     if (
       countKeys.length !== sheetNames.length ||
-      sheetNames.some(function(name) {
-        return !Object.prototype.hasOwnProperty.call(meta.counts, name);
-      }) ||
+      sheetNames.some(function(name) { return !Object.prototype.hasOwnProperty.call(meta.counts, name); }) ||
       countKeys.some(function(name) { return sheetNames.indexOf(name) === -1; })
     ) {
       throw new Error('Daftar jumlah record pada manifest tidak cocok dengan daftar sheet backup.');
@@ -875,10 +869,8 @@ var SettingsHandler = {
       var count = meta.counts[name];
       if (
         !Array.isArray(rows) ||
-        typeof count !== 'number' ||
-        !Number.isSafeInteger(count) ||
-        count < 0 ||
-        rows.length !== count
+        typeof count !== 'number' || !Number.isSafeInteger(count) ||
+        count < 0 || rows.length !== count
       ) {
         throw new Error('Data sheet "' + name + '" tidak sesuai dengan jumlah record pada manifest.');
       }
@@ -889,12 +881,8 @@ var SettingsHandler = {
         }
         Object.keys(record).forEach(function(field) {
           var value = record[field];
-          if (
-            value !== null &&
-            typeof value !== 'string' &&
-            typeof value !== 'number' &&
-            typeof value !== 'boolean'
-          ) {
+          if (value !== null && typeof value !== 'string' &&
+              typeof value !== 'number' && typeof value !== 'boolean') {
             throw new Error('Field "' + field + '" pada sheet "' + name + '" berisi nilai bertingkat yang tidak didukung.');
           }
           if (typeof value === 'number' && !Number.isFinite(value)) {
@@ -904,144 +892,320 @@ var SettingsHandler = {
       });
     });
 
-    var protectedSheets = [CONFIG.SHEETS.USERS, CONFIG.SHEETS.AUDIT_LOGS];
-    var restoreNames = sheetNames.filter(function(name) {
-      return protectedSheets.indexOf(name) === -1;
+    if (!payload || !Array.isArray(payload.selectedSheets) || !payload.selectedSheets.length) {
+      throw new Error('Pilih minimal satu sheet untuk dipulihkan.');
+    }
+    var requested = {};
+    payload.selectedSheets.forEach(function(name) {
+      if (typeof name !== 'string' || allowedTargets.indexOf(name) === -1) {
+        throw new Error('Sheet "' + String(name) + '" tidak diizinkan untuk restore selektif.');
+      }
+      if (requested[name]) throw new Error('Sheet "' + name + '" terpilih lebih dari satu kali.');
+      requested[name] = true;
     });
+
+    var mode = payload.mode;
+    if (mode !== 'merge' && mode !== 'replace') {
+      throw new Error('Mode restore harus merge atau replace.');
+    }
+    var conflictStrategy = mode === 'merge' ? (payload.conflictStrategy || 'keepExisting') : 'none';
+    if (mode === 'merge' && conflictStrategy !== 'keepExisting' &&
+        conflictStrategy !== 'overwriteExisting') {
+      throw new Error('Strategi konflik merge tidak dikenal.');
+    }
+
+    return {
+      backup: backup,
+      meta: meta,
+      sheetNames: sheetNames,
+      protectedSheets: protectedSheets,
+      allowedTargets: allowedTargets,
+      selectedSheets: allowedTargets.filter(function(name) { return requested[name]; }),
+      mode: mode,
+      conflictStrategy: conflictStrategy
+    };
+  },
+
+  /**
+   * Menyusun rencana tanpa menulis. Pratinjau dan eksekusi memakai builder
+   * yang sama sehingga hitungan konflik dihitung ulang di server.
+   */
+  _prepareRestorePlans: function(context) {
+    var plans = [];
+
+    context.selectedSheets.forEach(function(name) {
+      var sheet = getSheet(name);
+      var headers = getHeaders(sheet);
+      if (
+        !headers.length ||
+        headers.some(function(header) { return typeof header !== 'string' || !header.trim(); }) ||
+        new Set(headers).size !== headers.length ||
+        headers.indexOf('id') === -1
+      ) {
+        throw new Error('Header sheet "' + name + '" kosong, duplikat, atau tidak memiliki kolom id.');
+      }
+
+      var sourceRecords = context.backup[name];
+      var seenSourceIds = {};
+      var sourceRows = sourceRecords.map(function(record, rowIndex) {
+        var keys = Object.keys(record);
+        if (
+          keys.length !== headers.length ||
+          headers.some(function(header) { return !Object.prototype.hasOwnProperty.call(record, header); }) ||
+          keys.some(function(key) { return headers.indexOf(key) === -1; })
+        ) {
+          throw new Error(
+            'Struktur record ke-' + (rowIndex + 1) + ' pada sheet "' + name +
+            '" tidak cocok dengan header Spreadsheet. Tidak ada data yang ditulis.'
+          );
+        }
+
+        var recordId = record.id === null || record.id === undefined ? '' : String(record.id).trim();
+        if (!recordId) throw new Error('Record tanpa ID ditemukan pada sheet "' + name + '". Restore dibatalkan.');
+        if (seenSourceIds[recordId]) {
+          throw new Error('ID duplikat "' + recordId + '" ditemukan pada sheet "' + name + '". Restore dibatalkan.');
+        }
+        seenSourceIds[recordId] = true;
+
+        return headers.map(function(header) {
+          var value = record[header];
+          if (value === null || value === undefined) return '';
+          if (typeof value === 'string') {
+            // Cegah nilai backup dieksekusi sebagai formula Google Spreadsheet.
+            return /^[\s]*[=+\-@]/.test(value) ? "'" + value : value;
+          }
+          if (typeof value === 'number' && !Number.isFinite(value)) {
+            throw new Error('Angka tidak valid pada sheet "' + name + '".');
+          }
+          if (typeof value !== 'number' && typeof value !== 'boolean') {
+            throw new Error('Nilai field tidak didukung pada sheet "' + name + '".');
+          }
+          return value;
+        });
+      });
+
+      var lastRow = sheet.getLastRow();
+      var existingCount = Math.max(0, lastRow - 1);
+      var currentValues = existingCount
+        ? sheet.getRange(2, 1, existingCount, headers.length).getValues()
+        : [];
+      var currentFormulas = existingCount
+        ? sheet.getRange(2, 1, existingCount, headers.length).getFormulas()
+        : [];
+      var idColumn = headers.indexOf('id');
+      var currentIdToRow = {};
+      var duplicateCurrentIds = {};
+
+      currentValues.forEach(function(row, index) {
+        var id = row[idColumn] === null || row[idColumn] === undefined ? '' : String(row[idColumn]).trim();
+        if (!id) return;
+        if (Object.prototype.hasOwnProperty.call(currentIdToRow, id)) duplicateCurrentIds[id] = true;
+        else currentIdToRow[id] = index + 2;
+      });
+      if (context.mode === 'merge' && Object.keys(duplicateCurrentIds).length) {
+        throw new Error(
+          'Sheet "' + name + '" memiliki ID saat ini yang duplikat (' +
+          Object.keys(duplicateCurrentIds).slice(0, 5).join(', ') +
+          '). Perbaiki duplikasi sebelum menggunakan mode gabungkan data.'
+        );
+      }
+
+      var updates = [];
+      var appendedRows = [];
+      var added = 0;
+      var updated = 0;
+      var skipped = 0;
+      var deleted = context.mode === 'replace' ? currentValues.length : 0;
+
+      if (context.mode === 'replace') {
+        added = sourceRows.length;
+      } else {
+        sourceRows.forEach(function(row, index) {
+          var id = String(sourceRecords[index].id).trim();
+          if (!Object.prototype.hasOwnProperty.call(currentIdToRow, id)) {
+            appendedRows.push(row);
+            added++;
+          } else if (context.conflictStrategy === 'overwriteExisting') {
+            updates.push({ rowIndex: currentIdToRow[id], values: row });
+            updated++;
+          } else {
+            skipped++;
+          }
+        });
+      }
+
+      plans.push({
+        name: name,
+        sheet: sheet,
+        headers: headers,
+        sourceRows: sourceRows,
+        currentValues: currentValues,
+        currentFormulas: currentFormulas,
+        lastRow: Math.max(lastRow, 1),
+        updates: updates,
+        appendedRows: appendedRows,
+        added: added,
+        updated: updated,
+        skipped: skipped,
+        deleted: deleted,
+        finalRecords: context.mode === 'replace' ? sourceRows.length : currentValues.length + added
+      });
+    });
+
+    return plans;
+  },
+
+  _restoreFingerprint: function(plans) {
+    var state = plans.map(function(plan) {
+      return {
+        name: plan.name,
+        headers: plan.headers,
+        values: plan.currentValues,
+        formulas: plan.currentFormulas
+      };
+    });
+    var digest = Utilities.computeDigest(
+      Utilities.DigestAlgorithm.SHA_256,
+      JSON.stringify(state),
+      Utilities.Charset.UTF_8
+    );
+    return digest.map(function(byte) {
+      return ('0' + (byte & 255).toString(16)).slice(-2);
+    }).join('');
+  },
+
+  previewRestore: function(payload, user) {
+    var context = this._prepareRestoreRequest(payload, user);
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(30000)) {
+      throw new Error('Pratinjau tidak dapat dihitung karena ada proses penulisan lain. Coba lagi.');
+    }
+
+    try {
+      var plans = this._prepareRestorePlans(context);
+      var sheets = plans.map(function(plan) {
+        return {
+          sheetName: plan.name,
+          backupRecords: plan.sourceRows.length,
+          currentRecords: plan.currentValues.length,
+          added: plan.added,
+          updated: plan.updated,
+          skipped: plan.skipped,
+          deleted: plan.deleted,
+          finalRecords: plan.finalRecords
+        };
+      });
+      return successResponse({
+        fingerprint: this._restoreFingerprint(plans),
+        mode: context.mode,
+        conflictStrategy: context.conflictStrategy,
+        selectedSheets: context.selectedSheets,
+        sheets: sheets,
+        totals: sheets.reduce(function(total, item) {
+          total.backupRecords += item.backupRecords;
+          total.currentRecords += item.currentRecords;
+          total.added += item.added;
+          total.updated += item.updated;
+          total.skipped += item.skipped;
+          total.deleted += item.deleted;
+          total.finalRecords += item.finalRecords;
+          return total;
+        }, { backupRecords: 0, currentRecords: 0, added: 0, updated: 0, skipped: 0, deleted: 0, finalRecords: 0 }),
+        generatedAt: now()
+      });
+    } finally {
+      lock.releaseLock();
+    }
+  },
+
+  restoreBackup: function(payload, user) {
+    var context = this._prepareRestoreRequest(payload, user);
+    var expectedConfirmation = context.mode === 'replace' ? 'GANTI' : 'GABUNGKAN';
+    if (!payload || payload.confirmation !== expectedConfirmation) {
+      throw new Error('Konfirmasi tidak sesuai dengan mode pemulihan. Ketik ' + expectedConfirmation + ' lalu ulangi.');
+    }
+    if (typeof payload.expectedFingerprint !== 'string' || !payload.expectedFingerprint.trim()) {
+      throw new Error('Pratinjau restore wajib dijalankan ulang sebelum menulis data.');
+    }
+
     var lock = LockService.getScriptLock();
     if (!lock.tryLock(30000)) {
       throw new Error('Restore tidak dapat dimulai karena ada proses lain yang sedang mengubah data. Coba lagi.');
     }
 
     var plans = [];
-    var snapshots = {};
     var attempted = [];
 
     function replaceRows(sheet, headers, rows) {
       var requiredLastRow = rows.length + 1;
       var maxRows = sheet.getMaxRows();
-      if (maxRows < requiredLastRow) {
-        sheet.insertRowsAfter(maxRows, requiredLastRow - maxRows);
+      if (maxRows < requiredLastRow) sheet.insertRowsAfter(maxRows, requiredLastRow - maxRows);
+      var lastToClear = Math.max(sheet.getLastRow(), requiredLastRow);
+      if (lastToClear > 1) sheet.getRange(2, 1, lastToClear - 1, headers.length).clearContent();
+      if (rows.length) sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+    }
+
+    function applyMerge(plan) {
+      // Hanya update ID bentrok jika strategi overwrite dipilih. Record lain
+      // tidak disentuh sehingga formula dan nilai yang ada tetap terjaga.
+      var updates = plan.updates.slice().sort(function(a, b) { return a.rowIndex - b.rowIndex; });
+      var index = 0;
+      while (index < updates.length) {
+        var group = [updates[index]];
+        var next = index + 1;
+        while (next < updates.length && updates[next].rowIndex === group[group.length - 1].rowIndex + 1) {
+          group.push(updates[next]);
+          next++;
+        }
+        plan.sheet.getRange(group[0].rowIndex, 1, group.length, plan.headers.length)
+          .setValues(group.map(function(item) { return item.values; }));
+        index = next;
       }
 
-      var lastToClear = Math.max(sheet.getLastRow(), requiredLastRow);
-      if (lastToClear > 1) {
-        sheet.getRange(2, 1, lastToClear - 1, headers.length).clearContent();
-      }
-      if (rows.length) {
-        sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+      if (plan.appendedRows.length) {
+        var startRow = plan.lastRow + 1;
+        var requiredLastRow = startRow + plan.appendedRows.length - 1;
+        var maxRows = plan.sheet.getMaxRows();
+        if (maxRows < requiredLastRow) plan.sheet.insertRowsAfter(maxRows, requiredLastRow - maxRows);
+        plan.sheet.getRange(startRow, 1, plan.appendedRows.length, plan.headers.length)
+          .setValues(plan.appendedRows);
       }
     }
 
     try {
-      restoreNames.forEach(function(name) {
-        // Restore tidak membuat atau mengubah struktur sheet. Semua sheet tujuan
-        // harus sudah tersedia dan cocok dengan skema sebelum ada data yang ditulis.
-        var sheet = getSheet(name);
-        var headers = getHeaders(sheet);
-
-        if (
-          !headers.length ||
-          headers.some(function(header) { return typeof header !== 'string' || !header.trim(); }) ||
-          new Set(headers).size !== headers.length
-        ) {
-          throw new Error('Header sheet "' + name + '" kosong atau duplikat. Perbaiki skema sebelum restore.');
-        }
-
-        var rows = backup[name];
-        var seenIds = {};
-        var rowValues = rows.map(function(record, rowIndex) {
-          var keys = Object.keys(record);
-          if (
-            keys.length !== headers.length ||
-            headers.some(function(header) {
-              return !Object.prototype.hasOwnProperty.call(record, header);
-            }) ||
-            keys.some(function(key) { return headers.indexOf(key) === -1; })
-          ) {
-            throw new Error(
-              'Struktur record ke-' + (rowIndex + 1) + ' pada sheet "' + name +
-              '" tidak cocok dengan header Spreadsheet. Tidak ada data yang ditulis.'
-            );
-          }
-
-          if (headers.indexOf('id') >= 0) {
-            var recordId = record.id === null || record.id === undefined ? '' : String(record.id).trim();
-            if (!recordId) {
-              throw new Error('Record tanpa ID ditemukan pada sheet "' + name + '". Restore dibatalkan.');
-            }
-            if (seenIds[recordId]) {
-              throw new Error('ID duplikat "' + recordId + '" ditemukan pada sheet "' + name + '". Restore dibatalkan.');
-            }
-            seenIds[recordId] = true;
-          }
-
-          return headers.map(function(header) {
-            var value = record[header];
-            if (value === null || value === undefined) return '';
-            if (typeof value === 'string') {
-              // Jangan biarkan teks backup berubah menjadi formula Spreadsheet.
-              return /^[\s]*[=+\-@]/.test(value) ? "'" + value : value;
-            }
-            if (typeof value === 'number' && !Number.isFinite(value)) {
-              throw new Error('Angka tidak valid pada sheet "' + name + '".');
-            }
-            if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
-              throw new Error('Nilai field tidak didukung pada sheet "' + name + '".');
-            }
-            return value;
-          });
-        });
-
-        plans.push({ name: name, sheet: sheet, headers: headers, rows: rowValues });
-      });
-
-      // Snapshot seluruh target sebelum sheet pertama pun ditulis.
-      plans.forEach(function(plan) {
-        var lastRow = plan.sheet.getLastRow();
-        var rowCount = Math.max(0, lastRow - 1);
-        var existingValues = rowCount
-          ? plan.sheet.getRange(2, 1, rowCount, plan.headers.length).getValues()
-          : [];
-        var existingFormulas = rowCount
-          ? plan.sheet.getRange(2, 1, rowCount, plan.headers.length).getFormulas()
-          : [];
-        snapshots[plan.name] = {
-          headers: plan.headers,
-          values: existingValues,
-          formulas: existingFormulas
-        };
-      });
+      plans = this._prepareRestorePlans(context);
+      var actualFingerprint = this._restoreFingerprint(plans);
+      if (actualFingerprint !== payload.expectedFingerprint) {
+        throw new Error(
+          'Data pada Spreadsheet berubah setelah pratinjau dibuat. Tidak ada data yang ditulis. Hitung pratinjau baru sebelum melanjutkan.'
+        );
+      }
 
       try {
         plans.forEach(function(plan) {
           attempted.push(plan.name);
-          replaceRows(plan.sheet, plan.headers, plan.rows);
+          if (context.mode === 'replace') replaceRows(plan.sheet, plan.headers, plan.sourceRows);
+          else applyMerge(plan);
         });
       } catch (writeError) {
         var rollbackErrors = [];
         attempted.slice().reverse().forEach(function(name) {
           try {
             var plan = plans.find(function(item) { return item.name === name; });
-            var snapshot = snapshots[name];
-            replaceRows(plan.sheet, snapshot.headers, snapshot.values);
-            snapshot.formulas.forEach(function(row, rowIndex) {
+            replaceRows(plan.sheet, plan.headers, plan.currentValues);
+            plan.currentFormulas.forEach(function(row, rowIndex) {
               row.forEach(function(formula, columnIndex) {
-                if (formula) {
-                  plan.sheet.getRange(rowIndex + 2, columnIndex + 1).setFormula(formula);
-                }
+                if (formula) plan.sheet.getRange(rowIndex + 2, columnIndex + 1).setFormula(formula);
               });
             });
           } catch (rollbackError) {
             rollbackErrors.push(name + ': ' + (rollbackError && rollbackError.message ? rollbackError.message : String(rollbackError)));
           }
         });
-
         if (rollbackErrors.length) {
           throw new Error(
-            'Restore gagal saat menulis data dan rollback tidak tuntas untuk: ' +
-            rollbackErrors.join('; ') +
-            '. Jangan jalankan restore ulang; periksa Spreadsheet dan buat backup kondisi saat ini.'
+            'Restore gagal dan rollback tidak tuntas untuk: ' + rollbackErrors.join('; ') +
+            '. Jangan ulangi restore; periksa Spreadsheet dan buat backup kondisi saat ini.'
           );
         }
         throw new Error(
@@ -1051,38 +1215,44 @@ var SettingsHandler = {
       }
 
       var counts = {};
+      var restoredSheets = [];
       var totalRecords = 0;
       plans.forEach(function(plan) {
-        counts[plan.name] = plan.rows.length;
-        totalRecords += plan.rows.length;
+        restoredSheets.push(plan.name);
+        counts[plan.name] = {
+          added: plan.added,
+          updated: plan.updated,
+          skipped: plan.skipped,
+          deleted: plan.deleted,
+          finalRecords: plan.finalRecords
+        };
+        totalRecords += plan.added + plan.updated;
       });
 
       try {
         CacheService.getScriptCache().removeAll([
-          'students_all',
-          'students_stats',
-          'students_completeness',
-          'reports_intelligence'
+          'students_all', 'students_stats', 'students_completeness', 'reports_intelligence'
         ]);
       } catch (cacheError) {
         Logger.log('Restore berhasil, tetapi invalidasi cache tidak tuntas: ' +
           (cacheError && cacheError.message ? cacheError.message : String(cacheError)));
       }
+
       AuditService.log(
-        user.id,
-        'RESTORE',
-        'settings',
-        null,
-        null,
-        null,
-        'Restore backup JSON berhasil; ' + restoreNames.length +
-          ' sheet, ' + totalRecords + ' record; users dan audit_logs dipertahankan'
+        user.id, 'RESTORE', 'settings', null, null, null,
+        'Restore backup JSON (' + context.mode + '); ' + restoredSheets.length +
+          ' sheet terpilih; users dan audit_logs dipertahankan'
       );
 
       return successResponse({
         restoredAt: now(),
-        restoredSheets: restoreNames,
-        preservedSheets: protectedSheets,
+        mode: context.mode,
+        conflictStrategy: context.conflictStrategy,
+        restoredSheets: restoredSheets,
+        preservedSheets: context.protectedSheets,
+        unselectedSheets: context.allowedTargets.filter(function(name) {
+          return context.selectedSheets.indexOf(name) === -1;
+        }),
         counts: counts,
         totalRecords: totalRecords
       });
