@@ -1,6 +1,6 @@
 <template>
-  <div class="mb-6 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-    <div class="flex min-w-0 items-start gap-3">
+  <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div class="flex min-w-0 flex-1 items-start gap-3">
       <!-- Back button -->
       <button
         v-if="showBack"
@@ -31,12 +31,20 @@
         </nav>
 
         <h1 class="break-words text-xl font-bold leading-tight text-slate-800">{{ title }}</h1>
-        <p v-if="subtitle" class="mt-0.5 break-words text-sm text-slate-500">{{ subtitle }}</p>
+        <div
+          v-if="subtitle || $slots.subtitle"
+          class="mt-1 min-w-0 break-words text-sm text-slate-500"
+        >
+          <slot name="subtitle">{{ subtitle }}</slot>
+        </div>
       </div>
     </div>
 
     <!-- Actions -->
-    <div v-if="$slots.actions" class="flex min-w-0 flex-wrap items-center gap-2 sm:shrink-0">
+    <div
+      v-if="$slots.actions"
+      class="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:justify-end"
+    >
       <slot name="actions" />
     </div>
   </div>
@@ -60,12 +68,26 @@ const props = defineProps<{
 
 const router = useRouter()
 
-function handleBack() {
+function handleBack(): void {
   if (props.backTo) {
     void router.push(props.backTo)
     return
   }
 
-  router.back()
+  // Vue Router stores the previous in-app location in history.state.back.
+  // Direct entry (for example, opening a bookmark) may have no usable back entry.
+  const historyBack = typeof window !== 'undefined' ? window.history.state?.back : null
+  if (typeof historyBack === 'string' && historyBack.length > 0) {
+    router.back()
+    return
+  }
+
+  // Prefer the nearest parent breadcrumb when the page has no internal history.
+  const fallbackRoute = [...(props.breadcrumbs ?? [])]
+    .slice(0, -1)
+    .reverse()
+    .find(crumb => crumb.to)?.to
+
+  void router.replace(fallbackRoute ?? '/dashboard')
 }
 </script>
