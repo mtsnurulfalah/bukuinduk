@@ -362,14 +362,33 @@ export const schoolYearSchema = yup.object({
   name: yup
     .string()
     .required('Nama tahun pelajaran wajib diisi')
+    .trim()
     .matches(/^\d{4}\/\d{4}$/, 'Format harus YYYY/YYYY, contoh: 2024/2025'),
-  startDate: yup.string().required('Tanggal mulai wajib diisi'),
+  startDate: yup
+    .string()
+    .required('Tanggal mulai wajib diisi')
+    .test(
+      'date-only',
+      'Tanggal mulai harus berupa tanggal kalender yang valid',
+      value => Boolean(value && isValidDateOnly(value)),
+    ),
   endDate: yup
     .string()
     .required('Tanggal selesai wajib diisi')
+    .test(
+      'date-only',
+      'Tanggal selesai harus berupa tanggal kalender yang valid',
+      value => Boolean(value && isValidDateOnly(value)),
+    )
     .test('endDate', 'Tanggal selesai harus setelah tanggal mulai', function (value) {
       const { startDate } = this.parent
-      if (!startDate || !value) return true
-      return new Date(value) > new Date(startDate)
+      // Validitas tanggal ditangani oleh test date-only agar error lebih akurat.
+      if (
+        typeof startDate !== 'string' ||
+        typeof value !== 'string' ||
+        !isValidDateOnly(startDate) ||
+        !isValidDateOnly(value)
+      ) return true
+      return value > startDate
     }),
 })

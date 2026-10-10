@@ -26,34 +26,52 @@ export const useSchoolYearStore = defineStore('schoolYear', () => {
     grades.value.map(g => ({ value: g.id, label: g.name }))
   )
 
+  // Berbagi satu promise penuh (termasuk cleanup) agar beberapa halaman tidak
+  // melakukan fetch bersamaan atau melewatkan hasil dari request yang sedang berjalan.
+  let schoolYearFetchPromise: Promise<void> | null = null
+
   async function fetch(): Promise<void> {
     if (initialized.value) return
-    isLoading.value = true
-    try {
-      // Jalankan keduanya paralel, tapi tangani masing-masing secara independen
-      // agar kegagalan fetch grades tidak memblokir schoolYears (dan sebaliknya).
-      const results = await Promise.allSettled([
-        classroomsService.listSchoolYears(),
-        classroomsService.listGrades(),
-      ])
-
-      if (results[0].status === 'fulfilled') {
-        schoolYears.value = results[0].value
-      }
-      if (results[1].status === 'fulfilled') {
-        grades.value = results[1].value
-      }
-
-      // Tandai initialized jika minimal schoolYears berhasil.
-      // grades yang kosong/gagal bisa di-retry via refresh().
-      if (results[0].status === 'fulfilled') {
-        initialized.value = true
-      }
-    } catch {
-      // Tidak perlu catch — Promise.allSettled tidak pernah reject
-    } finally {
-      isLoading.value = false
+    if (schoolYearFetchPromise) {
+      await schoolYearFetchPromise
+      return
     }
+
+    isLoading.value = true
+    const request = (async () => {
+      try {
+        // Jalankan keduanya paralel, tapi tangani masing-masing secara independen
+        // agar kegagalan fetch grades tidak memblokir schoolYears (dan sebaliknya).
+        const results = await Promise.allSettled([
+          classroomsService.listSchoolYears(),
+          classroomsService.listGrades(),
+        ])
+
+        if (results[0].status === 'fulfilled') {
+          schoolYears.value = results[0].value
+        }
+        if (results[1].status === 'fulfilled') {
+          grades.value = results[1].value
+        }
+
+        // Tandai initialized jika minimal schoolYears berhasil.
+        // grades yang kosong/gagal bisa di-retry via refresh().
+        if (results[0].status === 'fulfilled') {
+          initialized.value = true
+        }
+      } finally {
+        isLoading.value = false
+      }
+    })()
+
+    // Cleanup menjadi bagian dari promise yang dibagikan supaya refresh()
+    // tidak berjalan sebelum penanda request sebelumnya benar-benar dilepas.
+    let trackedRequest: Promise<void>
+    trackedRequest = request.finally(() => {
+      if (schoolYearFetchPromise === trackedRequest) schoolYearFetchPromise = null
+    })
+    schoolYearFetchPromise = trackedRequest
+    await trackedRequest
   }
 
   /**
@@ -70,6 +88,14 @@ export const useSchoolYearStore = defineStore('schoolYear', () => {
   }
 
   async function refresh(): Promise<void> {
+    // Tunggu pemuatan yang berjalan sebelum meminta data segar.
+    if (schoolYearFetchPromise) {
+      try {
+        await schoolYearFetchPromise
+      } catch {
+        // Tetap lanjutkan refresh agar kegagalan request sebelumnya tidak mengunci retry.
+      }
+    }
     initialized.value = false
     await fetch()
   }
