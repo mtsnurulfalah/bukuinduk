@@ -302,7 +302,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { isNavigationFailure, useRoute, useRouter } from 'vue-router'
 import { Save } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import {
@@ -545,7 +545,8 @@ async function handleSubmit() {
         address: 'teacher-address',
         status: 'teacher-status',
       }
-      const firstErrorId = fieldIds[validationErrors[0]?.path]
+      const firstErrorPath = validationErrors[0]?.path
+      const firstErrorId = firstErrorPath ? fieldIds[firstErrorPath] : undefined
       if (firstErrorId) document.getElementById(firstErrorId)?.focus()
       return
     }
@@ -575,6 +576,14 @@ async function handleSubmit() {
       const message = saveError instanceof Error
         ? saveError.message
         : 'Gagal menyimpan data guru.'
+      const routeChanged = submitIsEdit !== isEdit.value ||
+        (submitIsEdit && editId.value !== submittedId)
+
+      if (routeChanged) {
+        toast.error(`Penyimpanan data guru tidak berhasil: ${message}`)
+        return
+      }
+
       mapServerError(message)
       errorMsg.value = message
       return
@@ -583,7 +592,10 @@ async function handleSubmit() {
     // Kegagalan navigasi setelah API sukses tidak boleh dilaporkan sebagai
     // kegagalan penyimpanan, karena data sudah tersimpan di backend.
     try {
-      await router.push({ name: 'teachers' })
+      const navigationFailure = await router.push({ name: 'teachers' })
+      if (isNavigationFailure(navigationFailure)) {
+        errorMsg.value = 'Data guru berhasil disimpan, tetapi halaman daftar belum terbuka. Gunakan tombol Batal untuk kembali ke Data Guru.'
+      }
     } catch {
       errorMsg.value = 'Data guru berhasil disimpan, tetapi halaman daftar belum terbuka. Gunakan tombol Batal untuk kembali ke Data Guru.'
     }
