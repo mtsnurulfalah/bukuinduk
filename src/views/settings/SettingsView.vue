@@ -631,7 +631,7 @@
               <div class="min-w-0 rounded-lg border border-slate-200 p-3">
                 <p class="text-xs text-slate-500">Status validasi</p>
                 <p class="mt-1 flex items-center gap-2 text-sm font-semibold" :class="backupViewerResult.valid ? 'text-emerald-700' : 'text-red-700'">
-                  <CheckCircle2 v-if="backupViewerResult.valid" class="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <CheckCircle v-if="backupViewerResult.valid" class="h-4 w-4 shrink-0" aria-hidden="true" />
                   <AlertTriangle v-else class="h-4 w-4 shrink-0" aria-hidden="true" />
                   {{ backupViewerResult.valid ? 'Valid dan lengkap' : 'Tidak valid / perlu tinjauan' }}
                 </p>
@@ -771,7 +771,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { ValidationError } from 'yup'
-import { Save, Plus, Trash2, Download, Building2, Calendar, Database, FileJson, Upload, Search, ShieldCheck, CheckCircle2, AlertTriangle } from 'lucide-vue-next'
+import { Save, Plus, Trash2, Download, Building2, Calendar, Database, FileJson, Upload, Search, ShieldCheck, CheckCircle, AlertTriangle } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import {
   BaseCard, BaseInput, BaseButton, BaseAlert, BaseBadge,
