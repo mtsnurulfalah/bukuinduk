@@ -24,51 +24,208 @@
 
     <!-- Tab: Profil Sekolah -->
     <template v-if="activeTab === 'school'">
-      <BaseAlert v-if="settingsLoadError" type="error">{{ settingsLoadError }}</BaseAlert>
+      <BaseAlert
+        v-if="settingsLoadError"
+        type="error"
+        title="Pengaturan belum dapat dimuat"
+      >
+        {{ settingsLoadError }}
+      </BaseAlert>
       <div v-if="settingsLoadError" class="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <BaseButton type="button" variant="outline" size="sm" :loading="isLoadingSettings" @click="loadSettingsData">
+        <BaseButton
+          type="button"
+          variant="outline"
+          size="sm"
+          class="w-full sm:w-auto"
+          :loading="isLoadingSettings"
+          @click="loadSettingsData"
+        >
           Coba Muat Ulang
         </BaseButton>
       </div>
-      <BaseAlert v-if="successMsg" type="success" dismissible @dismiss="successMsg = ''">{{ successMsg }}</BaseAlert>
-      <BaseAlert v-if="errorMsg" type="error" dismissible @dismiss="errorMsg = ''">{{ errorMsg }}</BaseAlert>
-      <BaseAlert v-if="isLoadingSettings" type="info">Memuat konfigurasi sekolah...</BaseAlert>
 
-      <form class="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-2" @submit.prevent="saveSchoolSettings">
-        <BaseCard title="Identitas Sekolah/Madrasah">
-          <div class="space-y-4 mt-3">
-            <BaseInput v-model="schoolForm.schoolName" :disabled="!canManageSettings || isLoadingSettings || isSaving" label="Nama Sekolah/Madrasah" placeholder="MTs..." required />
-            <BaseInput v-model="schoolForm.schoolNpsn" :disabled="!canManageSettings" label="NPSN" placeholder="8 digit angka" />
-            <BaseInput v-model="schoolForm.schoolAddress" :disabled="!canManageSettings" label="Alamat" placeholder="Jalan, desa, kecamatan..." />
-            <BaseInput v-model="schoolForm.schoolPhone" :disabled="!canManageSettings" label="Nomor Telepon" placeholder="(0xx) xxxx-xxxx" />
-            <BaseInput v-model="schoolForm.schoolEmail" :disabled="!canManageSettings" label="Email Sekolah" type="email" placeholder="info@sekolah.sch.id" />
-            <BaseInput v-model="schoolForm.schoolWebsite" :disabled="!canManageSettings" label="Website" placeholder="https://sekolah.sch.id" />
+      <BaseAlert
+        v-if="isLoadingSettings"
+        type="info"
+        title="Memuat pengaturan"
+        aria-live="polite"
+      >
+        Data profil sekolah sedang diambil dari server.
+      </BaseAlert>
+      <BaseAlert
+        v-if="settingsStore.initialized && !schoolForm.schoolName.trim()"
+        type="info"
+        title="Profil sekolah belum lengkap"
+      >
+        Lengkapi nama sekolah/madrasah sebelum menyimpan profil.
+      </BaseAlert>
+      <BaseAlert
+        v-if="!canManageSettings"
+        type="warning"
+        title="Akses lihat saja"
+      >
+        Anda dapat melihat profil sekolah, tetapi hanya pengguna dengan izin pengelolaan pengaturan yang dapat mengubahnya.
+      </BaseAlert>
+      <BaseAlert
+        v-if="successMsg"
+        type="success"
+        title="Perubahan tersimpan"
+        dismissible
+        @dismiss="successMsg = ''"
+      >
+        {{ successMsg }}
+      </BaseAlert>
+      <BaseAlert
+        v-if="errorMsg"
+        type="error"
+        title="Pengaturan belum tersimpan"
+        dismissible
+        @dismiss="errorMsg = ''"
+      >
+        {{ errorMsg }}
+      </BaseAlert>
+
+      <form
+        novalidate
+        class="grid min-w-0 grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2"
+        :aria-busy="isLoadingSettings || isSaving"
+        @submit.prevent="saveSchoolSettings"
+      >
+        <BaseCard
+          title="Identitas Sekolah/Madrasah"
+          subtitle="Informasi resmi dan kontak sekolah"
+          class="min-w-0"
+        >
+          <div class="mt-4 min-w-0 space-y-5">
+            <BaseInput
+              id="school-name"
+              v-model="schoolForm.schoolName"
+              :disabled="isSchoolFormDisabled"
+              :error-message="schoolFormErrors.schoolName"
+              label="Nama Sekolah/Madrasah"
+              placeholder="Contoh: MTs Nurul Falah"
+              autocomplete="organization"
+              maxlength="255"
+              required
+            />
+            <BaseInput
+              id="school-npsn"
+              v-model="schoolForm.schoolNpsn"
+              :disabled="isSchoolFormDisabled"
+              :error-message="schoolFormErrors.schoolNpsn"
+              label="NPSN"
+              placeholder="8 digit angka"
+              hint="Masukkan 8 digit NPSN jika tersedia."
+              inputmode="numeric"
+              maxlength="8"
+              autocomplete="off"
+            />
+            <BaseInput
+              id="school-address"
+              v-model="schoolForm.schoolAddress"
+              :disabled="isSchoolFormDisabled"
+              :error-message="schoolFormErrors.schoolAddress"
+              label="Alamat"
+              placeholder="Jalan, desa/kelurahan, kecamatan..."
+              autocomplete="street-address"
+            />
+            <BaseInput
+              id="school-phone"
+              v-model="schoolForm.schoolPhone"
+              :disabled="isSchoolFormDisabled"
+              :error-message="schoolFormErrors.schoolPhone"
+              label="Nomor Telepon"
+              placeholder="Contoh: (0xx) xxxx-xxxx"
+              type="tel"
+              inputmode="tel"
+              autocomplete="tel"
+            />
+            <BaseInput
+              id="school-email"
+              v-model="schoolForm.schoolEmail"
+              :disabled="isSchoolFormDisabled"
+              :error-message="schoolFormErrors.schoolEmail"
+              label="Email Sekolah"
+              placeholder="info@sekolah.sch.id"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+            />
+            <BaseInput
+              id="school-website"
+              v-model="schoolForm.schoolWebsite"
+              :disabled="isSchoolFormDisabled"
+              :error-message="schoolFormErrors.schoolWebsite"
+              label="Website"
+              placeholder="https://sekolah.sch.id"
+              inputmode="url"
+              autocomplete="url"
+            />
           </div>
         </BaseCard>
 
-        <BaseCard title="Kepala Sekolah/Madrasah">
-          <div class="space-y-4 mt-3">
-            <BaseInput v-model="schoolForm.principalName" :disabled="!canManageSettings" label="Nama Kepala Sekolah" placeholder="Nama lengkap beserta gelar" />
-            <BaseInput v-model="schoolForm.principalNip" :disabled="!canManageSettings" label="NIP Kepala Sekolah" placeholder="NIP (opsional)" />
+        <BaseCard
+          title="Kepala Sekolah/Madrasah"
+          subtitle="Informasi pimpinan sekolah"
+          class="min-w-0"
+        >
+          <div class="mt-4 min-w-0 space-y-5">
+            <BaseInput
+              id="principal-name"
+              v-model="schoolForm.principalName"
+              :disabled="isSchoolFormDisabled"
+              :error-message="schoolFormErrors.principalName"
+              label="Nama Kepala Sekolah"
+              placeholder="Nama lengkap beserta gelar"
+              autocomplete="name"
+            />
+            <BaseInput
+              id="principal-nip"
+              v-model="schoolForm.principalNip"
+              :disabled="isSchoolFormDisabled"
+              :error-message="schoolFormErrors.principalNip"
+              label="NIP Kepala Sekolah"
+              placeholder="NIP (opsional)"
+              autocomplete="off"
+            />
           </div>
 
-          <!-- BUG-58 FIX: Tahun pelajaran aktif ditangani terpisah via setActiveSY(),
-               bukan disimpan sebagai settings key-value biasa.
-               Section ini sekarang hanya tampil informasi + tombol aksi di tab Tahun Pelajaran. -->
-          <div class="mt-6 pt-4 border-t border-slate-100">
-            <p class="text-sm font-medium text-slate-700 mb-1">Tahun Pelajaran Aktif</p>
-            <p class="text-sm text-slate-500">
+          <!-- Tahun pelajaran aktif dikelola pada tab Tahun Pelajaran. -->
+          <div class="mt-6 rounded-lg border border-slate-100 bg-slate-50 p-3 sm:p-4">
+            <p class="mb-1 text-sm font-medium text-slate-700">Tahun Pelajaran Aktif</p>
+            <p class="break-words text-sm text-slate-600">
               {{ schoolYearStore.activeSchoolYearName || 'Belum ada tahun pelajaran aktif' }}
             </p>
-            <p class="text-xs text-slate-400 mt-1">
+            <p class="mt-1 text-xs leading-relaxed text-slate-500">
               Untuk mengubah tahun pelajaran aktif, buka tab <strong>Tahun Pelajaran</strong>.
             </p>
           </div>
         </BaseCard>
 
-        <div v-if="canManageSettings" class="lg:col-span-2 flex justify-end">
-          <BaseButton type="submit" class="w-full sm:w-auto" :loading="isSaving || isLoadingSettings" :loading-text="isLoadingSettings ? 'Memuat...' : 'Menyimpan...'">
-            <Save class="h-4 w-4" /> Simpan Pengaturan
+        <div
+          v-if="canManageSettings"
+          class="flex min-w-0 flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between lg:col-span-2"
+        >
+          <p
+            v-if="isSchoolFormDirty"
+            class="text-sm text-amber-700"
+            role="status"
+            aria-live="polite"
+          >
+            Perubahan belum disimpan.
+          </p>
+          <span v-else class="text-sm text-slate-500">
+            Data tersimpan. Ubah isian untuk mengaktifkan tombol simpan.
+          </span>
+          <BaseButton
+            type="submit"
+            class="w-full sm:w-auto"
+            :disabled="isSchoolFormDisabled || !isSchoolFormDirty"
+            :loading="isSaving"
+            loading-text="Menyimpan..."
+          >
+            <Save class="h-4 w-4" aria-hidden="true" />
+            Simpan Pengaturan
           </BaseButton>
         </div>
       </form>
@@ -221,7 +378,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { ValidationError } from 'yup'
 import { Save, Plus, Trash2, Download, Building2, Calendar, Database } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
@@ -234,7 +391,7 @@ import { useSchoolYearStore } from '@/stores/schoolYear'
 import { useConfirm, usePermission } from '@/composables'
 import { classroomsService, settingsService } from '@/services'
 import { PERMISSIONS } from '@/constants'
-import { formatDate, formatDateTime } from '@/utils'
+import { formatDate, formatDateTime, isValidEmail } from '@/utils'
 import { schoolYearSchema } from '@/utils/validation'
 import { toast } from 'vue-sonner'
 
@@ -273,9 +430,102 @@ const schoolForm = reactive({
   principalName: '', principalNip: '',
 })
 
-watch(schoolForm, () => {
-  if (!isHydratingSchoolForm) isSchoolFormDirty.value = true
-}, { flush: 'sync' })
+type SchoolFormField = keyof typeof schoolForm
+
+const schoolFormErrors = reactive<Record<SchoolFormField, string>>({
+  schoolName: '',
+  schoolNpsn: '',
+  schoolAddress: '',
+  schoolPhone: '',
+  schoolEmail: '',
+  schoolWebsite: '',
+  principalName: '',
+  principalNip: '',
+})
+
+const schoolFormFieldIds: Record<SchoolFormField, string> = {
+  schoolName: 'school-name',
+  schoolNpsn: 'school-npsn',
+  schoolAddress: 'school-address',
+  schoolPhone: 'school-phone',
+  schoolEmail: 'school-email',
+  schoolWebsite: 'school-website',
+  principalName: 'principal-name',
+  principalNip: 'principal-nip',
+}
+
+const isSchoolFormDisabled = computed(() =>
+  !canManageSettings.value ||
+  !settingsStore.initialized ||
+  isLoadingSettings.value ||
+  isSaving.value
+)
+
+watch(
+  () => ({ ...schoolForm }),
+  (current, previous) => {
+    if (isHydratingSchoolForm) return
+
+    isSchoolFormDirty.value = true
+    successMsg.value = ''
+    errorMsg.value = ''
+
+    ;(Object.keys(current) as SchoolFormField[]).forEach(field => {
+      if (current[field] !== previous[field]) {
+        schoolFormErrors[field] = ''
+      }
+    })
+  },
+  { flush: 'sync' },
+)
+
+function clearSchoolFormErrors() {
+  ;(Object.keys(schoolFormErrors) as SchoolFormField[]).forEach(field => {
+    schoolFormErrors[field] = ''
+  })
+}
+
+function isValidSchoolWebsite(value: string): boolean {
+  if (!value) return true
+  if (/\s/.test(value)) return false
+
+  const candidate = /^https?:\/\//i.test(value) ? value : `https://${value}`
+  try {
+    const url = new URL(candidate)
+    return (
+      (url.protocol === 'https:' || url.protocol === 'http:') &&
+      Boolean(url.hostname) &&
+      (url.hostname.includes('.') || url.hostname === 'localhost')
+    )
+  } catch {
+    return false
+  }
+}
+
+function validateSchoolForm(): boolean {
+  clearSchoolFormErrors()
+
+  if (!schoolForm.schoolName.trim()) {
+    schoolFormErrors.schoolName = 'Nama sekolah/madrasah wajib diisi.'
+  }
+
+  const npsn = schoolForm.schoolNpsn.trim()
+  if (npsn && !/^\d{8}$/.test(npsn)) {
+    schoolFormErrors.schoolNpsn = 'NPSN harus terdiri dari 8 digit angka.'
+  }
+
+  const email = schoolForm.schoolEmail.trim()
+  if (email && !isValidEmail(email)) {
+    schoolFormErrors.schoolEmail = 'Format email sekolah tidak valid.'
+  }
+
+  const website = schoolForm.schoolWebsite.trim()
+  if (website && !isValidSchoolWebsite(website)) {
+    schoolFormErrors.schoolWebsite = 'Masukkan alamat website yang valid, misalnya sekolah.sch.id atau https://sekolah.sch.id.'
+  }
+
+  return !(Object.values(schoolFormErrors) as string[]).some(Boolean)
+}
 
 function hydrateSchoolForm() {
   if (isSchoolFormDirty.value || !settingsStore.data) return
@@ -296,6 +546,7 @@ function hydrateSchoolForm() {
       principalName: principalName ?? '',
       principalNip: principalNip ?? '',
     })
+    clearSchoolFormErrors()
   } finally {
     isHydratingSchoolForm = false
   }
@@ -320,19 +571,49 @@ async function loadSettingsData() {
 }
 
 async function saveSchoolSettings() {
-  if (!canManageSettings.value || isSaving.value || isLoadingSettings.value) return
-  isSaving.value = true
+  if (
+    !canManageSettings.value ||
+    !settingsStore.initialized ||
+    isSaving.value ||
+    isLoadingSettings.value ||
+    !isSchoolFormDirty.value
+  ) return
+
   successMsg.value = ''
   errorMsg.value = ''
-  const payload = { ...schoolForm }
+
+  if (!validateSchoolForm()) {
+    errorMsg.value = 'Periksa kembali isian yang ditandai sebelum menyimpan.'
+    const firstInvalid = (Object.keys(schoolFormErrors) as SchoolFormField[])
+      .find(field => Boolean(schoolFormErrors[field]))
+    if (firstInvalid) {
+      await nextTick()
+      document.getElementById(schoolFormFieldIds[firstInvalid])?.focus()
+    }
+    return
+  }
+
+  // Snapshot yang sudah dinormalisasi; field terkunci sampai request selesai.
+  const payload = Object.fromEntries(
+    (Object.keys(schoolForm) as SchoolFormField[]).map(field => [
+      field,
+      schoolForm[field].trim(),
+    ]),
+  ) as typeof schoolForm
+
+  isSaving.value = true
   try {
     await settingsStore.update(payload)
     isSchoolFormDirty.value = false
+    hydrateSchoolForm()
+    clearSchoolFormErrors()
     settingsLoadError.value = ''
-    successMsg.value = 'Pengaturan berhasil disimpan.'
+    successMsg.value = 'Pengaturan profil sekolah berhasil disimpan.'
     toast.success('Pengaturan berhasil disimpan.')
   } catch (e: unknown) {
-    errorMsg.value = e instanceof Error ? e.message : 'Gagal menyimpan pengaturan.'
+    errorMsg.value = e instanceof Error
+      ? e.message
+      : 'Gagal menyimpan pengaturan profil sekolah. Silakan coba lagi.'
     toast.error(errorMsg.value)
   } finally {
     isSaving.value = false
