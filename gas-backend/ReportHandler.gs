@@ -913,16 +913,6 @@ var SettingsHandler = {
       throw new Error('Restore tidak dapat dimulai karena ada proses lain yang sedang mengubah data. Coba lagi.');
     }
 
-    var lazySheetHeaders = {};
-    lazySheetHeaders[CONFIG.SHEETS.VERIFICATIONS] = [
-      'id','studentId','section','label','status','verifiedBy','verifiedAt','notes'
-    ];
-    lazySheetHeaders[CONFIG.SHEETS.DOCUMENTS] = [
-      'id','studentId','documentType','documentName','documentNumber','fileUrl',
-      'status','notes','createdAt','updatedAt','createdBy'
-    ];
-
-    var sheets = {};
     var plans = [];
     var snapshots = {};
     var attempted = [];
@@ -945,9 +935,9 @@ var SettingsHandler = {
 
     try {
       restoreNames.forEach(function(name) {
-        var sheet = lazySheetHeaders[name]
-          ? getOrCreateSheet(name, lazySheetHeaders[name])
-          : getSheet(name);
+        // Restore tidak membuat atau mengubah struktur sheet. Semua sheet tujuan
+        // harus sudah tersedia dan cocok dengan skema sebelum ada data yang ditulis.
+        var sheet = getSheet(name);
         var headers = getHeaders(sheet);
 
         if (
@@ -1003,7 +993,6 @@ var SettingsHandler = {
           });
         });
 
-        sheets[name] = sheet;
         plans.push({ name: name, sheet: sheet, headers: headers, rows: rowValues });
       });
 
@@ -1068,12 +1057,17 @@ var SettingsHandler = {
         totalRecords += plan.rows.length;
       });
 
-      CacheService.getScriptCache().removeAll([
-        'students_all',
-        'students_stats',
-        'students_completeness',
-        'reports_intelligence'
-      ]);
+      try {
+        CacheService.getScriptCache().removeAll([
+          'students_all',
+          'students_stats',
+          'students_completeness',
+          'reports_intelligence'
+        ]);
+      } catch (cacheError) {
+        Logger.log('Restore berhasil, tetapi invalidasi cache tidak tuntas: ' +
+          (cacheError && cacheError.message ? cacheError.message : String(cacheError)));
+      }
       AuditService.log(
         user.id,
         'RESTORE',
