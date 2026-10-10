@@ -1,5 +1,5 @@
 <template>
-  <div class="min-w-0 max-w-xl space-y-5">
+  <div class="min-w-0 max-w-3xl space-y-5">
     <PageHeader
       :title="isEdit ? 'Edit Pengguna' : 'Tambah Pengguna'"
       :subtitle="isEdit ? 'Perbarui identitas dan hak akses pengguna.' : 'Buat akun dan tetapkan peran akses aplikasi.'"
@@ -64,8 +64,19 @@
     />
 
     <BaseCard v-else class="min-w-0">
-      <form class="mt-1 space-y-5" @submit.prevent="handleSubmit">
-        <div class="space-y-4">
+      <form class="space-y-5" @submit.prevent="handleSubmit">
+        <fieldset
+          :disabled="isSaving || isValidating"
+          class="min-w-0 w-full space-y-5 border-0 p-0"
+        >
+          <div class="border-b border-slate-100 pb-4">
+            <h2 class="text-base font-semibold text-slate-800">Informasi akun</h2>
+            <p class="mt-1 text-sm leading-relaxed text-slate-500">
+              Lengkapi identitas login dan pilih hak akses yang sesuai.
+            </p>
+          </div>
+
+          <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
           <BaseInput
             v-model="form.fullName"
             label="Nama Lengkap"
@@ -106,7 +117,7 @@
             @update:model-value="onRoleChange"
           />
 
-          <div v-if="form.role === 'teacher'" class="space-y-1">
+          <div v-if="form.role === 'teacher'" class="min-w-0 space-y-1 sm:col-span-2">
             <BaseSelect
               v-model="form.teacherId"
               label="Hubungkan ke Guru"
@@ -133,9 +144,9 @@
             :error-message="errors.password"
             hint="Gunakan password minimal 8 karakter."
           />
-        </div>
+          </div>
 
-        <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+          <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
           <label for="isActive" class="flex min-h-10 cursor-pointer items-center gap-3">
             <input
               id="isActive"
@@ -151,6 +162,7 @@
             </span>
           </label>
         </div>
+        </fieldset>
 
         <div class="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end sm:gap-3">
           <BaseButton
@@ -158,16 +170,16 @@
             variant="outline"
             type="button"
             :disabled="isSaving"
-            @click="router.back()"
+            @click="router.push('/users')"
           >
             Batal
           </BaseButton>
           <BaseButton
             class="w-full sm:w-auto"
             type="submit"
-            :loading="isSaving"
+            :loading="isSaving || isValidating"
             :disabled="isEdit && (isLoadingUser || Boolean(userLoadError))"
-            loading-text="Menyimpan..."
+            :loading-text="isValidating ? 'Memvalidasi...' : 'Menyimpan...'"
           >
             <Save class="h-4 w-4" />
             {{ isEdit ? 'Simpan Perubahan' : 'Buat Pengguna' }}
@@ -201,6 +213,7 @@ const route = useRoute()
 const router = useRouter()
 const isEdit = computed(() => Boolean(route.params.id))
 const isSaving = ref(false)
+const isValidating = ref(false)
 const isLoadingUser = ref(false)
 const isLoadingTeachers = ref(false)
 const errorMsg = ref('')
@@ -226,9 +239,15 @@ const teacherSelectHint = computed(() => {
 })
 
 let latestUserRequestId = 0
+let latestTeacherRequestId = 0
 
 function clearValidationErrors() {
   Object.keys(errors).forEach(key => delete errors[key])
+}
+
+function clearFieldError(field: string) {
+  if (errors[field]) delete errors[field]
+  if (errorMsg.value) errorMsg.value = ''
 }
 
 function resetForm() {
@@ -250,17 +269,29 @@ function routeUserId(): string {
 }
 
 function onRoleChange(role: string) {
+  clearFieldError('role')
   if (role !== 'teacher') {
     form.teacherId = ''
-    delete errors.teacherId
+    clearFieldError('teacherId')
   }
 }
 
+// Clear stale validation/API feedback as the user corrects the affected field.
+watch(() => form.fullName, () => clearFieldError('fullName'))
+watch(() => form.username, () => clearFieldError('username'))
+watch(() => form.email, () => clearFieldError('email'))
+watch(() => form.password, () => clearFieldError('password'))
+watch(() => form.teacherId, () => clearFieldError('teacherId'))
+
 async function loadTeacherOptions() {
+  const requestId = ++latestTeacherRequestId
   isLoadingTeachers.value = true
   teacherLoadError.value = ''
+
   try {
     const teachers = await teachersService.listActive()
+    if (requestId !== latestTeacherRequestId) return
+
     teacherOptions.value = Array.isArray(teachers)
       ? teachers
           .filter(teacher => teacher && teacher.id != null)
@@ -270,11 +301,13 @@ async function loadTeacherOptions() {
           }))
       : []
   } catch (e: unknown) {
-    teacherLoadError.value = e instanceof Error
-      ? e.message
-      : 'Gagal mengambil daftar guru aktif.'
+    if (requestId === latestTeacherRequestId) {
+      teacherLoadError.value = e instanceof Error
+        ? e.message
+        : 'Gagal mengambil daftar guru aktif.'
+    }
   } finally {
-    isLoadingTeachers.value = false
+    if (requestId === latestTeacherRequestId) isLoadingTeachers.value = false
   }
 }
 
@@ -330,7 +363,15 @@ watch(
 )
 
 async function handleSubmit() {
-  if (isSaving.value || isLoadingUser.value || (isEdit.value && userLoadError.value)) return
+  if (
+    isSaving.value ||
+    isValidating.value ||
+    isLoadingUser.value ||
+    (isEdit.value && userLoadError.value)
+  ) return
+
+  const submitIsEdit = isEdit.value
+  const submitUserId = submitIsEdit ? routeUserId() : ''
 
   clearValidationErrors()
   errorMsg.value = ''
@@ -341,57 +382,96 @@ async function handleSubmit() {
   form.email = form.email.trim().toLowerCase()
   form.teacherId = form.teacherId.trim()
 
+  // Validate and submit the same snapshot so the saved payload cannot differ
+  // from the values that were checked.
+  const values = { ...form }
+  isValidating.value = true
+
   try {
-    await userSchema.validate({ ...form }, {
+    await userSchema.validate(values, {
       abortEarly: false,
-      context: { isCreate: !isEdit.value },
+      context: { isCreate: !submitIsEdit },
     })
   } catch (err: unknown) {
+    let mappedFieldError = false
+
     if (err && typeof err === 'object' && 'inner' in err) {
-      const inner = (err as { inner?: { path?: string; message: string }[] }).inner
+      const inner = (err as { inner?: { path?: string; message?: string }[] }).inner
       if (Array.isArray(inner)) {
         inner.forEach((item) => {
-          if (item.path) errors[item.path] = item.message
+          if (item.path && item.message && !errors[item.path]) {
+            errors[item.path] = item.message
+            mappedFieldError = true
+          }
         })
       }
-    } else {
-      errorMsg.value = 'Validasi data gagal. Periksa kembali isian formulir.'
     }
+
+    if (!mappedFieldError) {
+      errorMsg.value = err instanceof Error
+        ? err.message
+        : 'Validasi data gagal. Periksa kembali isian formulir.'
+    }
+
+    isValidating.value = false
     return
   }
 
-  if (form.role === 'teacher' && !form.teacherId) {
+  // Ignore a validation result if navigation changed the record while it ran.
+  if (
+    submitIsEdit !== isEdit.value ||
+    (submitIsEdit && submitUserId !== routeUserId())
+  ) {
+    isValidating.value = false
+    return
+  }
+
+  if (values.role === 'teacher' && !values.teacherId) {
     errors.teacherId = 'Akun dengan role Guru wajib dihubungkan ke data guru.'
+    isValidating.value = false
     return
   }
 
-  isSaving.value = true
-  try {
-    if (isEdit.value) {
-      const id = routeUserId()
-      if (!id) throw new Error('ID pengguna tidak ditemukan. Muat ulang halaman dan coba lagi.')
+  if (submitIsEdit && !submitUserId) {
+    errorMsg.value = 'ID pengguna tidak ditemukan. Muat ulang halaman dan coba lagi.'
+    isValidating.value = false
+    return
+  }
 
-      await usersService.update(id, {
-        fullName: form.fullName,
-        email: form.email,
-        role: form.role,
-        teacherId: form.teacherId || undefined,
-        isActive: form.isActive,
+  isValidating.value = false
+  isSaving.value = true
+
+  try {
+    if (submitIsEdit) {
+      await usersService.update(submitUserId, {
+        fullName: values.fullName,
+        email: values.email,
+        role: values.role,
+        teacherId: values.teacherId || undefined,
+        isActive: values.isActive,
       })
-      toast.success('Pengguna berhasil diperbarui.')
     } else {
       await usersService.create({
-        username: form.username,
-        fullName: form.fullName,
-        email: form.email,
-        role: form.role,
-        password: form.password,
-        teacherId: form.teacherId || undefined,
-        isActive: form.isActive,
+        username: values.username,
+        fullName: values.fullName,
+        email: values.email,
+        role: values.role,
+        password: values.password,
+        teacherId: values.teacherId || undefined,
+        isActive: values.isActive,
       })
-      toast.success('Pengguna berhasil dibuat.')
     }
 
+    // Do not let a stale request redirect a newly opened form.
+    if (
+      submitIsEdit !== isEdit.value ||
+      (submitIsEdit && submitUserId !== routeUserId()) ||
+      (!submitIsEdit && isEdit.value)
+    ) return
+
+    toast.success(submitIsEdit
+      ? 'Pengguna berhasil diperbarui.'
+      : 'Pengguna berhasil dibuat.')
     await router.push('/users')
   } catch (e: unknown) {
     errorMsg.value = e instanceof Error ? e.message : 'Gagal menyimpan pengguna.'
@@ -399,12 +479,12 @@ async function handleSubmit() {
     isSaving.value = false
   }
 }
-
 onMounted(() => {
   void loadTeacherOptions()
 })
 
 onUnmounted(() => {
   latestUserRequestId += 1
+  latestTeacherRequestId += 1
 })
 </script>
