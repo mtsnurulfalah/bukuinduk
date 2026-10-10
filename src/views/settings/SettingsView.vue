@@ -416,46 +416,118 @@
 
     <!-- Tab: Backup -->
     <template v-if="activeTab === 'backup'">
-      <BaseCard title="Backup Data" subtitle="Export semua data dari Google Spreadsheet ke file JSON">
-        <div class="mt-4 space-y-4">
-          <BaseAlert type="info">
-            Backup mengekspor seluruh data dari Spreadsheet ke file JSON beserta manifest
-            versi dan jumlah record per sheet. Simpan file di lokasi yang aman dan terbatas.
+      <BaseCard
+        title="Backup Data"
+        subtitle="Ekspor data Google Spreadsheet ke berkas JSON untuk arsip dan pemulihan."
+        class="min-w-0"
+      >
+        <div class="mt-4 min-w-0 space-y-5" :aria-busy="isBackingUp">
+          <div class="flex min-w-0 items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
+              <Database class="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div class="min-w-0">
+              <h2 class="text-sm font-semibold text-slate-800">Cadangan data aplikasi</h2>
+              <p class="mt-1 break-words text-sm leading-relaxed text-slate-600">
+                Backup memuat data dari sheet yang dikelola aplikasi dan manifest berisi versi,
+                jumlah sheet, serta jumlah record. Unduhan hanya dibuat setelah backend menyatakan
+                seluruh sheet berhasil dibaca.
+              </p>
+            </div>
+          </div>
+
+          <BaseAlert type="warning" title="Simpan berkas dengan aman">
+            Berkas backup dapat memuat data pribadi siswa, orang tua, guru, dan catatan administrasi.
+            Simpan di lokasi terbatas, jangan kirim melalui kanal publik, dan pastikan salinannya dapat diakses saat pemulihan diperlukan.
           </BaseAlert>
 
-          <div v-if="canManageSettings" class="flex gap-3">
-            <BaseButton :loading="isBackingUp" loading-text="Mengekspor..." @click="handleBackup">
-              <Download class="h-4 w-4" /> Download Backup JSON
-            </BaseButton>
-          </div>
-          <BaseAlert v-else type="warning">
-            Akun Anda memiliki akses lihat saja. Fitur backup hanya dapat dijalankan oleh administrator.
+          <BaseAlert
+            v-if="backupError"
+            :key="backupError"
+            type="error"
+            title="Backup belum berhasil"
+            dismissible
+            @dismiss="backupError = ''"
+          >
+            <p class="break-words">{{ backupError }}</p>
           </BaseAlert>
+
+          <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div v-if="canManageSettings" class="min-w-0">
+              <BaseButton
+                class="min-h-11 w-full sm:w-auto"
+                :loading="isBackingUp"
+                :disabled="isBackingUp"
+                loading-text="Memvalidasi dan mengekspor..."
+                @click="handleBackup"
+              >
+                <Download class="h-4 w-4" aria-hidden="true" />
+                Download Backup JSON
+              </BaseButton>
+              <p class="mt-2 text-xs leading-relaxed text-slate-500">
+                Proses dapat memerlukan waktu lebih lama jika data berukuran besar.
+              </p>
+            </div>
+            <BaseAlert v-else type="warning" title="Akses lihat saja">
+              Hanya administrator dengan izin pengelolaan pengaturan yang dapat membuat backup.
+            </BaseAlert>
+            <p
+              v-if="isBackingUp"
+              class="text-sm text-slate-500"
+              role="status"
+              aria-live="polite"
+            >
+              Memeriksa kelengkapan data sebelum menyiapkan unduhan…
+            </p>
+          </div>
 
           <div
             v-if="backupMeta"
-            class="rounded-xl border border-slate-100 bg-slate-50 p-4"
+            class="min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5"
+            aria-live="polite"
           >
-            <div class="flex items-center justify-between gap-3 mb-3">
-              <div>
-                <p class="text-sm font-semibold text-slate-700">Manifest Backup yang Baru Dibuat</p>
-                <p class="text-xs text-slate-400 mt-0.5">{{ formatDateTime(backupMeta.generatedAt) }}</p>
+            <div class="mb-4 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-slate-800">Backup terakhir berhasil dibuat</p>
+                <p class="mt-1 break-words text-xs text-slate-500">
+                  {{ formatDateTime(backupMeta.generatedAt) }}
+                </p>
+                <p v-if="backupLastFileName" class="mt-1 break-all font-mono text-xs text-slate-500">
+                  {{ backupLastFileName }}
+                </p>
               </div>
-              <BaseBadge color="green" dot>Siap</BaseBadge>
+              <BaseBadge color="green" dot>Lengkap</BaseBadge>
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div>
-                <p class="text-xs text-slate-400">Versi</p>
-                <p class="text-sm font-semibold text-slate-700">{{ backupMeta.version }}</p>
+
+            <div class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
+              <div class="min-w-0 rounded-lg bg-slate-50 p-3">
+                <p class="text-xs text-slate-500">Versi aplikasi</p>
+                <p class="mt-1 break-words text-sm font-semibold text-slate-800">
+                  {{ backupMeta.version }}
+                </p>
               </div>
-              <div>
-                <p class="text-xs text-slate-400">Jumlah Sheet</p>
-                <p class="text-sm font-semibold text-slate-700">{{ backupMeta.sheetCount }}</p>
+              <div class="min-w-0 rounded-lg bg-slate-50 p-3">
+                <p class="text-xs text-slate-500">Sheet berhasil dicadangkan</p>
+                <p class="mt-1 text-sm font-semibold tabular-nums text-slate-800">
+                  {{ backupMeta.sheetCount }}
+                </p>
               </div>
-              <div>
-                <p class="text-xs text-slate-400">Total Record</p>
-                <p class="text-sm font-semibold text-slate-700">{{ backupTotalRecords }}</p>
+              <div class="min-w-0 rounded-lg bg-slate-50 p-3">
+                <p class="text-xs text-slate-500">Total record</p>
+                <p class="mt-1 text-sm font-semibold tabular-nums text-slate-800">
+                  {{ backupTotalRecords.toLocaleString('id-ID') }}
+                </p>
               </div>
+            </div>
+          </div>
+
+          <div v-else class="flex min-w-0 items-start gap-3 rounded-xl border border-dashed border-slate-300 p-4">
+            <Database class="mt-0.5 h-5 w-5 shrink-0 text-slate-400" aria-hidden="true" />
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-slate-700">Belum ada backup pada sesi ini</p>
+              <p class="mt-1 break-words text-sm leading-relaxed text-slate-500">
+                Jalankan backup untuk membuat berkas JSON dan melihat ringkasan jumlah sheet serta record yang berhasil dicadangkan.
+              </p>
             </div>
           </div>
         </div>
@@ -482,6 +554,15 @@ import { formatDate, formatDateTime, isValidEmail } from '@/utils'
 import { schoolYearSchema } from '@/utils/validation'
 import { toast } from 'vue-sonner'
 
+interface BackupManifest {
+  version: string
+  generatedAt: string
+  sheetCount: number
+  counts: Record<string, number>
+  complete: boolean
+  failedSheets: string[]
+}
+
 const settingsStore = useSettingsStore()
 const schoolYearStore = useSchoolYearStore()
 const { can } = usePermission()
@@ -498,8 +579,18 @@ const successMsg = ref('')
 const errorMsg = ref('')
 const isBackingUp = ref(false)
 const isSettingActiveSY = ref<string | null>(null)
-const backupMeta = ref<{ version: string; generatedAt: string; sheetCount: number; counts: Record<string, number> } | null>(null)
-const backupTotalRecords = computed(() => backupMeta.value ? Object.values(backupMeta.value.counts).reduce((sum, value) => sum + Number(value || 0), 0) : 0)
+const backupMeta = ref<BackupManifest | null>(null)
+const backupError = ref('')
+const backupLastFileName = ref('')
+const backupTotalRecords = computed(() => {
+  const counts = backupMeta.value?.counts
+  if (!counts) return 0
+
+  return Object.values(counts).reduce(
+    (total, count) => total + (Number.isSafeInteger(count) && count >= 0 ? count : 0),
+    0,
+  )
+})
 
 const tabs = [
   { key: 'school', label: 'Profil Sekolah', icon: Building2 },
@@ -969,47 +1060,156 @@ async function confirmDoDeleteSY() {
 }
 
 // ── Backup ────────────────────────────────────────────────────
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function validateBackupResponse(value: unknown): {
+  data: Record<string, unknown>
+  meta: BackupManifest
+} {
+  if (!isRecord(value)) {
+    throw new Error('Respons backup tidak valid. Muat ulang halaman lalu coba kembali.')
+  }
+
+  const rawMeta = value._meta
+  if (!isRecord(rawMeta)) {
+    throw new Error('Manifest backup tidak ditemukan. Backend GAS perlu diperiksa.')
+  }
+
+  if (rawMeta.complete !== true) {
+    const failedSheets = Array.isArray(rawMeta.failedSheets)
+      ? rawMeta.failedSheets
+          .map((item) => {
+            if (typeof item === 'string') return item
+            return isRecord(item) && typeof item.name === 'string' ? item.name : ''
+          })
+          .filter(Boolean)
+      : []
+
+    if (rawMeta.complete === false || failedSheets.length > 0) {
+      const detail = failedSheets.length
+        ? ` Sheet bermasalah: ${failedSheets.join(', ')}.`
+        : ''
+      throw new Error(`Backup dibatalkan karena backend tidak dapat memastikan semua sheet berhasil dibaca.${detail} Periksa sheet di Google Spreadsheet, lalu coba lagi.`)
+    }
+
+    throw new Error(
+      'Backend GAS yang aktif belum melaporkan status kelengkapan backup. ' +
+      'Sinkronkan gas-backend/ReportHandler.gs ke Google Apps Script lalu deploy versi baru sebelum mencoba lagi.',
+    )
+  }
+
+  if (
+    typeof rawMeta.version !== 'string' ||
+    !rawMeta.version.trim() ||
+    typeof rawMeta.generatedAt !== 'string' ||
+    !Number.isFinite(Date.parse(rawMeta.generatedAt)) ||
+    !Number.isSafeInteger(rawMeta.sheetCount) ||
+    (rawMeta.sheetCount as number) < 0 ||
+    !isRecord(rawMeta.counts)
+  ) {
+    throw new Error('Manifest backup tidak lengkap atau memiliki format yang tidak valid.')
+  }
+
+  const counts: Record<string, number> = {}
+  const expectedSheets = Object.keys(rawMeta.counts)
+  for (const [sheetName, count] of Object.entries(rawMeta.counts)) {
+    if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
+      throw new Error(`Jumlah record pada sheet "${sheetName}" tidak valid. Backup dibatalkan.`)
+    }
+
+    const sheetData = value[sheetName]
+    if (!Array.isArray(sheetData) || sheetData.length !== count) {
+      throw new Error(`Data sheet "${sheetName}" tidak sesuai dengan manifest. Backup dibatalkan agar berkas yang tidak konsisten tidak diunduh.`)
+    }
+    counts[sheetName] = count
+  }
+
+  const exportedSheets = Object.keys(value).filter((key) => key !== '_meta')
+  if (
+    expectedSheets.length !== rawMeta.sheetCount ||
+    exportedSheets.length !== expectedSheets.length ||
+    exportedSheets.some((name) => !Object.prototype.hasOwnProperty.call(counts, name))
+  ) {
+    throw new Error('Jumlah sheet pada data dan manifest tidak cocok. Backup dibatalkan.')
+  }
+
+  const failedSheets = Array.isArray(rawMeta.failedSheets)
+    ? rawMeta.failedSheets
+        .map((item) => {
+          if (typeof item === 'string') return item
+          return isRecord(item) && typeof item.name === 'string' ? item.name : ''
+        })
+        .filter(Boolean)
+    : []
+
+  if (failedSheets.length > 0) {
+    throw new Error(`Backup tidak lengkap. Sheet bermasalah: ${failedSheets.join(', ')}.`)
+  }
+
+  return {
+    data: value,
+    meta: {
+      version: rawMeta.version,
+      generatedAt: rawMeta.generatedAt,
+      sheetCount: rawMeta.sheetCount as number,
+      counts,
+      complete: true,
+      failedSheets: [],
+    },
+  }
+}
+
 async function handleBackup() {
   if (!canManageSettings.value || isBackingUp.value) return
+
   isBackingUp.value = true
+  backupError.value = ''
+
   try {
-    const data = await settingsService.exportBackup()
-    const meta = data._meta
-    if (meta && typeof meta === 'object') {
-      const candidate = meta as Record<string, unknown>
-      if (
-        typeof candidate.version === 'string' &&
-        typeof candidate.generatedAt === 'string' &&
-        typeof candidate.sheetCount === 'number' &&
-        candidate.counts &&
-        typeof candidate.counts === 'object'
-      ) {
-        backupMeta.value = {
-          version: candidate.version,
-          generatedAt: candidate.generatedAt,
-          sheetCount: candidate.sheetCount,
-          counts: candidate.counts as Record<string, number>,
-        }
-      }
-    }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
+    const response: unknown = await settingsService.exportBackup()
+    const validated = validateBackupResponse(response)
+    const json = JSON.stringify(validated.data, null, 2)
+    if (!json) throw new Error('Data backup tidak dapat dikonversi menjadi JSON.')
+
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' })
+    const objectUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
     const now = new Date()
-    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    a.download = `backup-buku-induk-${localDate}.json`
-    document.body.appendChild(a)
-    a.click()
-    // Beri browser waktu memulai unduhan sebelum URL blob dilepas.
-    window.setTimeout(() => {
-      URL.revokeObjectURL(url)
-      a.remove()
-    }, 1000)
-    toast.success('Backup berhasil didownload.')
+    const pad = (value: number) => String(value).padStart(2, '0')
+    const localTimestamp = [
+      `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+      `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`,
+    ].join('-')
+    const fileName = `backup-buku-induk-${localTimestamp}.json`
+
+    anchor.href = objectUrl
+    anchor.download = fileName
+    anchor.style.display = 'none'
+
+    try {
+      document.body.appendChild(anchor)
+      anchor.click()
+    } finally {
+      // Beri browser waktu memulai unduhan sebelum URL blob dilepas.
+      window.setTimeout(() => {
+        anchor.remove()
+        URL.revokeObjectURL(objectUrl)
+      }, 1000)
+    }
+
+    backupMeta.value = validated.meta
+    backupLastFileName.value = fileName
+    toast.success('Backup berhasil divalidasi dan unduhan telah dimulai.')
   } catch (e: unknown) {
-    toast.error(e instanceof Error ? e.message : 'Gagal membuat backup.')
-  } finally { isBackingUp.value = false }
+    backupError.value = e instanceof Error
+      ? e.message
+      : 'Gagal membuat backup. Silakan coba lagi.'
+    toast.error(backupError.value)
+  } finally {
+    isBackingUp.value = false
+  }
 }
 
 onMounted(() => {
