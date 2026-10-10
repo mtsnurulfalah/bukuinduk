@@ -1,34 +1,27 @@
 <template>
   <div class="w-full min-w-0 space-y-6">
 
-    <!-- ── Header ────────────────────────────────────────────── -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-bold text-slate-800 leading-tight">
-          Selamat datang, {{ firstName }} 👋
-        </h1>
-        <p class="text-sm text-slate-500 mt-0.5">
-          <span v-if="schoolYearStore.activeSchoolYearName">
-            Ringkasan — Tahun Pelajaran
-            <span class="font-medium text-primary-600">
-              {{ schoolYearStore.activeSchoolYearName }}
-            </span>
-          </span>
-          <span v-else class="text-slate-400 italic">Tahun pelajaran aktif belum diatur</span>
-        </p>
-      </div>
-
-      <button
-        type="button"
-        class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-start sm:self-auto"
-        :disabled="isLoadingStats || isLoadingClass"
-        aria-label="Segarkan data dashboard"
-        @click="loadData"
-      >
-        <RefreshCw :class="['h-3.5 w-3.5', (isLoadingStats || isLoadingClass) ? 'animate-spin' : '']" />
-        <span>Segarkan</span>
-      </button>
-    </div>
+    <PageHeader :title="'Selamat datang, ' + firstName + ' 👋'">
+      <template #subtitle>
+        <span v-if="schoolYearStore.activeSchoolYearName">
+          Ringkasan — Tahun Pelajaran
+          <span class="font-medium text-primary-600">{{ schoolYearStore.activeSchoolYearName }}</span>
+        </span>
+        <span v-else class="italic text-slate-400">Tahun pelajaran aktif belum diatur</span>
+      </template>
+      <template #actions>
+        <button
+          type="button"
+          class="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="isLoadingStats || isLoadingClass"
+          aria-label="Segarkan data dashboard"
+          @click="loadData"
+        >
+          <RefreshCw :class="['h-3.5 w-3.5', (isLoadingStats || isLoadingClass) ? 'animate-spin' : '']" aria-hidden="true" />
+          <span>Segarkan</span>
+        </button>
+      </template>
+    </PageHeader>
 
     <!-- ── Error Banner ───────────────────────────────────────── -->
     <div
@@ -209,7 +202,7 @@ import {
   Users, User, CheckCircle, GraduationCap, ArrowRightLeft,
   FileText, RefreshCw, AlertCircle, ChevronRight, School,
 } from 'lucide-vue-next'
-import { DataQualityCard, StatCard } from '@/components/shared'
+import { DataQualityCard, PageHeader, StatCard } from '@/components/shared'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolYearStore } from '@/stores/schoolYear'
