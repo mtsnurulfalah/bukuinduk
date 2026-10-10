@@ -410,6 +410,7 @@
         confirm-text="Ya, Hapus"
         :loading="confirmDeleteSY.isLoading.value"
         @confirm="confirmDoDeleteSY"
+        @cancel="cancelDeleteSY"
       />
     </template>
 
@@ -880,6 +881,13 @@ async function setActiveSY(id: string) {
   } finally {
     isSettingActiveSY.value = null
   }
+}
+
+function cancelDeleteSY() {
+  // Jangan pertahankan ID target yang batal dihapus; dialog bisa dibuka ulang
+  // untuk item lain dan harus selalu menggunakan target terbaru.
+  if (confirmDeleteSY.isLoading.value) return
+  _deleteSYId = ''
 }
 
 function handleDeleteSY(id: string, name: string) {
