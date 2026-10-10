@@ -234,32 +234,97 @@
     <!-- Tab: Tahun Pelajaran -->
     <template v-if="activeTab === 'schoolyear'">
       <BaseCard>
-        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p class="text-sm font-medium text-slate-700">Daftar Tahun Pelajaran</p>
-          <BaseButton v-if="canManageSettings" size="sm" @click="openAddSY">
-            <Plus class="h-4 w-4" /> Tambah
+        <div class="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="min-w-0">
+            <h2 class="text-base font-semibold text-slate-800">Daftar Tahun Pelajaran</h2>
+            <p class="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
+              Kelola periode akademik dan tentukan satu tahun pelajaran yang sedang digunakan.
+            </p>
+          </div>
+          <BaseButton
+            v-if="canManageSettings"
+            size="sm"
+            class="w-full shrink-0 sm:w-auto"
+            :disabled="isSchoolYearMutationBusy"
+            @click="openAddSY"
+          >
+            <Plus class="h-4 w-4" aria-hidden="true" /> Tambah Tahun
           </BaseButton>
         </div>
 
+        <div class="mb-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+          <div class="flex min-w-0 items-start gap-3 rounded-xl border border-primary-100 bg-primary-50/60 p-4">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-primary-700 shadow-sm">
+              <Calendar class="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Tahun Pelajaran Aktif</p>
+              <p class="mt-1 break-words text-sm font-semibold text-slate-800">
+                {{ schoolYearStore.activeSchoolYearName || 'Belum ada tahun pelajaran aktif' }}
+              </p>
+              <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                Tahun ini digunakan sebagai periode akademik aktif aplikasi.
+              </p>
+            </div>
+          </div>
+
+          <div class="flex min-w-0 items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-slate-600 shadow-sm">
+              <Database class="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Total Tahun Pelajaran</p>
+              <p class="mt-1 text-xl font-semibold tabular-nums text-slate-800">
+                {{ schoolYearStore.schoolYears.length }}
+              </p>
+              <p class="mt-1 text-xs leading-relaxed text-slate-500">Periode yang tersimpan di daftar.</p>
+            </div>
+          </div>
+        </div>
+
         <div v-if="schoolYearLoadError" class="mb-4 flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 p-3 sm:flex-row sm:items-center sm:justify-between" role="alert">
-          <p class="min-w-0 break-words text-sm text-red-700">{{ schoolYearLoadError }}</p>
-          <BaseButton type="button" variant="outline" size="sm" class="shrink-0" :loading="schoolYearStore.isLoading" @click="loadSchoolYears(true)">
+          <div class="min-w-0">
+            <p class="break-words text-sm font-medium text-red-700">{{ schoolYearLoadError }}</p>
+            <p v-if="schoolYearStore.schoolYears.length" class="mt-1 text-xs leading-relaxed text-red-600">
+              Daftar yang tersedia masih ditampilkan; data terbaru dari server belum berhasil dipastikan.
+            </p>
+          </div>
+          <BaseButton
+            type="button"
+            variant="outline"
+            size="sm"
+            class="w-full shrink-0 sm:w-auto"
+            :loading="schoolYearStore.isLoading"
+            :disabled="schoolYearStore.isLoading"
+            @click="loadSchoolYears(true)"
+          >
             Coba Lagi
           </BaseButton>
         </div>
 
-        <div v-if="schoolYearStore.isLoading" class="space-y-2" aria-busy="true" aria-live="polite">
+        <div v-if="schoolYearStore.isLoading" class="space-y-2" role="status" aria-label="Memuat daftar tahun pelajaran" aria-busy="true" aria-live="polite">
           <BaseSkeleton v-for="i in 3" :key="i" height="h-14" />
         </div>
-        <div v-else-if="!schoolYearStore.schoolYears.length && !schoolYearLoadError" class="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center">
-          <Calendar class="mx-auto mb-2 h-8 w-8 text-slate-300" aria-hidden="true" />
-          <p class="text-sm font-medium text-slate-700">Belum ada tahun pelajaran</p>
-          <p class="mt-1 text-xs text-slate-500">Tambahkan tahun pelajaran untuk mulai mengelola periode akademik.</p>
+        <div v-else-if="!schoolYearStore.schoolYears.length && !schoolYearLoadError" class="rounded-xl border border-dashed border-slate-200 px-4 py-10 text-center">
+          <Calendar class="mx-auto mb-3 h-9 w-9 text-slate-300" aria-hidden="true" />
+          <p class="text-sm font-semibold text-slate-700">Belum ada tahun pelajaran</p>
+          <p class="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-slate-500">
+            Tambahkan periode akademik agar dapat menentukan tahun pelajaran aktif.
+          </p>
+          <BaseButton
+            v-if="canManageSettings"
+            size="sm"
+            class="mt-4 w-full sm:w-auto"
+            :disabled="isSchoolYearMutationBusy"
+            @click="openAddSY"
+          >
+            <Plus class="mr-1 h-4 w-4" aria-hidden="true" /> Tambah Tahun Pelajaran
+          </BaseButton>
         </div>
-        <div v-else-if="schoolYearStore.schoolYears.length" class="divide-y divide-slate-100">
+        <div v-else-if="schoolYearStore.schoolYears.length" class="min-w-0 divide-y divide-slate-100">
           <div
-            v-for="sy in schoolYearStore.schoolYears"
-            :key="sy.id"
+            v-for="sy in sortedSchoolYears"
+            :key="sy.id || sy.name"
             class="flex min-w-0 flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
           >
             <div class="min-w-0">
@@ -274,7 +339,7 @@
                 v-if="canManageSettings && !sy.isActive"
                 type="button"
                 class="min-h-10 rounded-lg px-3 text-xs font-medium text-primary-700 transition-colors hover:bg-primary-50 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="isSettingActiveSY !== null"
+                :disabled="isSchoolYearMutationBusy"
                 :aria-label="`Jadikan tahun pelajaran ${sy.name} aktif`"
                 @click="setActiveSY(sy.id)"
               >
@@ -284,7 +349,7 @@
                 v-if="canManageSettings && !sy.isActive"
                 type="button"
                 class="flex min-h-10 min-w-10 items-center justify-center rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="confirmDeleteSY.isLoading.value"
+                :disabled="isSchoolYearMutationBusy"
                 :aria-label="`Hapus tahun pelajaran ${sy.name}`"
                 title="Hapus tahun pelajaran"
                 @click="handleDeleteSY(sy.id, sy.name)"
@@ -297,14 +362,31 @@
       </BaseCard>
 
       <!-- Modal tambah tahun pelajaran -->
-      <BaseModal v-model="showAddSY" title="Tambah Tahun Pelajaran" size="sm">
-        <form id="school-year-form" class="space-y-4" @submit.prevent="saveSY">
-          <BaseInput v-model="syForm.name" label="Nama" placeholder="2026/2027" required :disabled="isSavingSY" :error-message="syErrors.name" />
-          <BaseInput v-model="syForm.startDate" label="Tanggal Mulai" type="date" required :disabled="isSavingSY" :error-message="syErrors.startDate" />
-          <BaseInput v-model="syForm.endDate" label="Tanggal Selesai" type="date" required :disabled="isSavingSY" :error-message="syErrors.endDate" />
-          <div class="flex items-center gap-2">
-            <input id="syActive" v-model="syForm.isActive" type="checkbox" :disabled="isSavingSY" class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
-            <label for="syActive" class="cursor-pointer text-sm font-medium text-slate-700">Jadikan tahun aktif</label>
+      <BaseModal
+        v-model="showAddSY"
+        title="Tambah Tahun Pelajaran"
+        subtitle="Lengkapi nama periode dan rentang tanggal akademik."
+        size="sm"
+        :show-close="!isSavingSY"
+        :close-on-backdrop="!isSavingSY"
+      >
+        <form id="school-year-form" novalidate class="min-w-0 space-y-4" :aria-busy="isSavingSY" @submit.prevent="saveSY">
+          <BaseAlert v-if="sySubmitError" type="error" title="Tahun pelajaran belum tersimpan">
+            {{ sySubmitError }}
+          </BaseAlert>
+          <BaseInput id="school-year-name" v-model="syForm.name" label="Nama Tahun Pelajaran" placeholder="2026/2027" autocomplete="off" maxlength="9" required :disabled="isSavingSY" :error-message="syErrors.name" />
+          <BaseInput id="school-year-start-date" v-model="syForm.startDate" label="Tanggal Mulai" type="date" required :disabled="isSavingSY" :error-message="syErrors.startDate" />
+          <BaseInput id="school-year-end-date" v-model="syForm.endDate" label="Tanggal Selesai" type="date" :min="syForm.startDate || undefined" required :disabled="isSavingSY" :error-message="syErrors.endDate" />
+          <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div class="flex items-start gap-3">
+              <input id="syActive" v-model="syForm.isActive" type="checkbox" :disabled="isSavingSY" class="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
+              <div class="min-w-0">
+                <label for="syActive" class="cursor-pointer text-sm font-medium text-slate-700">Jadikan tahun pelajaran aktif</label>
+                <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                  Jika dipilih, tahun aktif sebelumnya akan dinonaktifkan setelah perubahan berhasil disimpan.
+                </p>
+              </div>
+            </div>
           </div>
         </form>
         <template #footer>
@@ -624,14 +706,68 @@ async function saveSchoolSettings() {
 const showAddSY = ref(false)
 const isSavingSY = ref(false)
 const syForm = reactive({ name: '', startDate: '', endDate: '', isActive: false })
-const syErrors = reactive<Record<string, string>>({})
+type SchoolYearFormField = keyof typeof syForm
+const schoolYearFieldIds: Record<Exclude<SchoolYearFormField, 'isActive'>, string> = {
+  name: 'school-year-name',
+  startDate: 'school-year-start-date',
+  endDate: 'school-year-end-date',
+}
+const syErrors = reactive<Record<Exclude<SchoolYearFormField, 'isActive'>, string>>({
+  name: '',
+  startDate: '',
+  endDate: '',
+})
+const sySubmitError = ref('')
 
 // BUG-57 FIX: Gunakan useConfirm() + BaseConfirmDialog alih-alih window.confirm()
 const confirmDeleteSY = useConfirm()
 let _deleteSYId = ''
 
+const sortedSchoolYears = computed(() =>
+  [...schoolYearStore.schoolYears].sort((a, b) => (b.name ?? '').localeCompare(a.name ?? '')),
+)
+const isSchoolYearMutationBusy = computed(() =>
+  isSavingSY.value ||
+  isSettingActiveSY.value !== null ||
+  confirmDeleteSY.isLoading.value,
+)
+
+watch(
+  () => syForm.name,
+  () => {
+    syErrors.name = ''
+    sySubmitError.value = ''
+  },
+  { flush: 'sync' },
+)
+
+watch(
+  () => [syForm.startDate, syForm.endDate] as const,
+  () => {
+    syErrors.startDate = ''
+    syErrors.endDate = ''
+    sySubmitError.value = ''
+  },
+  { flush: 'sync' },
+)
+
+function clearSchoolYearErrors() {
+  syErrors.name = ''
+  syErrors.startDate = ''
+  syErrors.endDate = ''
+  sySubmitError.value = ''
+}
+
+async function focusFirstSchoolYearError() {
+  const firstInvalid = (Object.keys(syErrors) as Array<keyof typeof syErrors>)
+    .find(field => Boolean(syErrors[field]))
+  if (!firstInvalid) return
+
+  await nextTick()
+  document.getElementById(schoolYearFieldIds[firstInvalid])?.focus()
+}
+
 async function loadSchoolYears(force = false) {
-  if (schoolYearStore.isLoading) return
   schoolYearLoadError.value = ''
   try {
     if (force) await schoolYearStore.refresh()
@@ -646,34 +782,65 @@ async function loadSchoolYears(force = false) {
 }
 
 function openAddSY() {
-  if (!canManageSettings.value || isSavingSY.value) return
+  if (!canManageSettings.value || isSchoolYearMutationBusy.value) return
   Object.assign(syForm, { name: '', startDate: '', endDate: '', isActive: false })
-  Object.keys(syErrors).forEach(k => delete syErrors[k])
+  clearSchoolYearErrors()
   showAddSY.value = true
 }
 
 async function saveSY() {
-  if (!canManageSettings.value || isSavingSY.value) return
+  if (!canManageSettings.value || isSchoolYearMutationBusy.value) return
   isSavingSY.value = true
-  Object.keys(syErrors).forEach(k => delete syErrors[k])
+  clearSchoolYearErrors()
 
   try {
-    const payload = { ...syForm }
+    const payload = {
+      name: syForm.name.trim(),
+      startDate: syForm.startDate,
+      endDate: syForm.endDate,
+      isActive: syForm.isActive,
+    }
+
     try {
       await schoolYearSchema.validate(payload, { abortEarly: false })
     } catch (err: unknown) {
       if (err instanceof ValidationError) {
         const issues = err.inner.length ? err.inner : [err]
         issues.forEach(issue => {
-          if (issue.path && !syErrors[issue.path]) syErrors[issue.path] = issue.message
+          if (
+            issue.path &&
+            ['name', 'startDate', 'endDate'].includes(issue.path) &&
+            !syErrors[issue.path as keyof typeof syErrors]
+          ) {
+            syErrors[issue.path as keyof typeof syErrors] = issue.message
+          }
         })
+        if (Object.values(syErrors).some(Boolean)) {
+          await focusFirstSchoolYearError()
+        } else {
+          toast.error('Data tahun pelajaran tidak dapat divalidasi.')
+        }
       } else {
         toast.error('Data tahun pelajaran tidak dapat divalidasi.')
       }
       return
     }
 
+    const normalizedName = payload.name.toLocaleLowerCase()
+    const duplicate = schoolYearStore.schoolYears.some(
+      sy => (sy.name ?? '').trim().toLocaleLowerCase() === normalizedName,
+    )
+    if (duplicate) {
+      syErrors.name = 'Tahun pelajaran dengan nama tersebut sudah ada.'
+      await focusFirstSchoolYearError()
+      return
+    }
+
     const created = await classroomsService.createSchoolYear(payload)
+    if (!created || !created.id) {
+      throw new Error('Server tidak mengembalikan data tahun pelajaran yang valid. Muat ulang daftar sebelum mencoba lagi.')
+    }
+
     // Sinkronkan status aktif antar-tahun; updateSchoolYear juga dapat menambahkan
     // item baru dan menonaktifkan tahun lama secara reaktif.
     schoolYearStore.updateSchoolYear(created)
@@ -682,21 +849,27 @@ async function saveSY() {
     toast.success('Tahun pelajaran berhasil ditambahkan.')
     showAddSY.value = false
   } catch (e: unknown) {
-    toast.error(e instanceof Error ? e.message : 'Gagal menyimpan tahun pelajaran.')
+    sySubmitError.value = e instanceof Error ? e.message : 'Gagal menyimpan tahun pelajaran.'
+    toast.error(sySubmitError.value)
   } finally {
     isSavingSY.value = false
   }
 }
 
 async function setActiveSY(id: string) {
-  if (!canManageSettings.value || !id || isSettingActiveSY.value !== null) return
+  if (!canManageSettings.value || !id || isSchoolYearMutationBusy.value) return
   const target = schoolYearStore.schoolYears.find(sy => sy.id === id)
   if (!target || target.isActive) return
 
   isSettingActiveSY.value = id
   try {
     const updated = await classroomsService.setActiveSchoolYear(id)
+    if (!updated || updated.id !== id || !updated.isActive) {
+      throw new Error('Status tahun aktif dari server tidak valid. Muat ulang daftar tahun pelajaran.')
+    }
     schoolYearStore.updateSchoolYear(updated)
+    schoolYearStore.schoolYears.sort((a, b) => b.name.localeCompare(a.name))
+    schoolYearLoadError.value = ''
     toast.success('Tahun pelajaran aktif diperbarui.')
   } catch (e: unknown) {
     toast.error(e instanceof Error ? e.message : 'Gagal mengubah tahun aktif.')
@@ -706,7 +879,17 @@ async function setActiveSY(id: string) {
 }
 
 function handleDeleteSY(id: string, name: string) {
-  if (!canManageSettings.value || !id || confirmDeleteSY.isLoading.value) return
+  if (!canManageSettings.value || !id || isSchoolYearMutationBusy.value || confirmDeleteSY.isOpen.value) return
+  const target = schoolYearStore.schoolYears.find(sy => sy.id === id)
+  if (!target) {
+    toast.error('Tahun pelajaran tidak ditemukan. Muat ulang daftar lalu coba lagi.')
+    return
+  }
+  if (target.isActive) {
+    toast.error('Tahun pelajaran aktif tidak dapat dihapus.')
+    return
+  }
+
   // BUG-57 FIX: Gunakan dialog konfirmasi custom, bukan window.confirm()
   _deleteSYId = id
   confirmDeleteSY.options.value = { message: name, type: 'danger' }
@@ -714,11 +897,36 @@ function handleDeleteSY(id: string, name: string) {
 }
 
 async function confirmDoDeleteSY() {
-  if (!canManageSettings.value || !_deleteSYId || confirmDeleteSY.isLoading.value) return
+  if (confirmDeleteSY.isLoading.value) return
+
+  if (!canManageSettings.value) {
+    confirmDeleteSY.isOpen.value = false
+    _deleteSYId = ''
+    toast.error('Akun Anda tidak memiliki izin untuk menghapus tahun pelajaran.')
+    return
+  }
+  if (!_deleteSYId || isSavingSY.value || isSettingActiveSY.value !== null) return
+
+  const target = schoolYearStore.schoolYears.find(sy => sy.id === _deleteSYId)
+  if (!target) {
+    confirmDeleteSY.isOpen.value = false
+    _deleteSYId = ''
+    toast.error('Tahun pelajaran tidak lagi tersedia. Daftar akan dimuat ulang.')
+    void loadSchoolYears(true)
+    return
+  }
+  if (target.isActive) {
+    confirmDeleteSY.isOpen.value = false
+    _deleteSYId = ''
+    toast.error('Tahun pelajaran aktif tidak dapat dihapus.')
+    return
+  }
+
   confirmDeleteSY.isLoading.value = true
   try {
-    await classroomsService.deleteSchoolYear(_deleteSYId)
-    schoolYearStore.removeSchoolYear(_deleteSYId)
+    const deletedId = _deleteSYId
+    await classroomsService.deleteSchoolYear(deletedId)
+    schoolYearStore.removeSchoolYear(deletedId)
     schoolYearLoadError.value = ''
     toast.success('Tahun pelajaran dihapus.')
     confirmDeleteSY.isOpen.value = false
