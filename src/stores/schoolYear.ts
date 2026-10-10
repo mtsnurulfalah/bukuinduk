@@ -64,12 +64,14 @@ export const useSchoolYearStore = defineStore('schoolYear', () => {
       }
     })()
 
-    schoolYearFetchPromise = request
-    try {
-      await request
-    } finally {
-      if (schoolYearFetchPromise === request) schoolYearFetchPromise = null
-    }
+    // Cleanup menjadi bagian dari promise yang dibagikan supaya refresh()
+    // tidak berjalan sebelum penanda request sebelumnya benar-benar dilepas.
+    let trackedRequest: Promise<void>
+    trackedRequest = request.finally(() => {
+      if (schoolYearFetchPromise === trackedRequest) schoolYearFetchPromise = null
+    })
+    schoolYearFetchPromise = trackedRequest
+    await trackedRequest
   }
 
   /**
