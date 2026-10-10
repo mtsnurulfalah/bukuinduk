@@ -1,27 +1,21 @@
 <template>
-  <div class="space-y-6">
+  <div class="w-full min-w-0 space-y-6">
 
-    <!-- ── Header ────────────────────────────────────────────── -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-bold text-slate-800 leading-tight">
-          Selamat datang, {{ firstName }} 👋
-        </h1>
-        <p class="text-sm text-slate-500 mt-0.5">
-          Kelas yang Anda ampu pada tahun pelajaran aktif
-        </p>
-      </div>
-
-      <!-- Retry -->
-      <button
-        v-if="error"
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors self-start sm:self-auto"
-        @click="loadData"
-      >
-        <RefreshCw class="h-3.5 w-3.5" />
-        Coba Lagi
-      </button>
-    </div>
+    <PageHeader :title="'Selamat datang, ' + firstName + ' 👋'" subtitle="Kelas yang Anda ampu pada tahun pelajaran aktif">
+      <template #actions>
+        <button
+          v-if="error"
+          type="button"
+          class="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="isLoading"
+          aria-label="Coba muat ulang data kelas"
+          @click="loadData"
+        >
+          <RefreshCw :class="['h-3.5 w-3.5', isLoading ? 'animate-spin' : '']" aria-hidden="true" />
+          Coba Lagi
+        </button>
+      </template>
+    </PageHeader>
 
     <!-- ── No teacherId warning ──────────────────────────────── -->
     <div
@@ -161,6 +155,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
+import { PageHeader } from '@/components/shared'
 import { School, Users, RefreshCw, AlertCircle } from 'lucide-vue-next'
 import BaseBadge    from '@/components/ui/BaseBadge.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
@@ -176,7 +171,7 @@ const error      = ref('')
 let latestRequestId = 0
 
 const firstName = computed(() =>
-  authStore.user?.fullName?.split(' ')[0] ?? 'Guru'
+  authStore.user?.fullName?.trim().split(/\s+/)[0] || 'Guru'
 )
 
 // BUG FIX: Expose hasTeacherId agar template bisa membedakan

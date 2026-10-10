@@ -1,26 +1,23 @@
 <template>
   <div class="flex flex-col gap-5 min-w-0">
 
-    <!-- ══════════════════════════════════════════════════════════
-         Page Header
-    ══════════════════════════════════════════════════════════ -->
-    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-      <div class="min-w-0">
-        <h1 class="text-xl font-bold text-slate-800 leading-tight">Data Siswa</h1>
-        <p class="text-sm mt-0.5 flex items-center gap-1.5 min-h-[1.25rem]">
-          <!-- Loading pulse -->
+    <PageHeader title="Data Siswa">
+      <template #subtitle>
+        <div
+          class="flex min-h-[1.25rem] min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <span
             v-if="studentsStore.isLoading"
             class="inline-flex items-center gap-1.5 text-slate-400"
           >
-            <span class="inline-block h-1.5 w-1.5 rounded-full bg-slate-300 animate-pulse" />
+            <span class="inline-block h-1.5 w-1.5 rounded-full bg-slate-300 animate-pulse" aria-hidden="true" />
             Memuat data…
           </span>
-          <!-- Error -->
-          <span v-else-if="studentsStore.error" class="text-red-500 text-xs">
+          <span v-else-if="studentsStore.error" class="text-xs text-red-500">
             Gagal memuat data
           </span>
-          <!-- Count -->
           <span v-else class="text-slate-500">
             <template v-if="studentsStore.total === 0">Tidak ada siswa ditemukan</template>
             <template v-else>
@@ -28,32 +25,35 @@
               siswa ditemukan
             </template>
           </span>
-        </p>
-      </div>
+        </div>
+      </template>
 
-      <!-- Action buttons -->
-      <div class="flex items-center gap-2 shrink-0">
-        <BaseButton
-          v-if="can(PERMISSIONS.STUDENT_IMPORT)"
-          variant="outline"
-          size="sm"
-          :disabled="studentsStore.isLoading || isExporting"
-          @click="$router.push('/students/import')"
-        >
-          <Upload class="h-4 w-4 shrink-0" />
-          <span class="hidden sm:inline">Import</span>
-        </BaseButton>
-        <BaseButton
-          v-if="can(PERMISSIONS.STUDENT_CREATE)"
-          size="sm"
-          :disabled="isExporting"
-          @click="$router.push('/students/create')"
-        >
-          <UserPlus class="h-4 w-4 shrink-0" />
-          <span class="hidden sm:inline">Tambah Siswa</span>
-        </BaseButton>
-      </div>
-    </div>
+      <template #actions>
+        <div class="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+          <BaseButton
+            v-if="can(PERMISSIONS.STUDENT_IMPORT)"
+            variant="outline"
+            size="sm"
+            class="min-h-10 min-w-0 flex-1 sm:flex-none"
+            :disabled="studentsStore.isLoading || isExporting"
+            @click="$router.push('/students/import')"
+          >
+            <Upload class="h-4 w-4 shrink-0" />
+            <span>Import</span>
+          </BaseButton>
+          <BaseButton
+            v-if="can(PERMISSIONS.STUDENT_CREATE)"
+            size="sm"
+            class="min-h-10 min-w-0 flex-1 sm:flex-none"
+            :disabled="isExporting"
+            @click="$router.push('/students/create')"
+          >
+            <UserPlus class="h-4 w-4 shrink-0" />
+            <span>Tambah Siswa</span>
+          </BaseButton>
+        </div>
+      </template>
+    </PageHeader>
 
     <!-- ══════════════════════════════════════════════════════════
          Error banner (store-level error, bukan filter kosong)
@@ -399,7 +399,7 @@ import {
   UserPlus, Upload, Download, Eye, Pencil, Archive,
   X, Search, SlidersHorizontal, AlertCircle, RefreshCw,
 } from 'lucide-vue-next'
-import { DataTable, StudentStatusBadge } from '@/components/shared'
+import { DataTable, PageHeader, StudentStatusBadge } from '@/components/shared'
 import type { TableColumn } from '@/components/shared/DataTable.vue'
 import {
   BaseButton, BaseSelect, BaseAvatar, BasePagination, BaseConfirmDialog,
