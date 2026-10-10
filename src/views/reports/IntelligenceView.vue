@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="min-w-0 space-y-6">
     <PageHeader
       title="Intelligence Center"
       subtitle="Deteksi otomatis area data siswa yang perlu ditinjau dan ditindaklanjuti."
@@ -14,7 +14,7 @@
     </PageHeader>
 
     <BaseRetry
-      v-if="error"
+      v-if="error && !data"
       title="Insight belum dapat dimuat"
       :message="error"
       button-text="Coba lagi"
@@ -22,13 +22,36 @@
     />
 
     <template v-else>
+      <div
+        v-if="error && data"
+        class="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between"
+        role="alert"
+      >
+        <div class="min-w-0">
+          <p class="font-semibold">Pembaruan data gagal</p>
+          <p class="mt-0.5 break-words text-amber-700">{{ error }} Data terakhir tetap ditampilkan.</p>
+        </div>
+        <BaseButton variant="outline" size="sm" :loading="isLoading" @click="load">
+          Coba lagi
+        </BaseButton>
+      </div>
+      <div
+        v-else-if="isLoading && data"
+        class="flex items-center gap-2 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-700"
+        role="status"
+        aria-live="polite"
+      >
+        <RefreshCw class="h-4 w-4 shrink-0 animate-spin" />
+        Memperbarui analisis. Data terakhir tetap ditampilkan.
+      </div>
+
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard
           label="Siswa Aktif"
           :value="data?.summary.activeStudents"
           :icon="Users"
           color="blue"
-          :loading="isLoading"
+          :loading="isLoading && !data"
           subtitle="Populasi yang dianalisis"
         />
         <StatCard
@@ -36,7 +59,7 @@
           :value="data?.summary.studentsNeedingAttention"
           :icon="TriangleAlert"
           color="amber"
-          :loading="isLoading"
+          :loading="isLoading && !data"
           subtitle="Memiliki minimal 1 temuan"
         />
         <StatCard
@@ -44,7 +67,7 @@
           :value="data?.summary.studentsWithoutClass"
           :icon="School"
           color="red"
-          :loading="isLoading"
+          :loading="isLoading && !data"
           subtitle="Siswa aktif tanpa kelas"
         />
         <StatCard
@@ -52,12 +75,12 @@
           :value="data?.summary.duplicateStudents"
           :icon="Copy"
           color="purple"
-          :loading="isLoading"
+          :loading="isLoading && !data"
           subtitle="NIS/NISN terindikasi ganda"
         />
       </div>
 
-      <div v-if="isLoading" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div v-if="isLoading && !data" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <BaseSkeleton height="h-56" />
         <BaseSkeleton height="h-56" />
       </div>
@@ -96,7 +119,7 @@
                   />
                   <div class="min-w-0">
                     <div class="flex items-start justify-between gap-3">
-                      <h3 class="text-sm font-semibold text-slate-800">{{ insight.title }}</h3>
+                      <h3 class="min-w-0 break-words text-sm font-semibold text-slate-800">{{ insight.title }}</h3>
                       <span class="text-xs font-semibold tabular-nums text-slate-500 shrink-0">
                         {{ formatNumber(insight.count) }}
                       </span>
@@ -109,8 +132,14 @@
               </article>
             </div>
 
-            <div v-else class="p-8 text-center text-sm text-slate-400">
-              Tidak ada temuan yang perlu ditampilkan.
+            <div v-else class="p-8 text-center" role="status">
+              <div class="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <Lightbulb class="h-5 w-5" />
+              </div>
+              <p class="mt-3 text-sm font-semibold text-slate-700">Belum ada temuan utama</p>
+              <p class="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-slate-500">
+                Berdasarkan aturan pemeriksaan saat ini, tidak ada insight yang perlu ditindaklanjuti.
+              </p>
             </div>
           </section>
 
@@ -170,8 +199,8 @@
             </span>
           </div>
 
-          <div v-if="data.attentionStudents.length" class="overflow-x-auto">
-            <table class="min-w-full text-sm">
+          <div v-if="data.attentionStudents.length" class="overflow-x-auto overscroll-x-contain">
+            <table class="min-w-[42rem] w-full text-sm">
               <thead>
                 <tr class="bg-slate-50 border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
                   <th class="px-5 py-3 text-left">Siswa</th>
@@ -187,7 +216,7 @@
                   class="hover:bg-slate-50 transition-colors"
                 >
                   <td class="px-5 py-3">
-                    <p class="font-medium text-slate-800">{{ student.fullName }}</p>
+                    <p class="break-words font-medium text-slate-800">{{ student.fullName }}</p>
                     <p class="text-xs font-mono text-slate-400 mt-0.5">{{ student.nis || 'NIS belum diisi' }}</p>
                   </td>
                   <td class="px-4 py-3 text-slate-600 whitespace-nowrap">
@@ -239,7 +268,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   Activity,
@@ -255,34 +284,122 @@ import { DataQualityCard, PageHeader, StatCard } from '@/components/shared'
 import { BaseButton, BaseRetry, BaseSkeleton } from '@/components/ui'
 import { reportsService } from '@/services'
 import { formatNumber } from '@/utils'
-import type { IntelligenceReport } from '@/types'
+import type { IntelligenceReport, IntelligenceSeverity } from '@/types'
 
 const data = ref<IntelligenceReport | null>(null)
 const isLoading = ref(true)
 const error = ref('')
+let latestRequestId = 0
 
-function formatDate(value: string) {
-  try {
-    return new Intl.DateTimeFormat('id-ID', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(value))
-  } catch {
-    return value || 'baru saja'
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function safeNumber(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+}
+
+function safeText(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+function safeSeverity(value: unknown): IntelligenceSeverity {
+  return value === 'high' || value === 'medium' || value === 'low' ? value : 'low'
+}
+
+/** Validasi dan normalkan respons GAS sebelum dipakai oleh template. */
+function normalizeIntelligenceReport(value: unknown): IntelligenceReport {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.summary) ||
+    !Array.isArray(value.insights) ||
+    !Array.isArray(value.breakdown) ||
+    !Array.isArray(value.attentionStudents)
+  ) {
+    throw new Error('Format respons Intelligence Center tidak valid. Muat ulang data atau periksa deployment backend GAS.')
+  }
+
+  const summary = value.summary
+  const insights = value.insights.filter(isRecord).map((item, index) => ({
+    id: safeText(item.id, 'insight-' + index),
+    title: safeText(item.title, 'Temuan'),
+    description: safeText(item.description),
+    severity: safeSeverity(item.severity),
+    count: safeNumber(item.count),
+  }))
+
+  const breakdown = value.breakdown.filter(isRecord).map((item, index) => ({
+    key: safeText(item.key, 'category-' + index),
+    label: safeText(item.label, 'Kategori'),
+    count: safeNumber(item.count),
+    percent: Math.min(100, safeNumber(item.percent)),
+  }))
+
+  const attentionStudents = value.attentionStudents.filter(isRecord).map((student, index) => ({
+    studentId: safeText(student.studentId, 'student-' + index),
+    fullName: safeText(student.fullName, 'Tanpa nama'),
+    nis: safeText(student.nis),
+    classroomName: safeText(student.classroomName),
+    issues: Array.isArray(student.issues)
+      ? student.issues.filter(isRecord).map((issue, issueIndex) => ({
+          key: safeText(issue.key, 'issue-' + issueIndex),
+          label: safeText(issue.label, 'Perlu ditinjau'),
+          severity: safeSeverity(issue.severity),
+        }))
+      : [],
+  }))
+
+  return {
+    summary: {
+      activeStudents: safeNumber(summary.activeStudents),
+      studentsNeedingAttention: safeNumber(summary.studentsNeedingAttention),
+      studentsWithoutIssues: safeNumber(summary.studentsWithoutIssues),
+      studentsWithoutClass: safeNumber(summary.studentsWithoutClass),
+      duplicateStudents: safeNumber(summary.duplicateStudents),
+      duplicateNis: safeNumber(summary.duplicateNis),
+      duplicateNisn: safeNumber(summary.duplicateNisn),
+      ageReviewStudents: safeNumber(summary.ageReviewStudents),
+      averageIssuesPerStudent: safeNumber(summary.averageIssuesPerStudent),
+    },
+    insights,
+    breakdown,
+    attentionStudents,
+    generatedAt: safeText(value.generatedAt),
   }
 }
 
+function formatDate(value?: string | null): string {
+  if (!value) return 'baru saja'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'baru saja'
+  return new Intl.DateTimeFormat('id-ID', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
+
 async function load() {
+  const requestId = ++latestRequestId
   isLoading.value = true
   error.value = ''
+
   try {
-    data.value = await reportsService.getIntelligence()
+    const response = await reportsService.getIntelligence()
+    if (requestId === latestRequestId) {
+      data.value = normalizeIntelligenceReport(response)
+    }
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Gagal memuat Intelligence Center.'
+    if (requestId === latestRequestId) {
+      error.value = e instanceof Error ? e.message : 'Gagal memuat Intelligence Center.'
+    }
   } finally {
-    isLoading.value = false
+    if (requestId === latestRequestId) isLoading.value = false
   }
 }
 
 onMounted(load)
+onUnmounted(() => {
+  latestRequestId += 1
+})
 </script>
