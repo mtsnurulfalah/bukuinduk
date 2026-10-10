@@ -742,12 +742,31 @@ var SettingsHandler = {
   },
   exportBackup: function(payload, user) {
     checkPermission(user, 'settings:manage');
+
     var backup = {};
     var sheetNames = Object.values(CONFIG.SHEETS);
     var counts = {};
+    var failedSheets = [];
+
+    // Kedua sheet ini bersifat lazy-created oleh fitur verifikasi/dokumen.
+    // Jika belum pernah digunakan, siapkan skema kosong secara idempoten agar
+    // backup tetap merepresentasikan seluruh entitas yang didukung aplikasi.
+    var lazySheetHeaders = {};
+    lazySheetHeaders[CONFIG.SHEETS.VERIFICATIONS] = [
+      'id','studentId','section','label','status','verifiedBy','verifiedAt','notes'
+    ];
+    lazySheetHeaders[CONFIG.SHEETS.DOCUMENTS] = [
+      'id','studentId','documentType','documentName','documentNumber','fileUrl',
+      'status','notes','createdAt','updatedAt','createdBy'
+    ];
+
     sheetNames.forEach(function(name) {
       try {
-        backup[name] = sheetToObjects(getSheet(name));
+        var sheet = lazySheetHeaders[name]
+          ? getOrCreateSheet(name, lazySheetHeaders[name])
+          : getSheet(name);
+        backup[name] = sheetToObjects(sheet);
+
         // Password hash tidak perlu ikut keluar ke browser/file backup.
         if (name === CONFIG.SHEETS.USERS) {
           backup[name] = backup[name].map(function(userRow) {
@@ -758,16 +777,25 @@ var SettingsHandler = {
         }
         counts[name] = backup[name].length;
       } catch(e) {
+        // Jangan menyamarkan sheet yang gagal dibaca sebagai sheet kosong.
+        // Frontend akan menolak unduhan jika complete !== true.
         backup[name] = [];
         counts[name] = 0;
+        failedSheets.push(name);
+        var errorMessage = e && e.message ? e.message : String(e);
+        Logger.log('Backup gagal membaca sheet "' + name + '": ' + errorMessage);
       }
     });
+
     backup._meta = {
       version: CONFIG.APP_VERSION,
       generatedAt: now(),
       sheetCount: sheetNames.length,
       counts: counts,
+      complete: failedSheets.length === 0,
+      failedSheets: failedSheets,
     };
+
     AuditService.log(user.id, 'EXPORT', 'settings', null, null, null, 'Backup data');
     return successResponse(backup);
   },
