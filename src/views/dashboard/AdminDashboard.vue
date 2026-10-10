@@ -352,7 +352,7 @@ const {
 
 // ── Computed ─────────────────────────────────────────────────────
 const firstName = computed(() =>
-  authStore.user?.fullName?.trim().split(/\\s+/)[0] || 'Admin'
+  authStore.user?.fullName?.trim().split(/\s+/)[0] || 'Admin'
 )
 
 const malePercent = computed(() => {
