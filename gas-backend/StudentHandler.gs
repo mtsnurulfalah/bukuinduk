@@ -74,9 +74,16 @@ var StudentHandler = {
     var classrooms  = sheetToObjects(getSheet(CONFIG.SHEETS.CLASSROOMS));
     var schoolYears = sheetToObjects(getSheet(CONFIG.SHEETS.SCHOOL_YEARS));
     var defaultYear = schoolYears.find(function(y) { return normalizeBoolean(y.isActive, false); });
-    var effectiveSchoolYearId = payload.schoolYearId
-      ? String(payload.schoolYearId)
-      : (defaultYear ? String(defaultYear.id) : '');
+    // "__all__" hanya dipakai oleh halaman Laporan untuk membedakan pilihan
+    // "Semua Tahun" dari parameter kosong yang secara default memakai tahun aktif.
+    // Role teacher tetap mengikuti batas tahun aktif/yang diminta seperti sebelumnya.
+    var allYearsRequested = user.role !== 'teacher' &&
+      String(payload.schoolYearId || '') === '__all__';
+    var effectiveSchoolYearId = allYearsRequested
+      ? ''
+      : (payload.schoolYearId
+        ? String(payload.schoolYearId)
+        : (defaultYear ? String(defaultYear.id) : ''));
 
     // Teacher filter: hanya siswa di kelas yang diampu pada tahun aktif/yang diminta.
     if (user.role === 'teacher') {
@@ -144,14 +151,19 @@ var StudentHandler = {
       return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
     });
 
-    // Enrich dengan nama kelas dari enrollment aktif
-    // BUG-DUP FIX: Gunakan enrollments & classrooms yang sama — tidak ada pembacaan ulang
+    // Enrich nama kelas memakai tahun yang dipilih. Pada mode semua tahun,
+    // pilih enrollment aktif terbaru agar kelas yang tampil tidak bergantung
+    // pada urutan baris lama di Spreadsheet.
     all = all.map(function(s) {
-      var enr = enrollments.find(function(e) {
+      var matchingEnrollments = enrollments.filter(function(e) {
         return String(e.studentId) === String(s.id) &&
           e.status === 'active' &&
           (!effectiveSchoolYearId || String(e.schoolYearId) === effectiveSchoolYearId);
       });
+      matchingEnrollments.sort(function(a, b) {
+        return String(b.entryDate || '').localeCompare(String(a.entryDate || ''));
+      });
+      var enr = matchingEnrollments[0];
       if (enr) {
         var cls = classrooms.find(function(c) { return String(c.id) === String(enr.classroomId); });
         s.classroomName = cls ? cls.name : '';
