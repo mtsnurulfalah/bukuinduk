@@ -14,6 +14,11 @@ export type {
   BackupRestorePreview,
   BackupRestoreSheetResult,
   BackupRestoreResult,
+  BackupHistorySource,
+  BackupHistoryStatus,
+  BackupHistoryItem,
+  BackupAutomationOptions,
+  BackupAutomationState,
 } from './settings.service'
 export { subjectsService } from './subjects.service'
 export { gradesService } from './grades.service'
