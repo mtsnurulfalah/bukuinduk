@@ -240,6 +240,7 @@ const teacherSelectHint = computed(() => {
 
 let latestUserRequestId = 0
 let latestTeacherRequestId = 0
+let isComponentActive = true
 
 function clearValidationErrors() {
   Object.keys(errors).forEach(key => delete errors[key])
@@ -372,6 +373,7 @@ async function handleSubmit() {
 
   const submitIsEdit = isEdit.value
   const submitUserId = submitIsEdit ? routeUserId() : ''
+  const submitRouteFullPath = route.fullPath
 
   clearValidationErrors()
   errorMsg.value = ''
@@ -419,6 +421,8 @@ async function handleSubmit() {
 
   // Ignore a validation result if navigation changed the record while it ran.
   if (
+    !isComponentActive ||
+    submitRouteFullPath !== route.fullPath ||
     submitIsEdit !== isEdit.value ||
     (submitIsEdit && submitUserId !== routeUserId())
   ) {
@@ -464,6 +468,8 @@ async function handleSubmit() {
 
     // Do not let a stale request redirect a newly opened form.
     if (
+      !isComponentActive ||
+      submitRouteFullPath !== route.fullPath ||
       submitIsEdit !== isEdit.value ||
       (submitIsEdit && submitUserId !== routeUserId()) ||
       (!submitIsEdit && isEdit.value)
@@ -475,6 +481,8 @@ async function handleSubmit() {
     await router.push('/users')
   } catch (e: unknown) {
     const isCurrentRoute =
+      isComponentActive &&
+      submitRouteFullPath === route.fullPath &&
       submitIsEdit === isEdit.value &&
       (!submitIsEdit || submitUserId === routeUserId())
     if (isCurrentRoute) {
@@ -489,6 +497,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  isComponentActive = false
   latestUserRequestId += 1
   latestTeacherRequestId += 1
 })
