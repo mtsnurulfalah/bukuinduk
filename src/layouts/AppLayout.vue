@@ -132,7 +132,7 @@
           aria-modal="true"
           aria-labelledby="mobile-sidebar-title"
           tabindex="-1"
-          class="mobile-sidebar-drawer absolute inset-y-0 left-0 flex h-screen h-[100dvh] w-72 max-w-[calc(100vw-2rem)] flex-col border-r border-slate-200 bg-white shadow-xl"
+          class="mobile-sidebar-drawer absolute inset-y-0 left-0 flex h-screen h-[100dvh] w-72 max-w-[calc(100vw_-_2rem)] flex-col border-r border-slate-200 bg-white shadow-xl"
         >
           <!-- Logo and close control -->
           <div class="flex h-16 shrink-0 items-center justify-between border-b border-slate-100 px-4">
@@ -304,7 +304,8 @@
           <span class="text-[11px] font-medium leading-tight">Menu</span>
         </button>
       </div>
-    </nav>  </div>
+    </nav>
+  </div>
 </template>
 
 <script setup lang="ts">
