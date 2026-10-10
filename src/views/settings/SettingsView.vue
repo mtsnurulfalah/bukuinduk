@@ -532,6 +532,230 @@
           </div>
         </div>
       </BaseCard>
+
+      <BaseCard
+        title="Pemeriksa File Backup JSON"
+        subtitle="Buka backup dari komputer untuk memeriksa kelengkapan dan melihat ringkasan data tanpa mengubah data aplikasi."
+        class="min-w-0"
+      >
+        <div class="min-w-0 space-y-4">
+          <div class="flex min-w-0 items-start gap-3 rounded-xl border border-primary-100 bg-primary-50/50 p-4">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-primary-700 shadow-sm">
+              <ShieldCheck class="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-slate-800">Validasi lokal, tanpa restore</p>
+              <p class="mt-1 break-words text-sm leading-relaxed text-slate-600">
+                File diperiksa langsung di browser. Data tidak dikirim ke server, tidak disimpan sebagai riwayat, dan tidak ditulis ke Google Spreadsheet.
+              </p>
+            </div>
+          </div>
+
+          <input
+            ref="backupFileInput"
+            type="file"
+            accept=".json,application/json"
+            class="sr-only"
+            aria-label="Pilih file backup JSON"
+            :disabled="isReadingBackupFile"
+            @change="handleBackupFileChange"
+          />
+
+          <div class="flex min-w-0 flex-col gap-3 rounded-xl border border-dashed border-slate-300 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex min-w-0 items-start gap-3">
+              <FileJson class="mt-0.5 h-6 w-6 shrink-0 text-slate-400" aria-hidden="true" />
+              <div class="min-w-0">
+                <p class="break-words text-sm font-semibold text-slate-800">Pilih berkas backup</p>
+                <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                  Gunakan berkas .json yang dihasilkan fitur Download Backup JSON. Ukuran maksimum 50 MB.
+                </p>
+                <p v-if="backupViewerResult" class="mt-2 break-all font-mono text-xs text-slate-600">
+                  {{ backupViewerResult.fileName }} · {{ formatBackupFileSize(backupViewerResult.fileSize) }}
+                </p>
+              </div>
+            </div>
+            <BaseButton
+              type="button"
+              variant="outline"
+              class="w-full shrink-0 sm:w-auto"
+              :disabled="isReadingBackupFile"
+              :loading="isReadingBackupFile"
+              loading-text="Memeriksa file..."
+              @click="openBackupFilePicker"
+            >
+              <Upload class="h-4 w-4" aria-hidden="true" />
+              Pilih File JSON
+            </BaseButton>
+          </div>
+
+          <p v-if="isReadingBackupFile" class="text-sm text-slate-500" role="status" aria-live="polite">
+            Membaca dan memvalidasi file di browser...
+          </p>
+
+          <template v-if="backupViewerResult">
+            <BaseAlert
+              :type="backupViewerResult.valid ? 'success' : 'error'"
+              :title="backupViewerResult.valid ? 'File backup valid dan lengkap' : 'File backup perlu diperiksa'"
+              aria-live="polite"
+            >
+              <p v-if="backupViewerResult.valid">
+                Struktur file, manifest, jumlah sheet, dan jumlah record cocok. File siap ditinjau, tetapi fitur ini belum melakukan pemulihan data.
+              </p>
+              <p v-else>
+                File tidak dinyatakan valid untuk pemulihan. Periksa masalah di bawah ini. Pratinjau yang tersedia hanya untuk membantu pemeriksaan.
+              </p>
+              <ul v-if="backupViewerResult.errors.length" class="mt-2 list-disc space-y-1 pl-5">
+                <li v-for="(message, index) in backupViewerResult.errors.slice(0, 8)" :key="index" class="break-words">
+                  {{ message }}
+                </li>
+              </ul>
+              <p v-if="backupViewerResult.errors.length > 8" class="mt-2 text-xs">
+                Masih ada {{ backupViewerResult.errors.length - 8 }} masalah lainnya.
+              </p>
+            </BaseAlert>
+
+            <BaseAlert
+              v-if="backupViewerResult.warnings.length"
+              type="warning"
+              title="Catatan pemeriksaan"
+            >
+              <ul class="list-disc space-y-1 pl-5">
+                <li v-for="(message, index) in backupViewerResult.warnings" :key="index" class="break-words">
+                  {{ message }}
+                </li>
+              </ul>
+            </BaseAlert>
+
+            <div class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Ringkasan file backup">
+              <div class="min-w-0 rounded-lg border border-slate-200 p-3">
+                <p class="text-xs text-slate-500">Status validasi</p>
+                <p class="mt-1 flex items-center gap-2 text-sm font-semibold" :class="backupViewerResult.valid ? 'text-emerald-700' : 'text-red-700'">
+                  <CheckCircle2 v-if="backupViewerResult.valid" class="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <AlertTriangle v-else class="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {{ backupViewerResult.valid ? 'Valid dan lengkap' : 'Tidak valid / perlu tinjauan' }}
+                </p>
+              </div>
+              <div class="min-w-0 rounded-lg border border-slate-200 p-3">
+                <p class="text-xs text-slate-500">Versi backup</p>
+                <p class="mt-1 break-words text-sm font-semibold text-slate-800">
+                  {{ backupViewerResult.meta?.version || 'Tidak tersedia' }}
+                </p>
+              </div>
+              <div class="min-w-0 rounded-lg border border-slate-200 p-3">
+                <p class="text-xs text-slate-500">Jumlah sheet</p>
+                <p class="mt-1 text-sm font-semibold tabular-nums text-slate-800">
+                  {{ backupViewerResult.sheetNames.length.toLocaleString('id-ID') }}
+                </p>
+              </div>
+              <div class="min-w-0 rounded-lg border border-slate-200 p-3">
+                <p class="text-xs text-slate-500">Total record terbaca</p>
+                <p class="mt-1 text-sm font-semibold tabular-nums text-slate-800">
+                  {{ backupViewerResult.totalRecords.toLocaleString('id-ID') }}
+                </p>
+              </div>
+            </div>
+
+            <div v-if="backupViewerResult.meta" class="rounded-lg bg-slate-50 p-3 text-sm">
+              <dl class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+                <div class="min-w-0">
+                  <dt class="text-xs text-slate-500">Tanggal backup</dt>
+                  <dd class="mt-1 break-words font-medium text-slate-700">
+                    {{ formatDateTime(backupViewerResult.meta.generatedAt) }}
+                  </dd>
+                </div>
+                <div class="min-w-0">
+                  <dt class="text-xs text-slate-500">Status pada manifest</dt>
+                  <dd class="mt-1 break-words font-medium" :class="backupViewerResult.meta.complete ? 'text-emerald-700' : 'text-red-700'">
+                    {{ backupViewerResult.meta.complete ? 'Ditandai lengkap' : 'Ditandai tidak lengkap' }}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <div v-if="backupViewerResult.sheetNames.length" class="min-w-0 space-y-4 border-t border-slate-200 pt-4">
+              <div class="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div class="min-w-0">
+                  <label for="backup-viewer-sheet" class="mb-1.5 block text-sm font-medium text-slate-700">
+                    Sheet yang ditinjau
+                  </label>
+                  <select
+                    id="backup-viewer-sheet"
+                    v-model="backupViewerSheet"
+                    class="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                  >
+                    <option v-for="sheetName in backupViewerResult.sheetNames" :key="sheetName" :value="sheetName">
+                      {{ sheetName }} ({{ backupViewerResult.counts[sheetName] ?? backupViewerResult.data[sheetName]?.length ?? 0 }})
+                    </option>
+                  </select>
+                </div>
+                <div class="min-w-0">
+                  <label for="backup-viewer-search" class="mb-1.5 block text-sm font-medium text-slate-700">
+                    Cari di sheet terpilih
+                  </label>
+                  <div class="relative">
+                    <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                    <input
+                      id="backup-viewer-search"
+                      v-model="backupViewerSearch"
+                      type="search"
+                      autocomplete="off"
+                      placeholder="Cari nilai atau nama kolom..."
+                      class="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <p class="break-words text-sm font-medium text-slate-700">
+                  {{ backupViewerSheet || '—' }}
+                </p>
+                <p class="text-xs tabular-nums text-slate-500">
+                  {{ filteredBackupRecords.length.toLocaleString('id-ID') }} record cocok
+                </p>
+              </div>
+
+              <div v-if="!filteredBackupRecords.length" class="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center">
+                <p class="text-sm font-medium text-slate-700">Tidak ada record yang cocok</p>
+                <p class="mt-1 text-xs text-slate-500">Coba kata kunci lain atau pilih sheet yang berbeda.</p>
+              </div>
+
+              <div v-else class="min-w-0 space-y-3">
+                <article
+                  v-for="(record, recordIndex) in previewBackupRecords"
+                  :key="backupViewerSheet + '-' + recordIndex"
+                  class="min-w-0 rounded-lg border border-slate-200 p-3 sm:p-4"
+                >
+                  <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Record pratinjau {{ recordIndex + 1 }}
+                  </p>
+                  <dl class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <div v-for="field in getBackupRecordFields(record)" :key="field" class="min-w-0">
+                      <dt class="break-words text-xs font-medium text-slate-500">{{ field }}</dt>
+                      <dd class="mt-1 break-words text-sm text-slate-800">{{ formatBackupValue(isRecord(record) ? record[field] : undefined) }}</dd>
+                    </div>
+                  </dl>
+                  <p v-if="getBackupRecordFieldCount(record) > 12" class="mt-3 text-xs text-slate-500">
+                    {{ getBackupRecordFieldCount(record) - 12 }} kolom lainnya tidak ditampilkan pada pratinjau ini.
+                  </p>
+                </article>
+                <p class="text-xs leading-relaxed text-slate-500">
+                  {{ filteredBackupRecords.length > 10 ? 'Hanya 10 record pertama yang ditampilkan.' : 'Seluruh hasil yang cocok ditampilkan.' }}
+                  Nilai panjang dipersingkat demi keterbacaan.
+                </p>
+              </div>
+            </div>
+            <div v-else class="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center">
+              <FileJson class="mx-auto mb-2 h-8 w-8 text-slate-300" aria-hidden="true" />
+              <p class="text-sm font-medium text-slate-700">Data sheet belum dapat ditampilkan</p>
+              <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                Pastikan file memuat array data sheet seperti pada format backup aplikasi.
+              </p>
+            </div>
+          </template>
+        </div>
+      </BaseCard>
+
     </template>
   </div>
 </template>
@@ -539,7 +763,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { ValidationError } from 'yup'
-import { Save, Plus, Trash2, Download, Building2, Calendar, Database } from 'lucide-vue-next'
+import { Save, Plus, Trash2, Download, Building2, Calendar, Database, FileJson, Upload, Search, ShieldCheck, CheckCircle2, AlertTriangle } from 'lucide-vue-next'
 import { PageHeader } from '@/components/shared'
 import {
   BaseCard, BaseInput, BaseButton, BaseAlert, BaseBadge,
@@ -563,6 +787,19 @@ interface BackupManifest {
   failedSheets: string[]
 }
 
+interface BackupViewerReport {
+  fileName: string
+  fileSize: number
+  valid: boolean
+  errors: string[]
+  warnings: string[]
+  meta: BackupManifest | null
+  counts: Record<string, number>
+  sheetNames: string[]
+  totalRecords: number
+  data: Record<string, unknown[]>
+}
+
 const settingsStore = useSettingsStore()
 const schoolYearStore = useSchoolYearStore()
 const { can } = usePermission()
@@ -582,6 +819,29 @@ const isSettingActiveSY = ref<string | null>(null)
 const backupMeta = ref<BackupManifest | null>(null)
 const backupError = ref('')
 const backupLastFileName = ref('')
+const backupFileInput = ref<HTMLInputElement | null>(null)
+const isReadingBackupFile = ref(false)
+const backupViewerResult = ref<BackupViewerReport | null>(null)
+const backupViewerSheet = ref('')
+const backupViewerSearch = ref('')
+const selectedBackupSheetRecords = computed<unknown[]>(() => {
+  const result = backupViewerResult.value
+  if (!result || !backupViewerSheet.value) return []
+  return result.data[backupViewerSheet.value] ?? []
+})
+const filteredBackupRecords = computed<unknown[]>(() => {
+  const query = backupViewerSearch.value.trim().toLocaleLowerCase('id-ID')
+  if (!query) return selectedBackupSheetRecords.value
+
+  return selectedBackupSheetRecords.value.filter((record) => {
+    if (!isRecord(record)) return String(record ?? '').toLocaleLowerCase('id-ID').includes(query)
+    return Object.entries(record).some(([field, value]) => {
+      const text = field + ' ' + formatBackupValue(value)
+      return text.toLocaleLowerCase('id-ID').includes(query)
+    })
+  })
+})
+const previewBackupRecords = computed<unknown[]>(() => filteredBackupRecords.value.slice(0, 10))
 const backupTotalRecords = computed(() => {
   const counts = backupMeta.value?.counts
   if (!counts) return 0
@@ -1062,6 +1322,256 @@ async function confirmDoDeleteSY() {
 // ── Backup ────────────────────────────────────────────────────
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+
+function formatBackupFileSize(size: number): string {
+  if (!Number.isFinite(size) || size < 0) return 'Ukuran tidak diketahui'
+  if (size < 1024) return size + ' B'
+  if (size < 1024 * 1024) return (size / 1024).toLocaleString('id-ID', { maximumFractionDigits: 1 }) + ' KB'
+  return (size / (1024 * 1024)).toLocaleString('id-ID', { maximumFractionDigits: 1 }) + ' MB'
+}
+
+function formatBackupValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—'
+  let formatted: string
+  if (typeof value === 'string') formatted = value
+  else if (typeof value === 'number' || typeof value === 'boolean') formatted = String(value)
+  else {
+    try {
+      formatted = JSON.stringify(value) ?? String(value)
+    } catch {
+      formatted = String(value)
+    }
+  }
+  return formatted.length > 180 ? formatted.slice(0, 177) + '…' : formatted
+}
+
+function getBackupRecordFields(record: unknown): string[] {
+  return isRecord(record) ? Object.keys(record).slice(0, 12) : []
+}
+
+function getBackupRecordFieldCount(record: unknown): number {
+  return isRecord(record) ? Object.keys(record).length : 0
+}
+
+function openBackupFilePicker() {
+  if (isReadingBackupFile.value) return
+  backupFileInput.value?.click()
+}
+
+function createBackupViewerError(file: File, message: string): BackupViewerReport {
+  return {
+    fileName: file.name,
+    fileSize: file.size,
+    valid: false,
+    errors: [message],
+    warnings: [],
+    meta: null,
+    counts: Object.create(null) as Record<string, number>,
+    sheetNames: [],
+    totalRecords: 0,
+    data: Object.create(null) as Record<string, unknown[]>,
+  }
+}
+
+function inspectBackupFile(value: unknown, file: File): BackupViewerReport {
+  const errors: string[] = []
+  const warnings: string[] = []
+  const counts: Record<string, number> = Object.create(null) as Record<string, number>
+  const data: Record<string, unknown[]> = Object.create(null) as Record<string, unknown[]>
+  let meta: BackupManifest | null = null
+
+  if (!isRecord(value)) {
+    return createBackupViewerError(file, 'Struktur JSON utama harus berupa objek yang berisi data sheet dan _meta.')
+  }
+
+  for (const [sheetName, sheetValue] of Object.entries(value)) {
+    if (sheetName === '_meta') continue
+    if (!Array.isArray(sheetValue)) {
+      errors.push('Bagian "' + sheetName + '" bukan array data sheet.')
+      continue
+    }
+    data[sheetName] = sheetValue
+    if (sheetValue.some((record) => !isRecord(record))) {
+      errors.push('Sheet "' + sheetName + '" memiliki record yang bukan objek data.')
+    }
+  }
+
+  const rawMeta = value._meta
+  if (!isRecord(rawMeta)) {
+    errors.push('Manifest _meta tidak ditemukan atau bukan objek. File ini tidak dikenali sebagai backup lengkap aplikasi.')
+  } else {
+    const versionIsValid = typeof rawMeta.version === 'string' && Boolean(rawMeta.version.trim())
+    const generatedAtIsValid = typeof rawMeta.generatedAt === 'string' &&
+      Number.isFinite(Date.parse(rawMeta.generatedAt))
+    const sheetCountIsValid = Number.isSafeInteger(rawMeta.sheetCount) &&
+      (rawMeta.sheetCount as number) >= 0
+    const rawCountsAreValid = isRecord(rawMeta.counts)
+    const completeIsValid = rawMeta.complete === true
+    const failedSheetsIsValid = Array.isArray(rawMeta.failedSheets)
+
+    if (!versionIsValid) errors.push('Versi pada manifest tidak ada atau tidak valid.')
+    if (!generatedAtIsValid) errors.push('Tanggal pembuatan backup pada manifest tidak valid.')
+    if (!sheetCountIsValid) errors.push('Jumlah sheet pada manifest tidak valid.')
+    if (!rawCountsAreValid) errors.push('Daftar jumlah record (counts) tidak tersedia atau formatnya tidak valid.')
+    if (!completeIsValid) errors.push('Manifest tidak menyatakan backup lengkap (complete harus bernilai true).')
+    if (!failedSheetsIsValid) errors.push('Daftar failedSheets pada manifest tidak tersedia atau formatnya tidak valid.')
+
+    let normalizedFailedSheets: string[] = []
+    if (failedSheetsIsValid) {
+      normalizedFailedSheets = rawMeta.failedSheets
+        .map((item) => {
+          if (typeof item === 'string') return item
+          return isRecord(item) && typeof item.name === 'string' ? item.name : ''
+        })
+        .filter(Boolean)
+      if (rawMeta.failedSheets.some((item) =>
+        typeof item !== 'string' && !(isRecord(item) && typeof item.name === 'string')
+      )) {
+        errors.push('Daftar failedSheets berisi item dengan format yang tidak dikenali.')
+      }
+      if (normalizedFailedSheets.length) {
+        errors.push('Backup melaporkan sheet yang gagal dicadangkan: ' + normalizedFailedSheets.join(', ') + '.')
+      }
+    }
+
+    if (rawCountsAreValid) {
+      for (const [sheetName, count] of Object.entries(rawMeta.counts)) {
+        if (
+          sheetName === '__proto__' ||
+          sheetName === 'prototype' ||
+          sheetName === 'constructor'
+        ) {
+          errors.push('Nama sheet pada manifest tidak diperbolehkan: ' + sheetName + '.')
+          continue
+        }
+        if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
+          errors.push('Jumlah record pada sheet "' + sheetName + '" bukan bilangan bulat nonnegatif.')
+          continue
+        }
+        counts[sheetName] = count
+        const sheetValue = value[sheetName]
+        if (!Array.isArray(sheetValue)) {
+          errors.push('Data untuk sheet "' + sheetName + '" tidak ditemukan atau bukan array.')
+        } else if (sheetValue.length !== count) {
+          errors.push(
+            'Jumlah record sheet "' + sheetName + '" tidak cocok: manifest ' +
+            count.toLocaleString('id-ID') + ', file ' + sheetValue.length.toLocaleString('id-ID') + '.'
+          )
+        }
+      }
+
+      if (sheetCountIsValid && Object.keys(rawMeta.counts).length !== rawMeta.sheetCount) {
+        errors.push('Jumlah nama sheet pada counts tidak cocok dengan sheetCount di manifest.')
+      }
+      const exportedSheetNames = Object.keys(value).filter((key) => key !== '_meta')
+      if (exportedSheetNames.length !== Object.keys(rawMeta.counts).length) {
+        errors.push('Jumlah bagian data sheet pada file tidak cocok dengan manifest.')
+      }
+      for (const sheetName of exportedSheetNames) {
+        if (!Object.prototype.hasOwnProperty.call(rawMeta.counts, sheetName)) {
+          errors.push('Sheet "' + sheetName + '" tidak tercantum pada manifest.')
+        }
+      }
+    }
+
+    if (
+      versionIsValid &&
+      generatedAtIsValid &&
+      sheetCountIsValid &&
+      rawCountsAreValid &&
+      typeof rawMeta.complete === 'boolean' &&
+      failedSheetsIsValid
+    ) {
+      meta = {
+        version: rawMeta.version as string,
+        generatedAt: rawMeta.generatedAt as string,
+        sheetCount: rawMeta.sheetCount as number,
+        counts,
+        complete: rawMeta.complete,
+        failedSheets: normalizedFailedSheets,
+      }
+    }
+
+    if (generatedAtIsValid && Date.parse(rawMeta.generatedAt as string) > Date.now() + 5 * 60 * 1000) {
+      warnings.push('Tanggal backup berada di masa depan. Periksa tanggal atau jam pada perangkat pembuat backup.')
+    }
+  }
+
+  const sheetNames = Object.keys(data).sort((a, b) => a.localeCompare(b, 'id'))
+  const totalRecords = sheetNames.reduce((total, sheetName) => total + data[sheetName].length, 0)
+  if (!sheetNames.length) warnings.push('Tidak ada array data sheet yang dapat ditampilkan pada file ini.')
+
+  const uniqueErrors = Array.from(new Set(errors))
+  const valid = uniqueErrors.length === 0 && meta !== null &&
+    meta.complete === true && meta.failedSheets.length === 0
+
+  return {
+    fileName: file.name,
+    fileSize: file.size,
+    valid,
+    errors: uniqueErrors,
+    warnings,
+    meta,
+    counts,
+    sheetNames,
+    totalRecords,
+    data,
+  }
+}
+
+async function handleBackupFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  // Kosongkan input agar berkas yang sama dapat dipilih ulang setelah dikoreksi.
+  input.value = ''
+  if (!file || isReadingBackupFile.value) return
+
+  backupViewerResult.value = null
+  backupViewerSheet.value = ''
+  backupViewerSearch.value = ''
+
+  if (!file.name.toLowerCase().endsWith('.json')) {
+    backupViewerResult.value = createBackupViewerError(file, 'Pilih file dengan ekstensi .json.')
+    return
+  }
+  if (file.size === 0) {
+    backupViewerResult.value = createBackupViewerError(file, 'File kosong dan tidak dapat divalidasi.')
+    return
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    backupViewerResult.value = createBackupViewerError(file, 'Ukuran file melebihi batas 50 MB. Pilih file yang lebih kecil.')
+    return
+  }
+
+  isReadingBackupFile.value = true
+  try {
+    const text = await file.text()
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text) as unknown
+    } catch {
+      backupViewerResult.value = createBackupViewerError(file, 'Isi file bukan JSON yang valid. Pastikan file tidak terpotong atau rusak.')
+      return
+    }
+
+    const result = inspectBackupFile(parsed, file)
+    backupViewerResult.value = result
+    backupViewerSheet.value = result.sheetNames[0] ?? ''
+    if (result.valid) {
+      toast.success('File backup berhasil divalidasi.')
+    } else {
+      toast.error('Pemeriksaan selesai. Periksa rincian validasi pada halaman ini.')
+    }
+  } catch (error: unknown) {
+    backupViewerResult.value = createBackupViewerError(
+      file,
+      error instanceof Error ? 'File tidak dapat dibaca: ' + error.message : 'File tidak dapat dibaca pada perangkat ini.'
+    )
+  } finally {
+    isReadingBackupFile.value = false
+  }
 }
 
 function validateBackupResponse(value: unknown): {
