@@ -283,9 +283,9 @@
           :to="item.to"
           :class="[
             'flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
-            isActive(item.to) ? 'text-primary-600' : 'text-slate-400',
+            isActive(item.to, mobilePrimaryNavItems) ? 'text-primary-600' : 'text-slate-400',
           ]"
-          :aria-current="isActive(item.to) ? 'page' : undefined"
+          :aria-current="isActive(item.to, mobilePrimaryNavItems) ? 'page' : undefined"
           :aria-label="item.label"
         >
           <component :is="item.icon" class="h-5 w-5 shrink-0" aria-hidden="true" />
@@ -591,7 +591,7 @@ const mobilePrimaryNavItems = computed<NavItem[]>(() => {
     { to: '/reports', icon: BarChart3, label: 'Laporan', mobileLabel: 'Laporan' },
   ]
 
-  const visibleByPath = new Map(filteredNavItems.value.map(item => [item.to, item]))
+  const visibleByPath = new Map<string, NavItem>(filteredNavItems.value.map(item => [item.to, item] as const))
   const selected: NavItem[] = []
 
   preferred.forEach(item => {
@@ -615,12 +615,13 @@ const mobilePrimaryNavItems = computed<NavItem[]>(() => {
   }))
 })
 
-// Sub-route menyorot menu induk, kecuali ada menu anak yang terlihat dan lebih spesifik.
-function isActive(path: string): boolean {
+// Sub-route menyorot menu induk, kecuali ada menu anak yang lebih spesifik
+// dalam lingkup navigasi yang sedang dirender (sidebar penuh atau shortcut bawah).
+function isActive(path: string, navScope: readonly NavItem[] = filteredNavItems.value): boolean {
   if (route.path === path) return true
   if (!route.path.startsWith(path + '/')) return false
 
-  const moreSpecificVisibleItem = filteredNavItems.value.some(
+  const moreSpecificVisibleItem = navScope.some(
     item => item.to !== path &&
       item.to.startsWith(path + '/') &&
       (route.path === item.to || route.path.startsWith(item.to + '/'))
