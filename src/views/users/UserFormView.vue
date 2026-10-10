@@ -77,91 +77,91 @@
           </div>
 
           <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
-          <BaseInput
-            v-model="form.fullName"
-            label="Nama Lengkap"
-            placeholder="Nama lengkap pengguna"
-            autocomplete="name"
-            required
-            :error-message="errors.fullName"
-          />
-
-          <BaseInput
-            v-model="form.username"
-            label="Username"
-            placeholder="Huruf kecil, angka, titik, atau underscore"
-            autocomplete="username"
-            required
-            :disabled="isEdit"
-            :error-message="errors.username"
-            hint="Username minimal 3 karakter dan tidak dapat diubah setelah akun dibuat."
-          />
-
-          <BaseInput
-            v-model="form.email"
-            label="Email"
-            type="email"
-            placeholder="email@sekolah.id"
-            autocomplete="email"
-            required
-            :error-message="errors.email"
-          />
-
-          <BaseSelect
-            v-model="form.role"
-            label="Role"
-            :options="roleOptions"
-            placeholder="Pilih role"
-            required
-            :error-message="errors.role"
-            @update:model-value="onRoleChange"
-          />
-
-          <div v-if="form.role === 'teacher'" class="min-w-0 space-y-1 sm:col-span-2">
-            <BaseSelect
-              v-model="form.teacherId"
-              label="Hubungkan ke Guru"
-              :options="teacherOptions"
-              placeholder="Pilih data guru"
-              :required="form.role === 'teacher'"
-              :disabled="isLoadingTeachers || teacherOptions.length === 0"
-              :error-message="errors.teacherId"
-              :hint="teacherSelectHint"
+            <BaseInput
+              v-model="form.fullName"
+              label="Nama Lengkap"
+              placeholder="Nama lengkap pengguna"
+              autocomplete="name"
+              required
+              :error-message="errors.fullName"
             />
-            <p v-if="!isLoadingTeachers && !teacherLoadError && teacherOptions.length === 0" class="text-xs text-amber-700">
-              Belum ada data guru aktif yang tersedia. Tambahkan atau aktifkan data guru terlebih dahulu.
-            </p>
-          </div>
 
-          <BaseInput
-            v-if="!isEdit"
-            v-model="form.password"
-            label="Password"
-            type="password"
-            placeholder="Minimal 8 karakter"
-            autocomplete="new-password"
-            required
-            :error-message="errors.password"
-            hint="Gunakan password minimal 8 karakter."
-          />
+            <BaseInput
+              v-model="form.username"
+              label="Username"
+              placeholder="Huruf kecil, angka, titik, atau underscore"
+              autocomplete="username"
+              required
+              :disabled="isEdit"
+              :error-message="errors.username"
+              hint="Username minimal 3 karakter dan tidak dapat diubah setelah akun dibuat."
+            />
+
+            <BaseInput
+              v-model="form.email"
+              label="Email"
+              type="email"
+              placeholder="email@sekolah.id"
+              autocomplete="email"
+              required
+              :error-message="errors.email"
+            />
+
+            <BaseSelect
+              v-model="form.role"
+              label="Role"
+              :options="roleOptions"
+              placeholder="Pilih role"
+              required
+              :error-message="errors.role"
+              @update:model-value="onRoleChange"
+            />
+
+            <div v-if="form.role === 'teacher'" class="min-w-0 space-y-1 sm:col-span-2">
+              <BaseSelect
+                v-model="form.teacherId"
+                label="Hubungkan ke Guru"
+                :options="teacherOptions"
+                placeholder="Pilih data guru"
+                :required="form.role === 'teacher'"
+                :disabled="isLoadingTeachers || teacherOptions.length === 0"
+                :error-message="errors.teacherId"
+                :hint="teacherSelectHint"
+              />
+              <p v-if="!isLoadingTeachers && !teacherLoadError && teacherOptions.length === 0" class="text-xs text-amber-700">
+                Belum ada data guru aktif yang tersedia. Tambahkan atau aktifkan data guru terlebih dahulu.
+              </p>
+            </div>
+
+            <BaseInput
+              v-if="!isEdit"
+              v-model="form.password"
+              label="Password"
+              type="password"
+              placeholder="Minimal 8 karakter"
+              autocomplete="new-password"
+              required
+              :error-message="errors.password"
+              hint="Gunakan password minimal 8 karakter."
+            />
           </div>
 
           <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
-          <label for="isActive" class="flex min-h-10 cursor-pointer items-center gap-3">
-            <input
-              id="isActive"
-              v-model="form.isActive"
-              type="checkbox"
-              class="h-5 w-5 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-2 focus:ring-primary-500"
-            />
-            <span class="min-w-0">
-              <span class="block text-sm font-medium text-slate-800">Pengguna Aktif</span>
-              <span class="mt-0.5 block text-xs leading-relaxed text-slate-500">
-                Akun aktif dapat masuk sesuai dengan hak akses role-nya.
+            <label for="isActive" class="flex min-h-10 cursor-pointer items-center gap-3">
+              <input
+                id="isActive"
+                v-model="form.isActive"
+                type="checkbox"
+                class="h-5 w-5 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-2 focus:ring-primary-500"
+              />
+              <span class="min-w-0">
+                <span class="block text-sm font-medium text-slate-800">Pengguna Aktif</span>
+                <span class="mt-0.5 block text-xs leading-relaxed text-slate-500">
+                  Akun aktif dapat masuk sesuai dengan hak akses role-nya.
+                </span>
               </span>
-            </span>
-          </label>
-        </div>
+            </label>
+          </div>
         </fieldset>
 
         <div class="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end sm:gap-3">
@@ -474,7 +474,12 @@ async function handleSubmit() {
       : 'Pengguna berhasil dibuat.')
     await router.push('/users')
   } catch (e: unknown) {
-    errorMsg.value = e instanceof Error ? e.message : 'Gagal menyimpan pengguna.'
+    const isCurrentRoute =
+      submitIsEdit === isEdit.value &&
+      (!submitIsEdit || submitUserId === routeUserId())
+    if (isCurrentRoute) {
+      errorMsg.value = e instanceof Error ? e.message : 'Gagal menyimpan pengguna.'
+    }
   } finally {
     isSaving.value = false
   }
