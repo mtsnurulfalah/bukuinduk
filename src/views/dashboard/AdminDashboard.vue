@@ -1,44 +1,36 @@
 <template>
   <div class="w-full min-w-0 space-y-6">
 
-    <!-- ── Header ────────────────────────────────────────────── -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-bold text-slate-800 leading-tight">
-          Selamat datang, {{ firstName }} 👋
-        </h1>
-        <p class="text-sm text-slate-500 mt-0.5">
-          <span v-if="schoolYearStore.activeSchoolYearName">
-            Tahun Pelajaran
-            <span class="font-medium text-primary-600">
-              {{ schoolYearStore.activeSchoolYearName }}
-            </span>
-          </span>
-          <span v-else class="text-slate-400 italic">Tahun pelajaran aktif belum diatur</span>
-        </p>
-      </div>
-
-      <div class="flex items-center gap-2 flex-wrap">
-        <button
-          type="button"
-          class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          :disabled="isLoadingStats || isLoadingClass"
-          aria-label="Segarkan data dashboard"
-          @click="loadData"
-        >
-          <RefreshCw :class="['h-3.5 w-3.5', (isLoadingStats || isLoadingClass) ? 'animate-spin' : '']" />
-          <span class="hidden sm:inline">Segarkan</span>
-        </button>
-
-        <RouterLink
-          to="/students/create"
-          class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 active:bg-primary-800 transition-colors shadow-sm"
-        >
-          <UserPlus class="h-4 w-4" />
-          Tambah Siswa
-        </RouterLink>
-      </div>
-    </div>
+    <PageHeader :title="'Selamat datang, ' + firstName + ' 👋'">
+      <template #subtitle>
+        <span v-if="schoolYearStore.activeSchoolYearName">
+          Tahun Pelajaran
+          <span class="font-medium text-primary-600">{{ schoolYearStore.activeSchoolYearName }}</span>
+        </span>
+        <span v-else class="italic text-slate-400">Tahun pelajaran aktif belum diatur</span>
+      </template>
+      <template #actions>
+        <div class="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+          <button
+            type="button"
+            class="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="isLoadingStats || isLoadingClass"
+            aria-label="Segarkan data dashboard"
+            @click="loadData"
+          >
+            <RefreshCw :class="['h-3.5 w-3.5', (isLoadingStats || isLoadingClass) ? 'animate-spin' : '']" aria-hidden="true" />
+            <span>Segarkan</span>
+          </button>
+          <RouterLink
+            to="/students/create"
+            class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700 active:bg-primary-800"
+          >
+            <UserPlus class="h-4 w-4" aria-hidden="true" />
+            Tambah Siswa
+          </RouterLink>
+        </div>
+      </template>
+    </PageHeader>
 
     <!-- ── Error Banner ───────────────────────────────────────── -->
     <div
@@ -337,7 +329,7 @@ import {
   FileText, UserCog, RefreshCw,
   AlertCircle, ChevronRight,
 } from 'lucide-vue-next'
-import { DataQualityCard, StatCard } from '@/components/shared'
+import { DataQualityCard, PageHeader, StatCard } from '@/components/shared'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolYearStore } from '@/stores/schoolYear'
