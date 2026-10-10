@@ -707,9 +707,10 @@ var AuditHandler = {
 var SettingsHandler = {
   handle: function(method, payload, user) {
     switch (method) {
-      case 'get':          return this.get(payload, user);
-      case 'update':       return this.update(payload, user);
-      case 'exportBackup': return this.exportBackup(payload, user);
+      case 'get':           return this.get(payload, user);
+      case 'update':        return this.update(payload, user);
+      case 'exportBackup':  return this.exportBackup(payload, user);
+      case 'restoreBackup': return this.restoreBackup(payload, user);
       default: return errorResponse(404, 'Settings method tidak ditemukan.');
     }
   },
@@ -798,6 +799,296 @@ var SettingsHandler = {
 
     AuditService.log(user.id, 'EXPORT', 'settings', null, null, null, 'Backup data');
     return successResponse(backup);
+  },
+
+  /**
+   * Restore aman: hanya admin settings:manage, manifest/skema divalidasi
+   * ulang di server, users dan audit_logs dipertahankan, serta snapshot
+   * dipakai untuk rollback apabila penulisan lintas-sheet gagal.
+   */
+  restoreBackup: function(payload, user) {
+    checkPermission(user, 'settings:manage');
+
+    if (!payload || payload.confirmation !== 'PULIHKAN') {
+      throw new Error('Konfirmasi restore tidak valid. Ketik PULIHKAN lalu ulangi.');
+    }
+
+    var backup = payload.backup;
+    if (!backup || typeof backup !== 'object' || Array.isArray(backup)) {
+      throw new Error('Payload backup harus berupa objek JSON.');
+    }
+
+    var serialized;
+    try {
+      serialized = JSON.stringify(backup);
+    } catch (serializeError) {
+      throw new Error('Backup tidak dapat diproses sebagai JSON.');
+    }
+    if (!serialized || serialized.length > 15 * 1024 * 1024) {
+      throw new Error('Ukuran payload restore melewati batas aman 15 MB. Gunakan backup yang lebih kecil.');
+    }
+
+    var meta = backup._meta;
+    var sheetNames = Object.values(CONFIG.SHEETS);
+    var backupKeys = Object.keys(backup);
+    var failedSheets = meta && Array.isArray(meta.failedSheets) ? meta.failedSheets : null;
+
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+      throw new Error('Manifest _meta tidak ditemukan atau formatnya salah.');
+    }
+    if (meta.complete !== true || !failedSheets || failedSheets.length !== 0) {
+      throw new Error('Restore ditolak karena manifest backup tidak lengkap atau memiliki sheet gagal dibaca.');
+    }
+    if (
+      typeof meta.version !== 'string' ||
+      !meta.version.trim() ||
+      typeof meta.generatedAt !== 'string' ||
+      !Number.isFinite(Date.parse(meta.generatedAt)) ||
+      meta.sheetCount !== sheetNames.length ||
+      !meta.counts ||
+      typeof meta.counts !== 'object' ||
+      Array.isArray(meta.counts)
+    ) {
+      throw new Error('Manifest backup tidak cocok dengan format yang didukung aplikasi.');
+    }
+    if (
+      backupKeys.length !== sheetNames.length + 1 ||
+      sheetNames.some(function(name) { return !Object.prototype.hasOwnProperty.call(backup, name); }) ||
+      backupKeys.some(function(name) { return name !== '_meta' && sheetNames.indexOf(name) === -1; })
+    ) {
+      throw new Error('Daftar sheet pada backup tidak cocok dengan versi skema aplikasi ini.');
+    }
+
+    var countKeys = Object.keys(meta.counts);
+    if (
+      countKeys.length !== sheetNames.length ||
+      sheetNames.some(function(name) {
+        return !Object.prototype.hasOwnProperty.call(meta.counts, name);
+      }) ||
+      countKeys.some(function(name) { return sheetNames.indexOf(name) === -1; })
+    ) {
+      throw new Error('Daftar jumlah record pada manifest tidak cocok dengan daftar sheet backup.');
+    }
+
+    sheetNames.forEach(function(name) {
+      var rows = backup[name];
+      var count = meta.counts[name];
+      if (
+        !Array.isArray(rows) ||
+        typeof count !== 'number' ||
+        !Number.isSafeInteger(count) ||
+        count < 0 ||
+        rows.length !== count
+      ) {
+        throw new Error('Data sheet "' + name + '" tidak sesuai dengan jumlah record pada manifest.');
+      }
+
+      rows.forEach(function(record, index) {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) {
+          throw new Error('Record ke-' + (index + 1) + ' pada sheet "' + name + '" harus berupa objek.');
+        }
+        Object.keys(record).forEach(function(field) {
+          var value = record[field];
+          if (
+            value !== null &&
+            typeof value !== 'string' &&
+            typeof value !== 'number' &&
+            typeof value !== 'boolean'
+          ) {
+            throw new Error('Field "' + field + '" pada sheet "' + name + '" berisi nilai bertingkat yang tidak didukung.');
+          }
+          if (typeof value === 'number' && !Number.isFinite(value)) {
+            throw new Error('Field "' + field + '" pada sheet "' + name + '" berisi angka tidak valid.');
+          }
+        });
+      });
+    });
+
+    var protectedSheets = [CONFIG.SHEETS.USERS, CONFIG.SHEETS.AUDIT_LOGS];
+    var restoreNames = sheetNames.filter(function(name) {
+      return protectedSheets.indexOf(name) === -1;
+    });
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(30000)) {
+      throw new Error('Restore tidak dapat dimulai karena ada proses lain yang sedang mengubah data. Coba lagi.');
+    }
+
+    var plans = [];
+    var snapshots = {};
+    var attempted = [];
+
+    function replaceRows(sheet, headers, rows) {
+      var requiredLastRow = rows.length + 1;
+      var maxRows = sheet.getMaxRows();
+      if (maxRows < requiredLastRow) {
+        sheet.insertRowsAfter(maxRows, requiredLastRow - maxRows);
+      }
+
+      var lastToClear = Math.max(sheet.getLastRow(), requiredLastRow);
+      if (lastToClear > 1) {
+        sheet.getRange(2, 1, lastToClear - 1, headers.length).clearContent();
+      }
+      if (rows.length) {
+        sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+      }
+    }
+
+    try {
+      restoreNames.forEach(function(name) {
+        // Restore tidak membuat atau mengubah struktur sheet. Semua sheet tujuan
+        // harus sudah tersedia dan cocok dengan skema sebelum ada data yang ditulis.
+        var sheet = getSheet(name);
+        var headers = getHeaders(sheet);
+
+        if (
+          !headers.length ||
+          headers.some(function(header) { return typeof header !== 'string' || !header.trim(); }) ||
+          new Set(headers).size !== headers.length
+        ) {
+          throw new Error('Header sheet "' + name + '" kosong atau duplikat. Perbaiki skema sebelum restore.');
+        }
+
+        var rows = backup[name];
+        var seenIds = {};
+        var rowValues = rows.map(function(record, rowIndex) {
+          var keys = Object.keys(record);
+          if (
+            keys.length !== headers.length ||
+            headers.some(function(header) {
+              return !Object.prototype.hasOwnProperty.call(record, header);
+            }) ||
+            keys.some(function(key) { return headers.indexOf(key) === -1; })
+          ) {
+            throw new Error(
+              'Struktur record ke-' + (rowIndex + 1) + ' pada sheet "' + name +
+              '" tidak cocok dengan header Spreadsheet. Tidak ada data yang ditulis.'
+            );
+          }
+
+          if (headers.indexOf('id') >= 0) {
+            var recordId = record.id === null || record.id === undefined ? '' : String(record.id).trim();
+            if (!recordId) {
+              throw new Error('Record tanpa ID ditemukan pada sheet "' + name + '". Restore dibatalkan.');
+            }
+            if (seenIds[recordId]) {
+              throw new Error('ID duplikat "' + recordId + '" ditemukan pada sheet "' + name + '". Restore dibatalkan.');
+            }
+            seenIds[recordId] = true;
+          }
+
+          return headers.map(function(header) {
+            var value = record[header];
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'string') {
+              // Jangan biarkan teks backup berubah menjadi formula Spreadsheet.
+              return /^[\s]*[=+\-@]/.test(value) ? "'" + value : value;
+            }
+            if (typeof value === 'number' && !Number.isFinite(value)) {
+              throw new Error('Angka tidak valid pada sheet "' + name + '".');
+            }
+            if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+              throw new Error('Nilai field tidak didukung pada sheet "' + name + '".');
+            }
+            return value;
+          });
+        });
+
+        plans.push({ name: name, sheet: sheet, headers: headers, rows: rowValues });
+      });
+
+      // Snapshot seluruh target sebelum sheet pertama pun ditulis.
+      plans.forEach(function(plan) {
+        var lastRow = plan.sheet.getLastRow();
+        var rowCount = Math.max(0, lastRow - 1);
+        var existingValues = rowCount
+          ? plan.sheet.getRange(2, 1, rowCount, plan.headers.length).getValues()
+          : [];
+        var existingFormulas = rowCount
+          ? plan.sheet.getRange(2, 1, rowCount, plan.headers.length).getFormulas()
+          : [];
+        snapshots[plan.name] = {
+          headers: plan.headers,
+          values: existingValues,
+          formulas: existingFormulas
+        };
+      });
+
+      try {
+        plans.forEach(function(plan) {
+          attempted.push(plan.name);
+          replaceRows(plan.sheet, plan.headers, plan.rows);
+        });
+      } catch (writeError) {
+        var rollbackErrors = [];
+        attempted.slice().reverse().forEach(function(name) {
+          try {
+            var plan = plans.find(function(item) { return item.name === name; });
+            var snapshot = snapshots[name];
+            replaceRows(plan.sheet, snapshot.headers, snapshot.values);
+            snapshot.formulas.forEach(function(row, rowIndex) {
+              row.forEach(function(formula, columnIndex) {
+                if (formula) {
+                  plan.sheet.getRange(rowIndex + 2, columnIndex + 1).setFormula(formula);
+                }
+              });
+            });
+          } catch (rollbackError) {
+            rollbackErrors.push(name + ': ' + (rollbackError && rollbackError.message ? rollbackError.message : String(rollbackError)));
+          }
+        });
+
+        if (rollbackErrors.length) {
+          throw new Error(
+            'Restore gagal saat menulis data dan rollback tidak tuntas untuk: ' +
+            rollbackErrors.join('; ') +
+            '. Jangan jalankan restore ulang; periksa Spreadsheet dan buat backup kondisi saat ini.'
+          );
+        }
+        throw new Error(
+          'Restore gagal saat menulis data. Backend telah mencoba mengembalikan sheet yang tersentuh ke kondisi sebelumnya. Detail: ' +
+          (writeError && writeError.message ? writeError.message : String(writeError))
+        );
+      }
+
+      var counts = {};
+      var totalRecords = 0;
+      plans.forEach(function(plan) {
+        counts[plan.name] = plan.rows.length;
+        totalRecords += plan.rows.length;
+      });
+
+      try {
+        CacheService.getScriptCache().removeAll([
+          'students_all',
+          'students_stats',
+          'students_completeness',
+          'reports_intelligence'
+        ]);
+      } catch (cacheError) {
+        Logger.log('Restore berhasil, tetapi invalidasi cache tidak tuntas: ' +
+          (cacheError && cacheError.message ? cacheError.message : String(cacheError)));
+      }
+      AuditService.log(
+        user.id,
+        'RESTORE',
+        'settings',
+        null,
+        null,
+        null,
+        'Restore backup JSON berhasil; ' + restoreNames.length +
+          ' sheet, ' + totalRecords + ' record; users dan audit_logs dipertahankan'
+      );
+
+      return successResponse({
+        restoredAt: now(),
+        restoredSheets: restoreNames,
+        preservedSheets: protectedSheets,
+        counts: counts,
+        totalRecords: totalRecords
+      });
+    } finally {
+      lock.releaseLock();
+    }
   },
 };
 

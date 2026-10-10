@@ -764,6 +764,107 @@
       >
         File backup dapat berisi informasi pribadi siswa, orang tua, dan guru. Hanya administrator dengan izin pengelolaan pengaturan yang dapat menggunakan viewer dan validator ini.
       </BaseAlert>
+      <BaseCard
+        v-if="canManageSettings"
+        title="Restore Aman"
+        subtitle="Pulihkan data dari file backup tervalidasi dengan perlindungan akun dan audit."
+        class="min-w-0"
+      >
+        <div class="min-w-0 space-y-4">
+          <BaseAlert type="warning" title="Pemulihan akan mengganti data saat ini">
+            Restore mengganti seluruh record pada {{ RESTORE_TARGET_SHEETS.length }} sheet data aplikasi yang tercantum pada pratinjau.
+            Sheet <strong>users</strong> (akun dan autentikasi) serta <strong>audit_logs</strong> (jejak audit) tidak ditimpa.
+            Buat dan simpan backup terbaru sebelum melanjutkan.
+          </BaseAlert>
+
+          <BaseAlert v-if="restoreError" type="error" title="Pemulihan belum berhasil" dismissible @dismiss="restoreError = ''">
+            <p class="break-words">{{ restoreError }}</p>
+          </BaseAlert>
+
+          <BaseAlert v-if="restoreResult" type="success" title="Pemulihan berhasil" aria-live="polite">
+            <p>
+              {{ restoreResult.restoredSheets.length }} sheet berhasil dipulihkan,
+              {{ restoreResult.totalRecords.toLocaleString('id-ID') }} record diproses.
+              Akun pengguna dan log audit tetap dipertahankan.
+            </p>
+            <p class="mt-1 text-xs text-emerald-800">Waktu selesai: {{ formatDateTime(restoreResult.restoredAt) }}</p>
+            <BaseButton type="button" class="mt-3 w-full sm:w-auto" size="sm" @click="reloadAfterRestore">
+              Muat Ulang Aplikasi
+            </BaseButton>
+          </BaseAlert>
+
+          <div v-if="canPrepareRestore" class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Pratinjau dampak pemulihan">
+            <div class="min-w-0 rounded-lg border border-slate-200 p-3">
+              <p class="text-xs text-slate-500">Sheet yang diganti</p>
+              <p class="mt-1 text-lg font-semibold tabular-nums text-slate-800">{{ RESTORE_TARGET_SHEETS.length }}</p>
+            </div>
+            <div class="min-w-0 rounded-lg border border-slate-200 p-3">
+              <p class="text-xs text-slate-500">Record dari backup</p>
+              <p class="mt-1 text-lg font-semibold tabular-nums text-slate-800">{{ restoreTargetRecordCount.toLocaleString('id-ID') }}</p>
+            </div>
+            <div class="min-w-0 rounded-lg border border-slate-200 p-3">
+              <p class="text-xs text-slate-500">Sheet dilindungi</p>
+              <p class="mt-1 text-lg font-semibold tabular-nums text-slate-800">2</p>
+              <p class="mt-1 text-xs text-slate-500">users · audit_logs</p>
+            </div>
+          </div>
+
+          <BaseAlert v-else type="info" title="Backup belum siap dipulihkan">
+            Pilih file JSON yang valid dan lengkap pada bagian Pemeriksa File Backup JSON di atas. Untuk menjaga kestabilan request GAS,
+            ukuran file yang dapat dipulihkan dibatasi 10 MB. File besar tetap dapat diperiksa, tetapi tidak dapat dikirim melalui alur restore ini.
+          </BaseAlert>
+
+          <div class="min-w-0 space-y-3 border-t border-slate-200 pt-4">
+            <div>
+              <label for="backup-restore-confirmation" class="mb-1.5 block text-sm font-medium text-slate-700">
+                Konfirmasi eksplisit
+              </label>
+              <p class="mb-2 text-sm leading-relaxed text-slate-600">
+                Ketik <strong>PULIHKAN</strong> untuk mengonfirmasi bahwa data pada sheet target akan diganti dengan isi backup.
+              </p>
+              <input
+                id="backup-restore-confirmation"
+                v-model="restoreConfirmation"
+                type="text"
+                autocomplete="off"
+                autocapitalize="characters"
+                spellcheck="false"
+                maxlength="20"
+                :disabled="isRestoringBackup || !canPrepareRestore"
+                placeholder="Ketik PULIHKAN"
+                class="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50"
+              />
+            </div>
+
+            <label class="flex min-w-0 items-start gap-3 rounded-lg border border-slate-200 p-3">
+              <input
+                v-model="restoreAcknowledged"
+                type="checkbox"
+                :disabled="isRestoringBackup || !canPrepareRestore"
+                class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span class="min-w-0 text-sm leading-relaxed text-slate-700">
+                Saya sudah memastikan file backup benar, menyimpan salinan backup terbaru, dan memahami bahwa record pada sheet target akan diganti.
+              </span>
+            </label>
+
+            <BaseButton
+              type="button"
+              class="w-full sm:w-auto"
+              :disabled="!canExecuteRestore"
+              :loading="isRestoringBackup"
+              loading-text="Memvalidasi dan memulihkan..."
+              @click="handleRestoreBackup"
+            >
+              Pulihkan Data dari Backup
+            </BaseButton>
+            <p class="text-xs leading-relaxed text-slate-500" role="note">
+              Pemulihan dijalankan di backend GAS di bawah izin settings:manage. Backend memvalidasi ulang manifest, skema, record, serta ID sebelum menulis.
+              Jika penulisan gagal, backend mencoba mengembalikan snapshot sheet yang sudah tersentuh.
+            </p>
+          </div>
+        </div>
+      </BaseCard>
     </template>
   </div>
 </template>
@@ -808,6 +909,25 @@ interface BackupViewerReport {
   data: Record<string, unknown[]>
 }
 
+interface BackupRestoreResult {
+  restoredAt: string
+  restoredSheets: string[]
+  preservedSheets: string[]
+  counts: Record<string, number>
+  totalRecords: number
+}
+
+const MAX_RESTORE_FILE_SIZE = 10 * 1024 * 1024
+const REQUIRED_BACKUP_SHEETS = [
+  'users', 'students', 'student_parents', 'student_health', 'student_education',
+  'student_enrollments', 'teachers', 'classrooms', 'grades', 'school_years',
+  'settings', 'audit_logs', 'student_verifications', 'student_documents',
+  'subjects', 'student_scores',
+] as const
+const RESTORE_TARGET_SHEETS = REQUIRED_BACKUP_SHEETS.filter(
+  (name) => name !== 'users' && name !== 'audit_logs',
+)
+
 const settingsStore = useSettingsStore()
 const schoolYearStore = useSchoolYearStore()
 const { can } = usePermission()
@@ -832,6 +952,11 @@ const isReadingBackupFile = ref(false)
 const backupViewerResult = ref<BackupViewerReport | null>(null)
 const backupViewerSheet = ref('')
 const backupViewerSearch = ref('')
+const restoreConfirmation = ref('')
+const restoreAcknowledged = ref(false)
+const isRestoringBackup = ref(false)
+const restoreError = ref('')
+const restoreResult = ref<BackupRestoreResult | null>(null)
 const selectedBackupSheetRecords = computed<unknown[]>(() => {
   const result = backupViewerResult.value
   if (!result || !backupViewerSheet.value) return []
@@ -850,6 +975,27 @@ const filteredBackupRecords = computed<unknown[]>(() => {
   })
 })
 const previewBackupRecords = computed<unknown[]>(() => filteredBackupRecords.value.slice(0, 10))
+const canPrepareRestore = computed(() => {
+  const result = backupViewerResult.value
+  if (!result || !result.valid || result.fileSize > MAX_RESTORE_FILE_SIZE) return false
+  if (result.sheetNames.length !== REQUIRED_BACKUP_SHEETS.length) return false
+  return REQUIRED_BACKUP_SHEETS.every((name) => Array.isArray(result.data[name]))
+})
+const restoreTargetRecordCount = computed(() => {
+  const data = backupViewerResult.value?.data
+  if (!data) return 0
+  return RESTORE_TARGET_SHEETS.reduce((total, name) => {
+    const rows = data[name]
+    return total + (Array.isArray(rows) ? rows.length : 0)
+  }, 0)
+})
+const canExecuteRestore = computed(() =>
+  canManageSettings.value &&
+  canPrepareRestore.value &&
+  restoreConfirmation.value.trim().toLocaleUpperCase('id-ID') === 'PULIHKAN' &&
+  restoreAcknowledged.value &&
+  !isRestoringBackup.value
+)
 const backupTotalRecords = computed(() => {
   const counts = backupMeta.value?.counts
   if (!counts) return 0
@@ -1545,6 +1691,10 @@ async function handleBackupFileChange(event: Event) {
   backupViewerResult.value = null
   backupViewerSheet.value = ''
   backupViewerSearch.value = ''
+  restoreConfirmation.value = ''
+  restoreAcknowledged.value = false
+  restoreError.value = ''
+  restoreResult.value = null
 
   if (!file.name.toLowerCase().endsWith('.json')) {
     backupViewerResult.value = createBackupViewerError(file, 'Pilih file dengan ekstensi .json.')
@@ -1586,6 +1736,55 @@ async function handleBackupFileChange(event: Event) {
   } finally {
     isReadingBackupFile.value = false
   }
+}
+
+async function handleRestoreBackup() {
+  const result = backupViewerResult.value
+  if (!canManageSettings.value || !canExecuteRestore.value || !result?.valid || !result.meta) return
+
+  isRestoringBackup.value = true
+  restoreError.value = ''
+  restoreResult.value = null
+
+  try {
+    // Build a fresh object from the normalized and locally validated viewer state.
+    // The GAS endpoint repeats all security-critical checks before any writes.
+    const backupPayload: Record<string, unknown> = { ...result.data, _meta: result.meta }
+    const response: unknown = await settingsService.restoreBackup(backupPayload)
+
+    if (
+      !isRecord(response) ||
+      !Array.isArray(response.restoredSheets) ||
+      !Array.isArray(response.preservedSheets) ||
+      !isRecord(response.counts) ||
+      typeof response.restoredAt !== 'string' ||
+      typeof response.totalRecords !== 'number'
+    ) {
+      throw new Error('Backend mengembalikan ringkasan restore yang tidak dikenali. Periksa log GAS sebelum mencoba ulang.')
+    }
+
+    restoreResult.value = {
+      restoredAt: response.restoredAt,
+      restoredSheets: response.restoredSheets.filter((item): item is string => typeof item === 'string'),
+      preservedSheets: response.preservedSheets.filter((item): item is string => typeof item === 'string'),
+      counts: response.counts as Record<string, number>,
+      totalRecords: response.totalRecords,
+    }
+    restoreConfirmation.value = ''
+    restoreAcknowledged.value = false
+    toast.success('Restore berhasil. Muat ulang aplikasi untuk menggunakan data terbaru.')
+  } catch (error: unknown) {
+    restoreError.value = error instanceof Error
+      ? error.message
+      : 'Restore gagal. Tidak ada konfirmasi keberhasilan dari server.'
+    toast.error(restoreError.value)
+  } finally {
+    isRestoringBackup.value = false
+  }
+}
+
+function reloadAfterRestore() {
+  window.location.reload()
 }
 
 function validateBackupResponse(value: unknown): {
