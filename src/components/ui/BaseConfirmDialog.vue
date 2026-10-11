@@ -5,6 +5,7 @@
     size="sm"
     :show-close="false"
     :close-on-backdrop="false"
+    :close-on-escape="!loading"
     @update:model-value="onBackdropClose"
   >
     <div class="flex gap-4 items-start">
