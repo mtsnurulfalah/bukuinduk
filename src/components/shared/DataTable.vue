@@ -64,7 +64,7 @@
                   @click="onSort(col.key)"
                 >
                   {{ col.label }}
-                  <span class="flex flex-col shrink-0 text-slate-300 group-hover:text-slate-400 transition-colors">
+                  <span class="flex flex-col shrink-0 text-slate-300 group-hover:text-slate-400 transition-colors" aria-hidden="true">
                     <!-- Asc arrow -->
                     <svg
                       class="h-2 w-2 -mb-0.5 transition-colors"
