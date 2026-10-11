@@ -50,6 +50,7 @@
                   col.width ?? '',
                   col.class ?? '',
                 ]"
+                :aria-sort="col.sortable && activeSortKey() === col.key ? (activeSortDir() === 'asc' ? 'ascending' : 'descending') : undefined"
               >
                 <!--
                   Sortable header — BUG-4 FIX: indikator sync dengan parent controlled state.
@@ -58,7 +59,8 @@
                 <button
                   v-if="col.sortable"
                   type="button"
-                  class="inline-flex items-center gap-1.5 hover:text-slate-700 transition-colors group"
+                  class="group inline-flex min-h-9 items-center gap-1.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 hover:text-slate-700 transition-colors"
+                  :aria-label="`${col.label}. ${activeSortKey() === col.key ? (activeSortDir() === 'asc' ? 'Urutan menaik; klik untuk menurun' : 'Urutan menurun; klik untuk menaik') : 'Klik untuk mengurutkan menaik'}`"
                   @click="onSort(col.key)"
                 >
                   {{ col.label }}
@@ -95,8 +97,12 @@
                 'transition-colors duration-100',
                 clickable ? 'cursor-pointer hover:bg-primary-50/40 active:bg-primary-50/60' : '',
                 striped && idx % 2 === 1 ? 'bg-slate-50/40' : '',
+                clickable ? 'focus-visible:bg-primary-50/60 focus-visible:outline-none' : '',
               ]"
-              @click="clickable && $emit('rowClick', row)"
+              :tabindex="clickable ? 0 : undefined"
+              @click="handleRowClick($event, row)"
+              @keydown.enter.self="activateKeyboardRow(row)"
+              @keydown.space.self.prevent="activateKeyboardRow(row)"
             >
               <td
                 v-for="col in columns"
@@ -172,6 +178,17 @@ const emit = defineEmits<{
   rowClick: [row: Record<string, unknown>]
   sort:     [key: string, dir: 'asc' | 'desc']
 }>()
+
+function handleRowClick(event: MouseEvent, row: Record<string, unknown>): void {
+  if (!props.clickable) return
+  const target = event.target
+  if (target instanceof Element && target.closest('a,button,input,select,textarea,[role="button"],[data-row-action]')) return
+  emit('rowClick', row)
+}
+
+function activateKeyboardRow(row: Record<string, unknown>): void {
+  if (props.clickable) emit('rowClick', row)
+}
 
 // ── Sort state ────────────────────────────────────────────────
 // Internal state digunakan saat parent tidak meneruskan sortKey/sortDir (uncontrolled).
