@@ -4,6 +4,7 @@
     <div class="relative min-w-0 flex-1">
       <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
       <input
+        ref="searchInput"
         :value="search"
         type="text"
         :placeholder="searchPlaceholder"
@@ -17,7 +18,7 @@
         aria-label="Hapus pencarian"
         title="Hapus pencarian"
         class="absolute right-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-        @click="$emit('update:search', '')"
+        @click="clearSearch"
       >
         <X class="h-4 w-4" aria-hidden="true" />
       </button>
@@ -36,6 +37,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, nextTick } from 'vue'
 import { Search, X } from 'lucide-vue-next'
 
 withDefaults(defineProps<{
@@ -47,5 +49,11 @@ withDefaults(defineProps<{
   searchLabel: 'Cari data',
 })
 
-defineEmits<{ 'update:search': [v: string] }>()
+const emit = defineEmits<{ 'update:search': [v: string] }>()
+const searchInput = ref<HTMLInputElement | null>(null)
+
+function clearSearch(): void {
+  emit('update:search', '')
+  void nextTick(() => searchInput.value?.focus())
+}
 </script>
