@@ -5,6 +5,7 @@ import { Toaster } from 'vue-sonner'
 import App from './App.vue'
 import router from './router'
 import './assets/styles/main.css'
+import { installErrorMonitoring } from './utils/errorMonitoring'
 
 /**
  * Vite emits this event when a code-split route/chunk cannot be loaded.
@@ -41,5 +42,6 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.component('Toaster', Toaster)
+installErrorMonitoring(app)
 
 app.mount('#app')
