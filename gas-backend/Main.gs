@@ -27,19 +27,31 @@
 
 function doPost(e) {
   try {
-    // Ambil dari e.parameter (hasil parse form body oleh GAS)
-    var action  = e.parameter.action  || '';
-    var token   = e.parameter.token   || '';
+    // Ambil hanya parameter form yang sudah diparse oleh GAS.
+    var params = (e && e.parameter) ? e.parameter : {};
+    var action = (typeof params.action === 'string') ? params.action.trim() : '';
+    var token = (typeof params.token === 'string') ? params.token : '';
     var payload = {};
-
-    try {
-      payload = e.parameter.payload ? JSON.parse(e.parameter.payload) : {};
-    } catch (parseErr) {
-      return errorResponse(400, 'Format payload tidak valid: ' + parseErr.message);
-    }
+    var payloadText = (typeof params.payload === 'string') ? params.payload : '';
 
     if (!action) {
       return errorResponse(400, 'Parameter "action" diperlukan.');
+    }
+    if (action.length > 120 || !/^[a-zA-Z][a-zA-Z0-9_-]*\\.[a-zA-Z][a-zA-Z0-9_-]*$/.test(action)) {
+      return errorResponse(400, 'Format action tidak valid.');
+    }
+    // Batas ukuran mencegah payload tak terbatas menghabiskan memori/waktu eksekusi.
+    if (payloadText.length > 2 * 1024 * 1024) {
+      return errorResponse(413, 'Payload terlalu besar.');
+    }
+
+    try {
+      payload = payloadText ? JSON.parse(payloadText) : {};
+    } catch (parseErr) {
+      return errorResponse(400, 'Format payload tidak valid.');
+    }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return errorResponse(400, 'Payload harus berupa objek JSON.');
     }
 
     // ── Public routes (tidak perlu token) ──────────────────
@@ -70,8 +82,8 @@ function doPost(e) {
   } catch (err) {
     // BUG-38 FIX: err bisa berupa string (bukan Error object), gunakan String() agar aman.
     var errMsg = (err && err.message) ? err.message : String(err);
-    AuditService.logError('doPost', errMsg);
-    return errorResponse(500, 'Terjadi kesalahan server: ' + errMsg);
+    _recordServerError('doPost', errMsg);
+    return errorResponse(500, 'Terjadi kesalahan internal. Silakan coba lagi.');
   }
 }
 
@@ -95,8 +107,8 @@ function doGet(e) {
     });
   } catch (err) {
     var errMsg = (err && err.message) ? err.message : String(err);
-    AuditService.logError('doGet', errMsg);
-    return errorResponse(500, 'Terjadi kesalahan server: ' + errMsg);
+    _recordServerError('doGet', errMsg);
+    return errorResponse(500, 'Terjadi kesalahan internal. Silakan coba lagi.');
   }
 }
 
@@ -127,8 +139,8 @@ var Router = {
     } catch (err) {
       var errMsg = (err && err.message) ? err.message : String(err);
       if (errMsg === 'FORBIDDEN') return errorResponse(403, 'Anda tidak memiliki izin.');
-      AuditService.logError(action, errMsg);
-      return errorResponse(500, errMsg || 'Terjadi kesalahan.');
+      _recordServerError(action, errMsg);
+      return errorResponse(500, 'Terjadi kesalahan internal. Silakan coba lagi.');
     }
   }
 };
@@ -168,4 +180,22 @@ function checkPermission(user, permission) {
 function hasPermission(user, permission) {
   var perms = ROLE_PERMISSIONS[user.role] || [];
   return perms.indexOf(permission) !== -1;
+}
+
+
+/**
+ * Simpan detail error di log internal tanpa mengekspos pesan/stack ke client.
+ * Logging failure tidak boleh membuat handler mengembalikan error kedua.
+ */
+function _recordServerError(context, message) {
+  try {
+    if (typeof AuditService !== 'undefined' && AuditService &&
+        typeof AuditService.logError === 'function') {
+      AuditService.logError(context, message);
+    } else {
+      Logger.log('Internal error recorded without AuditService. Context: ' + context);
+    }
+  } catch (loggingError) {
+    Logger.log('Audit logging failed for context: ' + context);
+  }
 }
