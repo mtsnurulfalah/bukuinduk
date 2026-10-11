@@ -107,11 +107,16 @@ Di GAS editor, jalankan fungsi `setupSpreadsheet()` sekali:
 2. Klik **Run**
 3. Izinkan akses yang diminta
 
-Fungsi ini akan membuat semua sheet dan akun admin default:
-- **Username:** `admin`
-- **Password:** `Admin@12345`
+Fungsi ini akan membuat semua sheet, tetapi **tidak membuat akun atau password default**.
 
-> ⚠️ **Segera ubah password default setelah login pertama!**
+Untuk instalasi baru, buka **Project Settings → Script Properties** dan tambahkan:
+- `INITIAL_ADMIN_USERNAME`: username unik (3–64 karakter; huruf, angka, titik, garis bawah, atau tanda hubung).
+- `INITIAL_ADMIN_EMAIL`: email admin yang benar-benar dikelola.
+- `INITIAL_ADMIN_PASSWORD`: password unik minimal 16 karakter dari password manager.
+
+Setelah itu jalankan `bootstrapInitialAdmin()` sekali. Fungsi hanya membuat admin saat sheet `users` masih kosong, menyimpan hash password, lalu menghapus ketiga Script Properties tersebut. Password tidak dicetak ke log.
+
+Untuk instalasi yang sudah memiliki akun, rotasi password admin dengan mengatur `INITIAL_ADMIN_USERNAME` dan `INITIAL_ADMIN_PASSWORD`, lalu menjalankan `rotateAdminPassword()`. Fungsi ini memerlukan akses editor GAS dan mencabut token lama melalui timestamp perubahan password. Setelah berhasil, kedua nilai tersebut dihapus dari Script Properties.
 
 ### 6. Deploy sebagai Web App
 
@@ -250,11 +255,11 @@ npm run typecheck  # TypeScript check
 
 ## Keamanan
 
-- JWT disimpan di `localStorage` dengan expiry 1 jam
-- Password di-hash dengan SHA-256 + salt di server GAS
-- Validasi permission dilakukan di **client (router guard)** DAN **server (GAS handler)**
-- Data sensitif (NIK, data kesehatan) hanya dapat diakses role Admin dan Kepala Madrasah
-- Semua aktivitas dicatat di audit log
+- JWT masih disimpan di `localStorage` dengan expiry 1 jam; migrasi ke sesi `HttpOnly/Secure/SameSite` memerlukan perubahan arsitektur autentikasi.
+- Hash password saat ini masih memakai SHA-256 + salt untuk kompatibilitas dengan akun lama. **Ini bukan password hashing yang direkomendasikan untuk produksi**; migrasi ke penyedia autentikasi atau backend yang mendukung Argon2id/scrypt/PBKDF2 terkalibrasi tetap menjadi pekerjaan keamanan wajib berikutnya.
+- Permission diperiksa di server GAS melalui handler/role permissions; UI guard hanya lapisan UX, bukan batas keamanan.
+- Header keamanan browser dikonfigurasi melalui `vercel.json`, termasuk CSP, HSTS, dan Permissions Policy.
+- Jangan membagikan akses editor GAS/Spreadsheet, dan segera rotasi password admin lama yang mungkin pernah menggunakan kredensial default yang dipublikasikan.
 
 ---
 
