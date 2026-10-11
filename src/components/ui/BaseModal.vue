@@ -7,7 +7,8 @@
         class="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
         role="dialog"
         aria-modal="true"
-        :aria-labelledby="titleId"
+        :aria-labelledby="title ? titleId : undefined"
+        :aria-label="title ? undefined : 'Dialog'"
         :aria-describedby="subtitle ? subtitleId : undefined"
       >
         <!-- Backdrop -->
@@ -23,15 +24,15 @@
           class="base-modal-panel"
           :class="[
             'relative flex w-full flex-col overflow-hidden bg-white shadow-xl',
-            'sm:rounded-xl',
+            'rounded-t-2xl sm:rounded-xl',
             maxWidthClass,
           ]"
           tabindex="-1"
         >
           <!-- Header -->
           <div v-if="title || $slots.header" class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-            <div :id="titleId" class="min-w-0 flex-1">
-              <h2 class="text-base font-semibold text-slate-800">{{ title }}</h2>
+            <div class="min-w-0 flex-1">
+              <h2 v-if="title" :id="titleId" class="text-base font-semibold text-slate-800">{{ title }}</h2>
               <p v-if="subtitle" :id="subtitleId" class="mt-0.5 text-xs text-slate-500">{{ subtitle }}</p>
             </div>
             <slot name="header" />
