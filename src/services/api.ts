@@ -188,7 +188,7 @@ export async function gasRequest<T = unknown>(
             'dan buat New Deployment di GAS.'
           )
         }
-        const match = text.match(/<title>([^<]+)<\\/title>/)
+        const match = text.match(/<title>([^<]+)<\/title>/)
         const title = match ? match[1] : 'Unknown error'
         throw new Error(
           `GAS mengembalikan HTML (${title}). ` +
