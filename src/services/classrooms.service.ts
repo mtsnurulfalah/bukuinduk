@@ -26,13 +26,13 @@ export const classroomsService = {
     const response = await gasRequest<unknown>(
       'classrooms.list',
       { schoolYearId },
-      { retry404: 2 },
+      { retryRead: 2 },
     )
     return normalizeArrayResponse<Classroom>(response, ['classrooms'])
   },
 
   async get(id: string): Promise<Classroom> {
-    return gasRequest<Classroom>('classrooms.get', { id }, { retry404: 2 })
+    return gasRequest<Classroom>('classrooms.get', { id }, { retryRead: 2 })
   },
 
   async create(data: ClassroomFormData): Promise<Classroom> {
@@ -51,7 +51,7 @@ export const classroomsService = {
     const response = await gasRequest<unknown>(
       'classrooms.getStats',
       { schoolYearId },
-      { retry404: 2 },
+      { retryRead: 2 },
     )
     return normalizeArrayResponse<ClassroomStats>(response, ['stats'])
   },
@@ -61,7 +61,7 @@ export const classroomsService = {
     const response = await gasRequest<unknown>(
       'classrooms.getByTeacher',
       { teacherId },
-      { retry404: 2 },
+      { retryRead: 2 },
     )
     return normalizeArrayResponse<Classroom>(response, ['classrooms'])
   },
@@ -72,7 +72,7 @@ export const classroomsService = {
     const response = await gasRequest<unknown>(
       'grades.list',
       undefined,
-      { retry404: 2 },
+      { retryRead: 2 },
     )
     return normalizeArrayResponse<Grade>(response, ['grades'])
   },
@@ -95,7 +95,7 @@ export const classroomsService = {
     const response = await gasRequest<unknown>(
       'schoolYears.list',
       undefined,
-      { retry404: 2 },
+      { retryRead: 2 },
     )
     return normalizeArrayResponse<SchoolYear>(response, ['schoolYears'])
   },

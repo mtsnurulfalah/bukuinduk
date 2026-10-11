@@ -1,14 +1,29 @@
 import type { ApiResponse } from '@/types'
 import { getToken } from '@/utils'
 
-// BUG-01 FIX: Validasi VITE_GAS_URL di module level agar error terdeteksi saat startup,
-// bukan saat request pertama dengan pesan "Failed to fetch" yang tidak informatif.
-const GAS_URL = import.meta.env.VITE_GAS_URL as string
-if (!GAS_URL) {
+// Fail fast when the deployment is misconfigured instead of surfacing a vague
+// "Failed to fetch" message on the first user action.
+const configuredGasUrl: unknown = import.meta.env.VITE_GAS_URL
+if (typeof configuredGasUrl !== 'string' || !configuredGasUrl.trim()) {
   throw new Error(
     'VITE_GAS_URL belum dikonfigurasi. ' +
     'Tambahkan VITE_GAS_URL=<url_deployment_GAS> di file .env.local atau .env.production.'
   )
+}
+const GAS_URL = configuredGasUrl.trim()
+
+const DEFAULT_TIMEOUT_MS = 60_000
+const MAX_READ_RETRIES = 3
+const MAX_RETRY_DELAY_MS = 2_000
+
+type GasRequestOptions = {
+  skipAuth?: boolean
+  timeout?: number
+  /**
+   * Additional retries for idempotent read operations only.
+   * Do not enable this option for create/update/delete/import actions.
+   */
+  retryRead?: number
 }
 
 let _onUnauthorized: (() => void) | null = null
@@ -29,31 +44,64 @@ function formatGasActionError(action: string, message: string) {
   return message
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 404 || status === 408 || status === 429 || (status >= 500 && status < 600)
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
+function normalizeRetryCount(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value)) return 0
+  return Math.min(MAX_READ_RETRIES, Math.max(0, Math.floor(value)))
+}
+
+function retryDelayMs(retryNumber: number): number {
+  const exponentialDelay = Math.min(250 * (2 ** Math.max(0, retryNumber - 1)), MAX_RETRY_DELAY_MS)
+  // A small jitter prevents multiple browser tabs from retrying in lockstep.
+  return exponentialDelay + Math.floor(Math.random() * 100)
+}
+
+function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException('Request aborted.', 'AbortError'))
+      return
+    }
+
+    const cleanup = () => signal.removeEventListener('abort', onAbort)
+    const timer = setTimeout(() => {
+      cleanup()
+      resolve()
+    }, delayMs)
+
+    const onAbort = () => {
+      clearTimeout(timer)
+      cleanup()
+      reject(new DOMException('Request aborted.', 'AbortError'))
+    }
+
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
 /**
- * Kirim request ke Google Apps Script Web App.
+ * Send a request to the Google Apps Script Web App.
  *
- * Pendekatan: POST dengan Content-Type application/x-www-form-urlencoded
- *
- * Mengapa bukan JSON POST? GAS melakukan 302 redirect, dan browser mengubah
- * POST → GET saat follow redirect → 405.
- *
- * Mengapa bukan GET dengan query param? URL bisa terpotong oleh GAS/proxy
- * saat payload besar, menyebabkan e.parameter.data undefined di GAS.
- *
- * Solusi terbaik yang bekerja di GAS:
- * - POST dengan body berformat application/x-www-form-urlencoded
- * - Ini adalah "simple request" CORS → tidak ada preflight OPTIONS
- * - GAS menerimanya di doPost via e.parameter (bukan e.postData.contents)
- * - Tidak ada masalah URL length
- * - Tidak ada masalah redirect method change karena GAS membaca parameter
- *   sebelum redirect terjadi
- *
- * Cara GAS membaca: e.parameter.action, e.parameter.payload, e.parameter.token
+ * Use application/x-www-form-urlencoded rather than JSON: GAS parses the
+ * simple form request through e.parameter and does not require a CORS preflight.
+ * Retries are opt-in and intended for idempotent reads only because a network
+ * failure cannot prove that a write did not reach the backend.
  */
 export async function gasRequest<T = unknown>(
   action: string,
   payload?: unknown,
-  options?: { skipAuth?: boolean; timeout?: number; retry404?: number }
+  options?: GasRequestOptions
 ): Promise<T> {
   const token = getToken()
 
@@ -62,115 +110,147 @@ export async function gasRequest<T = unknown>(
     throw new Error('Sesi tidak valid. Silakan login kembali.')
   }
 
-  // Kirim sebagai form fields terpisah agar GAS bisa baca via e.parameter
   const formData = new URLSearchParams()
-  formData.set('action',  action)
+  formData.set('action', action)
   formData.set('payload', JSON.stringify(payload ?? {}))
   if (token) formData.set('token', token)
 
-  const timeoutMs  = options?.timeout ?? 60_000   // GAS cold start bisa ~10–20 detik
-  const max404Retries = Math.max(0, Math.floor(options?.retry404 ?? 0))
+  const requestedTimeout = options?.timeout
+  const timeoutMs =
+    typeof requestedTimeout === 'number' && Number.isFinite(requestedTimeout) && requestedTimeout > 0
+      ? requestedTimeout
+      : DEFAULT_TIMEOUT_MS
+  const maxReadRetries = normalizeRetryCount(options?.retryRead)
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  let timedOut = false
+  let requestAttempt = 0
+  let retriesUsed = 0
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
 
   try {
-    let response: Response | null = null
+    while (true) {
+      let response: Response
 
-    for (let attempt = 0; ; attempt++) {
-      response = await fetch(addCacheBust(GAS_URL, attempt), {
-        method:   'POST',
-        headers:  { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body:     formData.toString(),
-        redirect: 'follow',
-        signal:   controller.signal,
-        cache:    'no-store',
-      })
+      try {
+        response = await fetch(addCacheBust(GAS_URL, requestAttempt++), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formData.toString(),
+          redirect: 'follow',
+          signal: controller.signal,
+          cache: 'no-store',
+        })
+      } catch (error: unknown) {
+        if (isAbortError(error)) throw error
+        if (error instanceof TypeError && retriesUsed < maxReadRetries) {
+          retriesUsed += 1
+          await waitForRetry(retryDelayMs(retriesUsed), controller.signal)
+          continue
+        }
+        throw error
+      }
 
-      if (response.status !== 404 || attempt >= max404Retries) break
+      if (!response.ok) {
+        if (isRetryableStatus(response.status) && retriesUsed < maxReadRetries) {
+          retriesUsed += 1
+          await waitForRetry(retryDelayMs(retriesUsed), controller.signal)
+          continue
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText || 'Permintaan gagal.'}`)
+      }
 
-      // A 404 can briefly occur at the edge during deployment propagation.
-      // Retry only for callers that explicitly opted in (read-only operations).
-      await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)))
-    }
+      let text: string
+      try {
+        text = await response.text()
+      } catch (error: unknown) {
+        if (isAbortError(error)) throw error
+        if (error instanceof TypeError && retriesUsed < maxReadRetries) {
+          retriesUsed += 1
+          await waitForRetry(retryDelayMs(retriesUsed), controller.signal)
+          continue
+        }
+        throw error
+      }
 
-    if (!response) {
-      throw new Error('Request tidak menghasilkan response dari server.')
-    }
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    const text = await response.text()
-
-    // Deteksi HTML — tanda deployment GAS bermasalah
-    if (text.trimStart().startsWith('<')) {
-      if (text.includes('accounts.google.com') || text.includes('signin')) {
+      // Detect common HTML responses caused by an inaccessible or stale GAS deployment.
+      if (text.trimStart().startsWith('<')) {
+        if (text.includes('accounts.google.com') || text.includes('signin')) {
+          throw new Error(
+            'GAS meminta login Google. Buka GAS editor → Deploy → ' +
+            'pastikan "Who has access" diset ke "Anyone".'
+          )
+        }
+        if (text.includes('Script function not found') || text.includes('doPost')) {
+          throw new Error(
+            'Fungsi doPost tidak ditemukan. Pastikan Main.gs sudah disimpan ' +
+            'dan buat New Deployment di GAS.'
+          )
+        }
+        const match = text.match(/<title>([^<]+)<\/title>/)
+        const title = match ? match[1] : 'Unknown error'
         throw new Error(
-          'GAS meminta login Google. Buka GAS editor → Deploy → ' +
-          'pastikan "Who has access" diset ke "Anyone".'
+          `GAS mengembalikan HTML (${title}). ` +
+          'Buat New Deployment di GAS dan pastikan URL sudah diupdate di .env.production.'
         )
       }
-      if (text.includes('Script function not found') || text.includes('doPost')) {
-        throw new Error(
-          'Fungsi doPost tidak ditemukan. Pastikan Main.gs sudah disimpan ' +
-          'dan buat New Deployment di GAS.'
-        )
+
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        // Never include response fragments here: they may contain personal or operational data.
+        throw new Error('Response GAS bukan JSON. Periksa URL deployment dan akses Web App GAS.')
       }
-      // Coba ekstrak pesan error dari HTML GAS jika ada
-      const match = text.match(/<title>([^<]+)<\/title>/)
-      const title = match ? match[1] : 'Unknown error'
+
+      if (!isRecord(parsed) || typeof parsed.status !== 'number' || !Number.isFinite(parsed.status)) {
+        throw new Error('Format response GAS tidak sesuai kontrak API.')
+      }
+
+      const data = parsed as unknown as ApiResponse<T>
+
+      // GAS often returns HTTP 200 while expressing errors in the JSON status.
+      // Retry is therefore evaluated for both HTTP responses and the API envelope.
+      if (isRetryableStatus(data.status) && retriesUsed < maxReadRetries) {
+        retriesUsed += 1
+        await waitForRetry(retryDelayMs(retriesUsed), controller.signal)
+        continue
+      }
+
+      if (data.status === 401) {
+        _onUnauthorized?.()
+        throw new Error('Sesi berakhir. Silakan login kembali.')
+      }
+
+      if (data.status === 403) {
+        throw new Error('Anda tidak memiliki izin untuk melakukan tindakan ini.')
+      }
+
+      if (data.status < 200 || data.status >= 300) {
+        const message = data.error ?? data.message ?? 'Terjadi kesalahan.'
+        throw new Error(formatGasActionError(action, message))
+      }
+
+      return data.data as T
+    }
+  } catch (error: unknown) {
+    if (isAbortError(error) || timedOut) {
       throw new Error(
-        `GAS mengembalikan HTML (${title}). ` +
-        'Buat New Deployment di GAS dan pastikan URL sudah diupdate di .env.production.'
-      )
-    }
-
-    let data: ApiResponse<T>
-    try {
-      data = JSON.parse(text)
-    } catch {
-      throw new Error(
-        `Response GAS bukan JSON. Isi awal response: "${text.slice(0, 150)}"`
-      )
-    }
-
-    if (data.status === 401) {
-      // BUG-03 FIX: Hapus auth data SEKALI lewat _onUnauthorized (yang memanggil logout()
-      // yang sudah memanggil clearAuth()). Jangan clearAuth() di sini juga agar tidak
-      // double-clear dan tidak memicu logout() GAS request dengan token yang sudah kosong.
-      _onUnauthorized?.()
-      throw new Error('Sesi berakhir. Silakan login kembali.')
-    }
-
-    if (data.status === 403) {
-      throw new Error('Anda tidak memiliki izin untuk melakukan tindakan ini.')
-    }
-
-    if (data.status >= 400) {
-      const message = data.error ?? data.message ?? 'Terjadi kesalahan.'
-      throw new Error(formatGasActionError(action, message))
-    }
-
-    return data.data as T
-
-  } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error(
-        `Request timeout setelah ${timeoutMs / 1000} detik. ` +
+        `Request timeout setelah ${Math.round(timeoutMs / 1000)} detik. ` +
         'GAS mungkin sedang cold start. Coba lagi dalam beberapa saat.'
       )
     }
-    // BUG-02 FIX: TypeError check yang benar — TypeError adalah network error (fetch gagal),
-    // tidak ada hubungannya dengan RangeError (RangeError BUKAN subclass TypeError).
-    // Kondisi lama !(err instanceof RangeError) selalu true dan menyesatkan.
-    if (err instanceof TypeError) {
+
+    if (error instanceof TypeError) {
       throw new Error(
         'Tidak dapat terhubung ke server GAS. ' +
         'Periksa koneksi internet dan pastikan URL GAS benar.'
       )
     }
-    throw err
+
+    throw error
   } finally {
     clearTimeout(timer)
   }

@@ -232,6 +232,12 @@ buku-induk-digital/
 
 ---
 
+## Operasional & Reliability
+
+Lihat [Runbook Reliability & Operations](docs/OPERATIONS.md) untuk quality gate, pemeriksaan pasca-deploy Vercel, sinkronisasi backend GAS, triase gangguan, dan prosedur backup/pemulihan.
+
+---
+
 ## Scripts
 
 ```bash

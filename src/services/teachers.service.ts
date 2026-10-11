@@ -4,11 +4,11 @@ import type { PaginatedResponse } from '@/types'
 
 export const teachersService = {
   async list(params?: { search?: string; status?: string; page?: number; limit?: number }): Promise<PaginatedResponse<Teacher>> {
-    return gasRequest<PaginatedResponse<Teacher>>('teachers.list', params, { retry404: 2 })
+    return gasRequest<PaginatedResponse<Teacher>>('teachers.list', params, { retryRead: 2 })
   },
 
   async get(id: string): Promise<Teacher> {
-    return gasRequest<Teacher>('teachers.get', { id }, { retry404: 2 })
+    return gasRequest<Teacher>('teachers.get', { id }, { retryRead: 2 })
   },
 
   async create(data: TeacherFormData): Promise<Teacher> {
@@ -25,6 +25,6 @@ export const teachersService = {
 
   /** Semua guru aktif (untuk dropdown wali kelas) */
   async listActive(): Promise<Pick<Teacher, 'id' | 'fullName'>[]> {
-    return gasRequest('teachers.listActive', undefined, { retry404: 2 })
+    return gasRequest('teachers.listActive', undefined, { retryRead: 2 })
   },
 }

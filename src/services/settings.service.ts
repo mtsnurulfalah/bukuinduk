@@ -79,7 +79,7 @@ export interface BackupAutomationState extends BackupAutomationOptions {
 
 export const settingsService = {
   async get(): Promise<AppSettings> {
-    return gasRequest<AppSettings>('settings.get', undefined, { retry404: 2 })
+    return gasRequest<AppSettings>('settings.get', undefined, { retryRead: 2 })
   },
 
   async update(data: Partial<AppSettings>): Promise<AppSettings> {

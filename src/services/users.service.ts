@@ -49,7 +49,7 @@ function normalizeUser(user: User): User {
 
 export const usersService = {
   async list(params?: { search?: string; role?: string; page?: number; limit?: number }): Promise<PaginatedResponse<User>> {
-    const response = await gasRequest<PaginatedResponse<User>>('users.list', params, { retry404: 2 })
+    const response = await gasRequest<PaginatedResponse<User>>('users.list', params, { retryRead: 2 })
     return {
       ...response,
       items: Array.isArray(response?.items) ? response.items.map(normalizeUser) : [],
@@ -57,7 +57,7 @@ export const usersService = {
   },
 
   async get(id: string): Promise<User> {
-    const response = await gasRequest<User>('users.get', { id }, { retry404: 2 })
+    const response = await gasRequest<User>('users.get', { id }, { retryRead: 2 })
     return normalizeUser(response)
   },
 

@@ -8,7 +8,7 @@ export const gradesService = {
     semester?: 1 | 2
     classroomId?: string
   }): Promise<StudentGrade[]> {
-    return gasRequest<StudentGrade[]>('scores.list', params, { retry404: 2 })
+    return gasRequest<StudentGrade[]>('scores.list', params, { retryRead: 2 })
   },
   async save(data: GradeFormData): Promise<StudentGrade> {
     return gasRequest<StudentGrade>('scores.save', data)
