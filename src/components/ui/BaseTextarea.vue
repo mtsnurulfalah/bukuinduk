@@ -13,6 +13,8 @@
       :disabled="disabled"
       :readonly="readonly"
       :required="required"
+      :aria-invalid="hasError ? 'true' : undefined"
+      :aria-describedby="hasError ? errorId : hint ? hintId : undefined"
       :rows="rows"
       :class="[
         'block w-full rounded-lg border text-sm text-slate-800 placeholder-slate-400 transition-colors resize-none',
@@ -26,8 +28,8 @@
       @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
     />
 
-    <p v-if="hasError" class="mt-1 text-xs text-red-500">{{ errorMessage }}</p>
-    <p v-else-if="hint" class="mt-1 text-xs text-slate-500">{{ hint }}</p>
+    <p v-if="hasError" :id="errorId" class="mt-1 text-xs text-red-500">{{ errorMessage }}</p>
+    <p v-else-if="hint" :id="hintId" class="mt-1 text-xs text-slate-500">{{ hint }}</p>
   </div>
 </template>
 
@@ -58,6 +60,8 @@ const props = withDefaults(defineProps<Props>(), {
 defineEmits<{ 'update:modelValue': [value: string] }>()
 
 const textareaId = computed(() => props.id ?? `textarea-${uid()}`)
+const errorId = computed(() => `${textareaId.value}-error`)
+const hintId = computed(() => `${textareaId.value}-hint`)
 const hasError = computed(() => Boolean(props.errorMessage))
 </script>
 
