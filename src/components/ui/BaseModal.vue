@@ -20,9 +20,10 @@
         <!-- Panel -->
         <div
           ref="dialogPanel"
+          class="base-modal-panel"
           :class="[
             'relative flex w-full flex-col overflow-hidden bg-white shadow-xl',
-            'max-h-[95vh] max-h-[95dvh] sm:rounded-xl sm:max-h-[calc(100dvh-2rem)]',
+            'sm:rounded-xl',
             maxWidthClass,
           ]"
           tabindex="-1"
@@ -65,6 +66,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { uid } from '@/utils'
+import { isTopModal, registerModal, unregisterModal } from '@/utils/modalStack'
 
 interface Props {
   modelValue: boolean
@@ -96,8 +98,6 @@ let isActive = false
 
 // Stack support prevents a nested confirmation dialog from closing its parent
 // when Escape is pressed, and preserves the parent's scroll lock.
-const modalStack: symbol[] = []
-
 const FOCUSABLE_SELECTOR = [
   'a[href]',
   'button:not([disabled])',
@@ -136,7 +136,7 @@ async function activateDialog(): Promise<void> {
       : null
     previousBodyOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    modalStack.push(modalId)
+    registerModal(modalId)
     document.addEventListener('keydown', handleDialogKeydown)
     isActive = true
   }
@@ -155,8 +155,7 @@ function deactivateDialog(restoreFocus = true): void {
   if (!isActive || typeof document === 'undefined') return
 
   document.removeEventListener('keydown', handleDialogKeydown)
-  const stackIndex = modalStack.lastIndexOf(modalId)
-  if (stackIndex >= 0) modalStack.splice(stackIndex, 1)
+  unregisterModal(modalId)
 
   document.body.style.overflow = previousBodyOverflow
   isActive = false
@@ -169,7 +168,7 @@ function deactivateDialog(restoreFocus = true): void {
 }
 
 function handleDialogKeydown(event: KeyboardEvent): void {
-  if (!props.modelValue || modalStack[modalStack.length - 1] !== modalId) return
+  if (!props.modelValue || !isTopModal(modalId)) return
 
   if (event.key === 'Escape' && props.closeOnEscape) {
     event.preventDefault()
@@ -228,6 +227,22 @@ onBeforeUnmount(() => {
 }
 .modal-enter-from .relative {
   transform: translateY(16px) scale(0.98);
+}
+
+.base-modal-panel {
+  max-height: 95vh;
+}
+
+@supports (height: 100dvh) {
+  .base-modal-panel {
+    max-height: 95dvh;
+  }
+
+  @media (min-width: 640px) {
+    .base-modal-panel {
+      max-height: calc(100dvh - 2rem);
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
