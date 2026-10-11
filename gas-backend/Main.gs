@@ -37,7 +37,7 @@ function doPost(e) {
     if (!action) {
       return errorResponse(400, 'Parameter "action" diperlukan.');
     }
-    if (action.length > 120 || !/^[a-zA-Z][a-zA-Z0-9_-]*\\.[a-zA-Z][a-zA-Z0-9_-]*$/.test(action)) {
+    if (action.length > 120 || !/^[a-zA-Z][a-zA-Z0-9_-]*\.[a-zA-Z][a-zA-Z0-9_-]*$/.test(action)) {
       return errorResponse(400, 'Format action tidak valid.');
     }
     // Batas ukuran mencegah payload tak terbatas menghabiskan memori/waktu eksekusi.
