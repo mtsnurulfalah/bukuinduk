@@ -147,11 +147,11 @@
               v-model="form.password"
               label="Password"
               type="password"
-              placeholder="Minimal 8 karakter"
+              placeholder="Minimal 12 karakter"
               autocomplete="new-password"
               required
               :error-message="errors.password"
-              hint="Gunakan password minimal 8 karakter."
+              hint="Gunakan password minimal 12 karakter."
             />
           </div>
 

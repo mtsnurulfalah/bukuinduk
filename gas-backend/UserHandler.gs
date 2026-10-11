@@ -97,8 +97,10 @@ var UserHandler = {
     }
     try {
     checkPermission(user, 'user:manage');
-    if (!payload.username || !payload.fullName || !payload.email || !payload.role || !payload.password)
+    if (!payload.username || !payload.fullName || !payload.email || !payload.role ||
+        typeof payload.password !== 'string' || !payload.password) {
       return errorResponse(400, 'Semua field wajib (username, fullName, email, role, password).');
+    }
 
     var validRoles = ['admin','principal','teacher'];
     if (validRoles.indexOf(payload.role) === -1)
@@ -106,15 +108,18 @@ var UserHandler = {
 
     var normalizedUsername = String(payload.username).trim().toLowerCase();
     var normalizedEmail = String(payload.email).trim().toLowerCase();
-    if (normalizedUsername.length < 3) return errorResponse(400, 'Username minimal 3 karakter.');
+    if (normalizedUsername.length < 3 || normalizedUsername.length > 64)
+      return errorResponse(400, 'Username harus berukuran 3–64 karakter.');
+    if (String(payload.fullName).trim().length > 150 || normalizedEmail.length > 254)
+      return errorResponse(400, 'Nama atau email terlalu panjang.');
     var all = sheetToObjects(getSheet(CONFIG.SHEETS.USERS));
     if (all.find(function(u){ return String(u.username || '').trim().toLowerCase() === normalizedUsername; }))
       return errorResponse(409, 'Username "' + normalizedUsername + '" sudah digunakan.');
     if (all.find(function(u){ return String(u.email || '').trim().toLowerCase() === normalizedEmail; }))
       return errorResponse(409, 'Email "' + normalizedEmail + '" sudah digunakan.');
 
-    if (payload.password.length < 8)
-      return errorResponse(400, 'Password minimal 8 karakter.');
+    if (payload.password.length < 12 || payload.password.length > 256)
+      return errorResponse(400, 'Password harus berukuran 12–256 karakter.');
 
     var sheet   = getSheet(CONFIG.SHEETS.USERS);
     var headers = getHeaders(sheet);
@@ -174,6 +179,10 @@ var UserHandler = {
     if (!old) return errorResponse(404, 'Pengguna tidak ditemukan.');
     if (String(payload.id) === String(user.id) && payload.isActive !== undefined && !normalizeBoolean(payload.isActive, true)) {
       return errorResponse(400, 'Tidak dapat menonaktifkan akun Anda sendiri.');
+    }
+    if (String(payload.id) === String(user.id) && payload.role !== undefined &&
+        String(payload.role) !== String(old.role)) {
+      return errorResponse(400, 'Tidak dapat mengubah role akun sendiri. Minta admin lain melakukan perubahan ini.');
     }
     var updated = Object.assign({}, old);
     if (payload.role !== undefined && ['admin','principal','teacher'].indexOf(payload.role) === -1) return errorResponse(400, 'Role tidak valid.');
@@ -248,8 +257,9 @@ var UserHandler = {
     }
     try {
     checkPermission(user, 'user:manage');
-    if (!payload.newPassword || payload.newPassword.length < 8)
-      return errorResponse(400, 'Password baru minimal 8 karakter.');
+    if (typeof payload.newPassword !== 'string' ||
+        payload.newPassword.length < 12 || payload.newPassword.length > 256)
+      return errorResponse(400, 'Password baru harus berukuran 12–256 karakter.');
     var sheet   = getSheet(CONFIG.SHEETS.USERS);
     var headers = getHeaders(sheet);
     var rowIdx  = findRowById(sheet, payload.id);

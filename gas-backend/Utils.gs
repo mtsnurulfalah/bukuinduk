@@ -94,34 +94,60 @@ function generateJWT(payload) {
   return data + '.' + sig;
 }
 
+function _constantTimeEquals(left, right) {
+  left = String(left || '');
+  right = String(right || '');
+  var difference = left.length ^ right.length;
+  var maxLength = Math.max(left.length, right.length);
+  for (var i = 0; i < maxLength; i++) {
+    difference |= (left.charCodeAt(i) || 0) ^ (right.charCodeAt(i) || 0);
+  }
+  return difference === 0;
+}
+
 function verifyJWT(token) {
-  if (!token) return null;
+  if (typeof token !== 'string' || !token || token.length > 8192) return null;
   try {
     var parts = token.split('.');
-    if (parts.length !== 3) return null;
+    if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return null;
+
+    // JWT header wajib eksplisit menggunakan algoritma yang benar-benar didukung.
+    var headerPadding = '='.repeat((4 - parts[0].length % 4) % 4);
+    var header = JSON.parse(
+      Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0] + headerPadding)).getDataAsString()
+    );
+    if (!header || Array.isArray(header) || header.alg !== 'HS256' || header.typ !== 'JWT') return null;
+
     var data = parts[0] + '.' + parts[1];
     var expectedSig = base64UrlEncode(
       Utilities.computeHmacSha256Signature(data, CONFIG.JWT_SECRET)
         .map(function(b) { return String.fromCharCode(b < 0 ? b + 256 : b); })
         .join('')
     );
-    if (expectedSig !== parts[2]) return null;
-    // BUG-35 FIX: Hitung padding base64 yang tepat berdasarkan panjang string.
-    var base64Str = parts[1];
-    var padLen = (4 - base64Str.length % 4) % 4;
-    var padded = base64Str + '='.repeat(padLen);
-    var payload = JSON.parse(
-      Utilities.newBlob(Utilities.base64DecodeWebSafe(padded)).getDataAsString()
-    );
-    if (payload.exp < Math.floor(Date.now() / 1000)) return null;
+    if (!_constantTimeEquals(expectedSig, parts[2])) return null;
 
-    // BUG-46 FIX: Validasi token tidak diterbitkan sebelum password terakhir diubah.
-    // Cek passwordChangedAt dari user record di sheet — jika iat < passwordChangedAt, token lama.
-    if (!payload.id) return null;
+    var payloadPadding = '='.repeat((4 - parts[1].length % 4) % 4);
+    var payload = JSON.parse(
+      Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[1] + payloadPadding)).getDataAsString()
+    );
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+
+    var nowSeconds = Math.floor(Date.now() / 1000);
+    var maxLifetime = Number(CONFIG.JWT_EXPIRES_IN);
+    if (typeof payload.iat !== 'number' || !Number.isFinite(payload.iat) ||
+        typeof payload.exp !== 'number' || !Number.isFinite(payload.exp) ||
+        payload.iat < 0 || payload.exp <= payload.iat ||
+        payload.exp <= nowSeconds || payload.iat > nowSeconds + 60 ||
+        !Number.isFinite(maxLifetime) || maxLifetime < 1 ||
+        payload.exp - payload.iat > maxLifetime + 60) {
+      return null;
+    }
+
+    // BUG-46 FIX: Token lama ditolak setelah perubahan password.
+    if (typeof payload.id !== 'string' || !payload.id.trim()) return null;
     var users = sheetToObjects(getSheet(CONFIG.SHEETS.USERS));
     var u = users.find(function(x) { return String(x.id) === String(payload.id); });
-    if (!u) return null;
-    if (!normalizeBoolean(u.isActive, false)) return null;
+    if (!u || !normalizeBoolean(u.isActive, false)) return null;
 
     if (u.passwordChangedAt) {
       var changedAt = Number(u.passwordChangedAt);
@@ -132,12 +158,11 @@ function verifyJWT(token) {
       if (changedAt && payload.iat < changedAt) return null;
     }
 
-    // Sheet menjadi sumber kebenaran untuk role/profil agar perubahan role
-    // atau teacherId berlaku segera tanpa menunggu JWT lama kadaluarsa.
-    payload.username = u.username || payload.username || '';
-    payload.fullName = u.fullName || payload.fullName || '';
-    payload.email = u.email || payload.email || '';
-    payload.role = u.role || payload.role;
+    // Spreadsheet adalah sumber kebenaran untuk role/profil terkini.
+    payload.username = u.username || '';
+    payload.fullName = u.fullName || '';
+    payload.email = u.email || '';
+    payload.role = u.role;
     payload.teacherId = u.teacherId || null;
     payload.isActive = true;
     return payload;

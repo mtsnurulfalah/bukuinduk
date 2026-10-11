@@ -37,7 +37,7 @@ export function isValidPhone(phone: string): boolean {
  * Validasi password: min 8 karakter, ada huruf dan angka
  */
 export function isValidPassword(password: string): boolean {
-  return password.length >= 8 && /[a-zA-Z]/.test(password) && /\d/.test(password)
+  return password.length >= 12 && /[a-zA-Z]/.test(password) && /\d/.test(password)
 }
 
 /**
@@ -232,7 +232,8 @@ export const changePasswordSchema = yup.object({
   newPassword: yup
     .string()
     .required('Password baru wajib diisi')
-    .min(8, 'Password minimal 8 karakter')
+    .min(12, 'Password minimal 12 karakter')
+    .max(256, 'Password maksimal 256 karakter')
     .matches(/[a-zA-Z]/, 'Password harus mengandung huruf')
     .matches(/\d/, 'Password harus mengandung angka'),
   confirmPassword: yup
@@ -256,7 +257,8 @@ export const userSchema = yup.object({
     then: schema =>
       schema
         .required('Password wajib diisi')
-        .min(8, 'Password minimal 8 karakter'),
+        .min(12, 'Password minimal 12 karakter')
+        .max(256, 'Password maksimal 256 karakter'),
     otherwise: schema => schema.optional(),
   }),
 })
