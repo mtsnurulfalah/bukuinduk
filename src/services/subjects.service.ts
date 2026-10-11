@@ -5,7 +5,7 @@ type SubjectUpdateData = SubjectFormData & { id: string }
 
 export const subjectsService = {
   async list(schoolYearId?: string, activeOnly = false): Promise<Subject[]> {
-    return gasRequest<Subject[]>('subjects.list', { schoolYearId, activeOnly }, { retry404: 2 })
+    return gasRequest<Subject[]>('subjects.list', { schoolYearId, activeOnly }, { retryRead: 2 })
   },
   async create(data: SubjectFormData): Promise<Subject> {
     return gasRequest<Subject>('subjects.create', data)
