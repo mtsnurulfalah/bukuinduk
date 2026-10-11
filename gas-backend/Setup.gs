@@ -107,45 +107,126 @@ function setupSpreadsheet() {
     }
   });
 
-  // Buat akun admin default jika belum ada
-  _createDefaultAdmin(ss);
-
-  Logger.log('Setup selesai!');
-  return 'Setup berhasil.';
+  // Jangan pernah membuat akun dengan kredensial default yang tertanam di source code.
+  // Untuk instalasi baru, gunakan bootstrapInitialAdmin() setelah mengatur Script Properties.
+  Logger.log('Setup selesai. Tidak ada kredensial admin default yang dibuat.');
+  return 'Setup berhasil. Jika instalasi baru, atur INITIAL_ADMIN_USERNAME, INITIAL_ADMIN_EMAIL, dan INITIAL_ADMIN_PASSWORD di Script Properties, lalu jalankan bootstrapInitialAdmin().';
 }
 
-function _createDefaultAdmin(ss) {
-  var sheet = ss.getSheetByName(CONFIG.SHEETS.USERS);
-  if (!sheet) return;
+/**
+ * Membuat admin pertama tanpa kredensial bawaan yang tertanam di repository.
+ *
+ * Sebelum menjalankan fungsi ini, atur Script Properties berikut:
+ * INITIAL_ADMIN_USERNAME, INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_PASSWORD.
+ * Password minimal 16 karakter. Rahasia dihapus setelah operasi berhasil.
+ */
+function bootstrapInitialAdmin() {
+  var credentials = _readAdminProvisioningProperties(true);
+  var sheet = getSheet(CONFIG.SHEETS.USERS);
+  var headers = getHeaders(sheet);
+  var users = sheetToObjects(sheet);
 
-  var data = sheet.getDataRange().getValues();
-  // Cek apakah sudah ada user
-  if (data.length > 1) {
-    Logger.log('Admin sudah ada, skip pembuatan.');
-    return;
+  if (users.length > 0) {
+    _clearAdminProvisioningProperties();
+    return 'Bootstrap dibatalkan: sheet pengguna sudah berisi akun. Rahasia provisioning yang tersimpan telah dihapus.';
   }
 
-  var id = generateUUID();
-  var admin = [
-    id,                         // id
-    'admin',                    // username
-    'Administrator',            // fullName
-    'admin@sekolah.id',         // email
-    'admin',                    // role
-    hashPassword('Admin@12345'), // passwordHash
-    true,                       // isActive
-    '',                         // teacherId
-    '',                         // avatarUrl
-    '',                         // lastLogin
-    '',                         // passwordChangedAt
-    now(),                      // createdAt
-    now(),                      // updatedAt
-    '',                         // createdBy
-  ];
+  var requiredHeaders = ['id', 'username', 'fullName', 'email', 'role', 'passwordHash', 'isActive'];
+  var missing = requiredHeaders.filter(function(header) {
+    return headers.indexOf(header) === -1;
+  });
+  if (missing.length) {
+    throw new Error('Header sheet users belum lengkap. Jalankan setupSpreadsheet() terlebih dahulu.');
+  }
 
-  sheet.appendRow(admin);
-  Logger.log('Admin default dibuat. Username: admin | Password: Admin@12345');
-  Logger.log('PENTING: Segera ubah password default setelah login pertama!');
+  var timestamp = now();
+  var admin = {
+    id: generateUUID(),
+    username: credentials.username,
+    fullName: 'Administrator',
+    email: credentials.email,
+    role: 'admin',
+    passwordHash: hashPassword(credentials.password),
+    isActive: true,
+    teacherId: '',
+    avatarUrl: '',
+    lastLogin: '',
+    passwordChangedAt: '',
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    createdBy: ''
+  };
+
+  appendRow(sheet, admin, headers);
+  _clearAdminProvisioningProperties();
+  Logger.log('Admin awal dibuat. Kredensial tidak dicatat ke log.');
+  return 'Admin awal berhasil dibuat untuk username yang dikonfigurasi. Password tidak ditampilkan atau dicatat.';
+}
+
+/**
+ * Rotasi password admin untuk instalasi yang sudah memiliki akun.
+ * Fungsi ini hanya dapat dijalankan oleh editor project GAS yang berwenang.
+ * Atur INITIAL_ADMIN_USERNAME dan INITIAL_ADMIN_PASSWORD sebelum menjalankannya.
+ */
+function rotateAdminPassword() {
+  var credentials = _readAdminProvisioningProperties(false);
+  var lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    var sheet = getSheet(CONFIG.SHEETS.USERS);
+    var users = sheetToObjects(sheet);
+    var target = users.find(function(u) {
+      return String(u.username || '').trim().toLowerCase() === credentials.username &&
+        String(u.role || '').trim().toLowerCase() === 'admin';
+    });
+    if (!target) {
+      throw new Error('Akun admin tujuan tidak ditemukan. Periksa INITIAL_ADMIN_USERNAME.');
+    }
+
+    var row = findRowById(sheet, target.id);
+    if (row < 2) throw new Error('Baris akun admin tidak valid.');
+
+    var passwordColumn = ensureHeader(sheet, 'passwordHash');
+    var changedColumn = ensureHeader(sheet, 'passwordChangedAt');
+    var updatedColumn = ensureHeader(sheet, 'updatedAt');
+    var changedAt = Math.floor(Date.now() / 1000);
+
+    sheet.getRange(row, passwordColumn).setValue(hashPassword(credentials.password));
+    sheet.getRange(row, changedColumn).setValue(changedAt);
+    sheet.getRange(row, updatedColumn).setValue(now());
+
+    _clearAdminProvisioningProperties();
+    Logger.log('Password admin berhasil dirotasi. Nilai password tidak dicatat ke log.');
+    return 'Password admin berhasil dirotasi. Silakan login menggunakan password baru.';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function _readAdminProvisioningProperties(requireEmail) {
+  var props = PropertiesService.getScriptProperties();
+  var username = String(props.getProperty('INITIAL_ADMIN_USERNAME') || '').trim().toLowerCase();
+  var email = String(props.getProperty('INITIAL_ADMIN_EMAIL') || '').trim().toLowerCase();
+  var password = String(props.getProperty('INITIAL_ADMIN_PASSWORD') || '');
+
+  if (!/^[a-z0-9._-]{3,64}$/.test(username)) {
+    throw new Error('INITIAL_ADMIN_USERNAME wajib 3–64 karakter: huruf, angka, titik, garis bawah, atau tanda hubung.');
+  }
+  if (requireEmail && (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+    throw new Error('INITIAL_ADMIN_EMAIL wajib diisi dengan alamat email yang valid.');
+  }
+  if (password.length < 16 || password.length > 256) {
+    throw new Error('INITIAL_ADMIN_PASSWORD wajib 16–256 karakter. Gunakan password manager untuk membuat password unik.');
+  }
+
+  return { username: username, email: email, password: password };
+}
+
+function _clearAdminProvisioningProperties() {
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty('INITIAL_ADMIN_USERNAME');
+  props.deleteProperty('INITIAL_ADMIN_EMAIL');
+  props.deleteProperty('INITIAL_ADMIN_PASSWORD');
 }
 
 // Jalankan untuk cek koneksi ke spreadsheet
