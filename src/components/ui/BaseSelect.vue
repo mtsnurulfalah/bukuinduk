@@ -12,6 +12,8 @@
         :value="modelValue"
         :disabled="disabled"
         :required="required"
+        :aria-invalid="hasError ? 'true' : undefined"
+        :aria-describedby="hasError ? errorId : hint ? hintId : undefined"
         :class="[
           'block w-full rounded-lg border text-sm text-slate-800 transition-colors',
           'focus:outline-none focus:ring-2 focus:ring-offset-0 appearance-none',
@@ -39,14 +41,14 @@
 
       <!-- Chevron icon -->
       <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
         </svg>
       </div>
     </div>
 
-    <p v-if="hasError" class="mt-1 text-xs text-red-500">{{ errorMessage }}</p>
-    <p v-else-if="hint" class="mt-1 text-xs text-slate-500">{{ hint }}</p>
+    <p v-if="hasError" :id="errorId" class="mt-1 text-xs text-red-500">{{ errorMessage }}</p>
+    <p v-else-if="hint" :id="hintId" class="mt-1 text-xs text-slate-500">{{ hint }}</p>
   </div>
 </template>
 
@@ -84,6 +86,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 defineEmits<{ 'update:modelValue': [value: string] }>()
 const selectId = computed(() => props.id ?? `select-${uid()}`)
+const errorId = computed(() => `${selectId.value}-error`)
+const hintId = computed(() => `${selectId.value}-hint`)
 const hasError = computed(() => Boolean(props.errorMessage))
 </script>
 

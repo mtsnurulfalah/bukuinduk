@@ -1,7 +1,7 @@
 <template>
-  <div v-if="totalPages > 1" class="flex flex-col sm:flex-row items-center justify-between gap-3 py-3">
+  <nav v-if="totalPages > 1" aria-label="Navigasi halaman" class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
     <!-- Info -->
-    <p class="text-sm text-slate-500 order-2 sm:order-1">
+    <p class="order-2 text-sm text-slate-500 sm:order-1" aria-live="polite">
       Menampilkan
       <span class="font-medium text-slate-700">{{ from }}–{{ to }}</span>
       dari
@@ -10,16 +10,17 @@
     </p>
 
     <!-- Tombol navigasi -->
-    <div class="flex items-center gap-1 order-1 sm:order-2">
+    <div class="order-1 flex items-center gap-1 sm:order-2">
       <!-- First -->
       <button
         type="button"
         :disabled="currentPage === 1"
-        class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        aria-label="Halaman pertama"
         title="Halaman pertama"
+        class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-40"
         @click="$emit('update:currentPage', 1)"
       >
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7M18 19l-7-7 7-7" />
         </svg>
       </button>
@@ -28,27 +29,33 @@
       <button
         type="button"
         :disabled="currentPage === 1"
-        class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        aria-label="Halaman sebelumnya"
         title="Sebelumnya"
+        class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-40"
         @click="$emit('update:currentPage', currentPage - 1)"
       >
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
       </button>
 
       <!-- Page numbers -->
-      <template v-for="page in visiblePages" :key="page">
+      <template
+        v-for="(page, pageIndex) in visiblePages"
+        :key="typeof page === 'number' ? `page-${page}` : `ellipsis-${pageIndex}`"
+      >
         <span v-if="page === '...'" class="px-2 text-slate-400 text-sm">…</span>
         <button
           v-else
           type="button"
           :class="[
-            'h-8 w-8 rounded-lg text-sm font-medium transition-colors',
+            'inline-flex h-10 min-w-10 items-center justify-center rounded-lg px-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
             page === currentPage
               ? 'bg-primary-600 text-white'
               : 'text-slate-600 hover:bg-slate-100',
           ]"
+          :aria-label="page === currentPage ? `Halaman ${page}, aktif` : `Buka halaman ${page}`"
+          :aria-current="page === currentPage ? 'page' : undefined"
           @click="$emit('update:currentPage', page as number)"
         >
           {{ page }}
@@ -59,11 +66,12 @@
       <button
         type="button"
         :disabled="currentPage === totalPages"
-        class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        aria-label="Halaman berikutnya"
         title="Berikutnya"
+        class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-40"
         @click="$emit('update:currentPage', currentPage + 1)"
       >
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
         </svg>
       </button>
@@ -72,16 +80,17 @@
       <button
         type="button"
         :disabled="currentPage === totalPages"
-        class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        aria-label="Halaman terakhir"
         title="Halaman terakhir"
+        class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-40"
         @click="$emit('update:currentPage', totalPages)"
       >
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M6 5l7 7-7 7" />
         </svg>
       </button>
     </div>
-  </div>
+  </nav>
 </template>
 
 <script setup lang="ts">
