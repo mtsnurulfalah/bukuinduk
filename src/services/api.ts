@@ -3,13 +3,14 @@ import { getToken } from '@/utils'
 
 // Fail fast when the deployment is misconfigured instead of surfacing a vague
 // "Failed to fetch" message on the first user action.
-const GAS_URL = import.meta.env.VITE_GAS_URL as string | undefined
-if (!GAS_URL?.trim()) {
+const configuredGasUrl: unknown = import.meta.env.VITE_GAS_URL
+if (typeof configuredGasUrl !== 'string' || !configuredGasUrl.trim()) {
   throw new Error(
     'VITE_GAS_URL belum dikonfigurasi. ' +
     'Tambahkan VITE_GAS_URL=<url_deployment_GAS> di file .env.local atau .env.production.'
   )
 }
+const GAS_URL = configuredGasUrl.trim()
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_READ_RETRIES = 3
