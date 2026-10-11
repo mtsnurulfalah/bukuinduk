@@ -176,7 +176,7 @@
     <BaseModal
       v-model="showResetPw"
       title="Reset Password"
-      subtitle="Gunakan password baru minimal 8 karakter."
+      subtitle="Gunakan password baru minimal 12 karakter."
       size="sm"
       :show-close="!isResetting"
       :close-on-backdrop="!isResetting"
@@ -190,7 +190,7 @@
           label="Password Baru"
           type="password"
           autocomplete="new-password"
-          placeholder="Minimal 8 karakter"
+          placeholder="Minimal 12 karakter"
           required
           :error-message="resetPwError"
         />
@@ -411,8 +411,8 @@ async function doResetPassword() {
     resetPwError.value = 'Pilih pengguna yang akan direset password-nya.'
     return
   }
-  if (newPassword.value.length < 8) {
-    resetPwError.value = 'Password minimal 8 karakter.'
+  if (newPassword.value.length < 12 || newPassword.value.length > 256) {
+    resetPwError.value = 'Password harus berukuran 12–256 karakter.'
     return
   }
 
