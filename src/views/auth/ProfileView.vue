@@ -51,7 +51,7 @@
             v-model="pwForm.newPassword"
             label="Password Baru"
             type="password"
-            placeholder="Min. 8 karakter, kombinasi huruf & angka"
+            placeholder="Min. 12 karakter"
             required
             :error-message="pwErrors.newPassword"
           />
