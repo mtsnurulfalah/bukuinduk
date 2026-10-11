@@ -5,11 +5,17 @@
 var AuthHandler = {
 
   login: function(payload) {
-    var username = (payload.username || '').trim().toLowerCase();
-    var password  = payload.password || '';
+    payload = (payload && typeof payload === 'object' && !Array.isArray(payload)) ? payload : {};
+    var usernameInput = payload.username;
+    var password = payload.password;
 
-    if (!username || !password) {
-      return errorResponse(400, 'Username dan password wajib diisi.');
+    if (typeof usernameInput !== 'string' || typeof password !== 'string') {
+      return errorResponse(400, 'Username dan password wajib berupa teks.');
+    }
+
+    var username = usernameInput.trim().toLowerCase();
+    if (!username || username.length > 100 || !password || password.length > 1024) {
+      return errorResponse(400, 'Username atau password tidak valid.');
     }
 
     // Batasi percobaan login gagal per username untuk mengurangi brute-force.
@@ -30,7 +36,8 @@ var AuthHandler = {
       return errorResponse(401, 'Username atau password salah.');
     }
     if (!normalizeBoolean(user.isActive, false)) {
-      return errorResponse(403, 'Akun Anda tidak aktif. Hubungi administrator.');
+      // Samakan respons untuk akun nonaktif dan kredensial salah agar status akun tidak bocor.
+      return errorResponse(401, 'Username atau password salah.');
     }
     if (!verifyPassword(password, user.passwordHash)) {
       CacheService.getScriptCache().put(loginKey, String(failedAttempts + 1), 600);
@@ -92,13 +99,18 @@ var AuthHandler = {
   },
 
   changePassword: function(payload, user) {
-    var currentPw  = payload.currentPassword || '';
-    var newPw      = payload.newPassword     || '';
-    var confirmPw  = payload.confirmPassword  || '';
+    var currentPw = payload.currentPassword;
+    var newPw = payload.newPassword;
+    var confirmPw = payload.confirmPassword;
 
-    if (!currentPw || !newPw || !confirmPw) return errorResponse(400, 'Semua field wajib diisi.');
+    if (typeof currentPw !== 'string' || typeof newPw !== 'string' ||
+        typeof confirmPw !== 'string' || !currentPw || !newPw || !confirmPw) {
+      return errorResponse(400, 'Semua field wajib diisi dengan teks.');
+    }
     if (newPw !== confirmPw) return errorResponse(400, 'Konfirmasi password tidak cocok.');
-    if (newPw.length < 8)    return errorResponse(400, 'Password minimal 8 karakter.');
+    if (newPw.length < 12 || newPw.length > 256) {
+      return errorResponse(400, 'Password baru harus berukuran 12–256 karakter.');
+    }
 
     var sheet = getSheet(CONFIG.SHEETS.USERS);
     var users = sheetToObjects(sheet);
