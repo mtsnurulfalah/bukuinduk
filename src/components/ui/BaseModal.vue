@@ -209,7 +209,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  deactivateDialog(false)
+  deactivateDialog()
 })
 </script>
 
